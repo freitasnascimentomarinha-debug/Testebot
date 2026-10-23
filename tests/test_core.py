@@ -1138,6 +1138,49 @@ def test_other_markets_have_validated_bots():
         assert rs["prev_label"] and rs["contexts"] and "tendencia_alta" in rs["contexts"]
     assert not Pm.allowed("forex", "1h") and not Pm.allowed("stocks", "5m")           # sem prova nesse tempo gráfico: bloqueado
 
+
+def test_realtime_chart_for_yahoo_markets_and_stream_decoder():
+    """Gráfico ao vivo dos novos mercados: histórico embutido + streaming do Yahoo; o decodificador roda o JS real da página."""
+    import base64
+    import json as _json
+    import re
+    import shutil
+    import struct
+    import subprocess
+
+    from core import realtime
+
+    cfg = default_settings(PROFILES["forex"])
+    hist = pd.DataFrame({"time": pd.date_range("2026-10-23 10:00", periods=5, freq="1h", tz="UTC"), "open": [1.1] * 5, "high": [1.2] * 5,
+                         "low": [1.0] * 5, "close": [1.15] * 5, "volume": [1.0] * 5})
+    hist.attrs["no_volume"] = True
+    html = realtime.realtime_chart_html(symbol="EURUSD", interval="1h", market="forex", cfg=cfg, lines=[], positions=[{"side": "BUY", "qty": 1000, "entry": 1.1,
+                                        "fee_pct": 0.01, "fees_paid": 0.1, "margin": 50, "fx": 1.0}], height=640, history=hist, prev_close=1.12)
+    conf = _json.loads(re.search(r"const C = (\{.*?\}), I = C\.ind", html, re.S).group(1))
+    assert conf["yahoo"] == "EURUSD=X" and len(conf["history"]) == 5 and conf["prev_close"] == 1.12 and conf["label"] == "Forex" and conf["no_volume"]
+    assert conf["positions"][0]["fx"] == 1.0 and "streamer.finance.yahoo.com" in html and "yahooStream" in html
+    crypto = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="futures", cfg=default_settings(PROFILES["day"]), lines=[], positions=[], height=640)
+    assert "yahoo" not in _json.loads(re.search(r"const C = (\{.*?\}), I = C\.ind", crypto, re.S).group(1))   # cripto não muda
+    if not shutil.which("node"):
+        pytest.skip("sem Node para testar o decodificador")
+
+    def varint(n):
+        out = b""
+        while True:
+            b = n & 0x7F
+            n >>= 7
+            out += bytes([b | (0x80 if n else 0)])
+            if not n:
+                return out
+    zz = lambda n: (n << 1) if n >= 0 else ((-n << 1) - 1)
+    msg = (b"\x0a" + varint(8) + b"EURUSD=X" + b"\x15" + struct.pack("<f", 1.11948) + b"\x18" + varint(zz(1792784390000))
+           + b"\x48" + varint(zz(49854200)) + varint(22 << 3) + varint(zz(100)))
+    fn = re.search(r"function pbParse\(buf\) \{.*?\n\}\n", html, re.S).group(0)
+    js = fn + "const d = pbParse(Uint8Array.from(Buffer.from(process.argv[1], 'base64'))); console.log(JSON.stringify({p: d[2], t: d[3], v: d[9], s: d[22], len: d[1].length}));"
+    out = subprocess.run(["node", "-e", js, base64.b64encode(msg).decode()], capture_output=True, text=True, check=True).stdout
+    got = _json.loads(out)
+    assert got["p"] == pytest.approx(1.11948, abs=1e-6) and got["t"] == 1792784390000 and got["v"] == 49854200 and got["s"] == 100 and got["len"] == 8
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

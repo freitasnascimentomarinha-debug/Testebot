@@ -4,8 +4,12 @@ Quatro páginas novas no menu **Outros mercados**, com o mesmo formato da cripto
 boleta e calculadora, bots, piloto automático, leitura do especialista e carteira simulada.
 
 ## Dados "ao vivo"
-* Fonte: **Yahoo Finance** (API pública, sem chave). O gráfico e a cotação são atualizados sozinhos a cada consulta (15–30 s).
-* Atraso: forex quase em tempo real; commodities (contratos futuros contínuos), índices e a B3 podem ter **atraso de até ~15 min**.
+* Fonte: **Yahoo Finance** (API pública, sem chave).
+* **Gráfico em tempo real igual ao da cripto**: o servidor entrega o histórico e o **navegador** assina o streaming do Yahoo
+  (`wss://streamer.finance.yahoo.com`); cada negociação move o candle, os indicadores e o P&L das posições abertas, e o cabeçalho mostra
+  "ao vivo" e o número de atualizações. As métricas, a análise e o piloto automático se atualizam a cada 15–30 s.
+* Atraso: forex quase em tempo real (poucos segundos); commodities (contratos futuros contínuos), índices e a B3 podem ter **atraso de até ~15 min**.
+* Sem negociações (mercado fechado ou ativo parado) o gráfico avisa "aguardando negócios".
 * **Mercado fechado** é detectado pelo horário do último negócio: a página mostra 🔴, o piloto automático fica em espera e ordens a mercado ficam bloqueadas.
 * Limites do Yahoo (não é API oficial): pode oscilar ou limitar requisições, principalmente em servidores compartilhados; o app usa cache curto e dois hosts, mas sem
   fonte de reserva. Histórico: 5/15/30 min só ~60 dias; 1h e 4h ~2 anos; diário ~10 anos.

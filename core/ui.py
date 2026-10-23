@@ -163,22 +163,29 @@ def render_bot_page(bot: str) -> None:
     col_chart, col_ticket = st.columns([3.2, 1.25], gap="medium")
     with col_chart:
         indicator_picker(bot, cfg)
-        if profile.is_crypto:
-            tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
-                                                 "🖊️ TradingView — ferramentas de desenho"])
-        else:  # sem WebSocket público: o gráfico se atualiza sozinho a cada consulta ao Yahoo Finance
-            tab_chart, tab_tv = st.tabs(["⚡ Ao vivo (atualiza sozinho) + indicadores", "🖊️ TradingView — ferramentas de desenho"])
-            tab_rt = None
-        if tab_rt is not None:
-            with tab_rt:
-                positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
-                height = chart_height(cfg)
+        tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
+                                             "🖊️ TradingView — ferramentas de desenho"])
+        with tab_rt:
+            positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
+            height = chart_height(cfg)
+            extra = {}
+            if not profile.is_crypto:  # histórico vem do servidor; o navegador assina o streaming do Yahoo Finance
+                try:
+                    tk = cached_ticker(cfg["symbol"], profile.market)
+                    extra = {"history": cached_klines(cfg["symbol"], cfg["interval"], 1000, profile.market),
+                             "prev_close": tk.last / (1 + tk.change_pct / 100)}
+                except MarketDataError as exc:
+                    st.error(f"Sem dados para o gráfico em tempo real: {exc}")
+            if profile.is_crypto or extra:
                 components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
                                                     cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
-                                                    height=height), height=height + 5)
-                st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
-                           "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
-                           "descontadas as taxas de entrada e saída).")
+                                                    height=height, **extra), height=height + 5)
+            st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
+                       "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
+                       "descontadas as taxas de entrada e saída)." if profile.is_crypto else
+                       "Candles ao vivo pelo streaming do Yahoo Finance, direto no seu navegador: cada negociação move o candle, os "
+                       "indicadores e o lucro/prejuízo das posições abertas. Na B3 o fluxo chega com cerca de 15 min de atraso; com o "
+                       "mercado fechado não há negociações.")
         with tab_chart:
             analysis_chart(profile, cfg)
         with tab_tv:
