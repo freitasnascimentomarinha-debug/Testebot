@@ -13,6 +13,9 @@ st.caption("Cada bot é especialista em um estilo, timeframe, indicador e relaç
            "vem de testes com candles reais (1% da banca arriscado por operação, com taxas); o real vem das operações "
            "feitas pelos bots na carteira simulada. Resultado passado não garante resultado futuro.")
 
+if msg := st.session_state.pop("bots_toast", None):
+    st.toast(msg, icon="✅")
+
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
 STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}
 
@@ -36,7 +39,7 @@ def activate(p: dict, bot: str) -> None:
         st.session_state[f"{bot}__interval"] = tested
         msg += f" Timeframe: {tested}."
     save_settings(bot, cfg)
-    st.toast(msg, icon="✅")
+    st.session_state["bots_toast"] = msg  # exibido após o recarregamento da página
 
 
 live = {r["id"]: r for r in P.ranking()}

@@ -503,6 +503,34 @@
   "interval": "15m",
   "status": "ressalva"
  },
+ "esp_15m_rsi_1x2": {
+  "period_label": "40 dias",
+  "period_days": 40,
+  "ret_pct": 0.68,
+  "monthly_pct": 0.51,
+  "ret_seen": 1.87,
+  "ret_new": -0.52,
+  "win_pct": 75.0,
+  "dd_pct": 4.4,
+  "trades_month": 9.6,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "BTCUSDT": 2.09,
+   "ETHUSDT": 0.18,
+   "SOLUSDT": 3.91,
+   "BNBUSDT": 2.71,
+   "XRPUSDT": 0.48,
+   "DOGEUSDT": 2.86,
+   "ADAUSDT": -1.19,
+   "LINKUSDT": -2.39,
+   "AVAXUSDT": -3.52,
+   "LTCUSDT": 1.62
+  },
+  "tested_at": "23/10/2026",
+  "market": "futures",
+  "interval": "15m",
+  "status": "ressalva"
+ },
  "esp_15m_ema_3x1": {
   "period_label": "40 dias",
   "period_days": 40,

@@ -34,6 +34,10 @@ pronta para receber a API de negociação da Binance numa segunda fase.
 * **Alavancagem no padrão da Binance**: futuros com as faixas oficiais por par (ex.: BTC até 150×, com a
   posição máxima diminuindo conforme a alavancagem), margem isolada/cruzada, fórmula oficial de liquidação e
   funding a cada 8 h; no spot, Binance Margin (cruzada 3×, isolada 10×).
+* **🤖 Bots especialistas** — galeria com 32 bots (18 especialistas nativos + clássicos + pesquisa), cada um
+  com especialidade (timeframe, indicador e risco:retorno), dica rápida, **desempenho simulado com % estimada
+  ao mês**, acerto, pior queda, situação na prova final (moedas inéditas) e desempenho real; filtros por
+  estilo, indicador e risco:retorno, e ativação com um clique (já ajusta o timeframe testado).
 * **Personalidades (estratégias)** — página 🏆 Personalidades:
   * 9 prontas: Seguidor de Tendência, Reversão à Média, Rompimento, Scalper VWAP, Momentum, Price Action,
     Ichimoku, Conservador (multi-confirmação) e Posicional Comprador;
@@ -132,6 +136,8 @@ core/indicators.py   indicadores em pandas puro
 core/strategy.py     14 habilidades de programação e plano por regras (com personalidade)
 core/personalities.py personalidades prontas e da comunidade, ranking
 core/backtest.py     backtest das personalidades em candles reais (resultado em R)
+core/specialists.json bots especialistas nativos (gerados pela pesquisa)
+core/research_results.json resultados simulados padronizados de todas as personalidades prontas
 core/ai.py           cliente OpenRouter (DeepSeek) e prompt
 core/risk.py         calculadora de trade e gestor de risco
 core/paper.py        corretora simulada (stops/alvos/liquidação com máximas e mínimas reais)

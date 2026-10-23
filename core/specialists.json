@@ -137,6 +137,40 @@
   }
  },
  {
+  "id": "esp_15m_rsi_1x2",
+  "name": "🎯 RSI Precisão 15m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "RSI 15m · alvo curto · 1:2",
+  "tip": "Alvo pela metade do stop: alta taxa de acerto no 15 minutos.",
+  "summary": "Alvo pela metade do stop: alta taxa de acerto no 15 minutos.",
+  "description": "Especialista em RSI no 15 minutos com alvo curto. Muitas operações positivas pequenas; os stops são maiores, mas raros quando a leitura de força é correta.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "15m",
+  "timeframes": "15m (testado)",
+  "direction": "venda",
+  "threshold": 50,
+  "sl_atr": 3.0,
+  "tp_atr": 1.5,
+  "skills": {
+   "momentum": 1.5,
+   "macd": 0.5,
+   "estocastico": 0.5
+  },
+  "filters": {
+   "adx_min": 25,
+   "adx_max": 35
+  },
+  "selection": {
+   "busca_r": 0.141,
+   "validacao_r": 0.138,
+   "busca_n": 38,
+   "validacao_n": 29
+  }
+ },
+ {
   "id": "esp_15m_ema_3x1",
   "name": "📈 Tendência EMA 15m",
   "author": "Bots nativos · pesquisa out/2026",
