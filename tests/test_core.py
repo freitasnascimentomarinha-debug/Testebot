@@ -717,47 +717,116 @@ def test_bot_page_renders_with_analysis_and_advice():
     assert "deepseek" not in text.lower() and not any("Resposta bruta" in (e.label or "") for e in at.expander)
 
 
-def test_accounts_register_login_lockout_token(monkeypatch):
+def test_accounts_signup_requires_admin_approval(monkeypatch):
     import time
 
     from core import accounts, storage
 
     monkeypatch.setenv("AUTH_MODE", "contas")
     monkeypatch.setenv("SIGNUP_CODE", "convite")
-    assert accounts.enabled() and accounts.needs_code()
+    monkeypatch.setenv("ADMIN_USER", "chefe")
+    monkeypatch.setenv("ADMIN_PASSWORD", "senha-do-chefe-1")
+    assert accounts.enabled() and accounts.needs_code() and accounts.is_primary_admin("CHEFE")
     with pytest.raises(ValueError, match="convite"):
         accounts.register("carla", "senha-forte-1", "errado")
-    user = accounts.register("Carla", "senha-forte-1", "convite")
-    assert user == "carla"
+    with pytest.raises(ValueError, match="reservado"):
+        accounts.register("chefe", "senha-forte-1", "convite")          # ninguém "toma" o nome do admin
+    assert accounts.register("Carla", "senha-forte-1", "convite", "Carla, colega do trabalho") == "carla"
     users = storage.load_json(storage.USERS_KEY, {})
     assert "senha-forte-1" not in json.dumps(users) and users["carla"]["hash"].startswith("scrypt$")  # só o hash
+    assert users["carla"]["status"] == "pendente" and accounts.pending_count() == 1
     for bad, msg in ((("carla", "outra-senha-9", "convite"), "já existe"), (("x", "senha-forte-1", "convite"), "Usuário:"),
                      (("diego", "curta", "convite"), "8 caracteres"), (("diego", "aaaaaaaaaa", "convite"), "fraca")):
         with pytest.raises(ValueError, match=msg):
             accounts.register(*bad)
-    assert accounts.authenticate(" CARLA ", "senha-forte-1") == "carla"
-    # erro genérico (não revela se o usuário existe) e bloqueio após 5 tentativas
+    # pendente: a senha certa não basta; a errada continua dando erro genérico
+    with pytest.raises(ValueError, match="não foi autorizada"):
+        accounts.authenticate("carla", "senha-forte-1")
+    with pytest.raises(ValueError, match="incorretos"):
+        accounts.authenticate("carla", "senha-errada-1")
     with pytest.raises(ValueError, match="incorretos"):
         accounts.authenticate("ninguem", "qualquer-coisa-1")
-    for _ in range(5):
-        with pytest.raises(ValueError, match="incorretos"):
-            accounts.authenticate("carla", "errada-errada")
-    with pytest.raises(ValueError, match="bloqueada"):
-        accounts.authenticate("carla", "senha-forte-1")
-    users = storage.load_json(storage.USERS_KEY, {})
-    users["carla"]["locked_until"] = time.time() - 1
-    storage.save_json(storage.USERS_KEY, users)
-    assert accounts.authenticate("carla", "senha-forte-1") == "carla"
-    # link de "manter conectado": válido, adulterado e invalidado pela troca de senha
+    # admin principal vem dos Secrets
+    assert accounts.authenticate("chefe", "senha-do-chefe-1") == "chefe" and accounts.is_admin("chefe")
+    with pytest.raises(ValueError, match="incorretos"):
+        accounts.authenticate("chefe", "senha-do-chefe-2")
+    # quem não é admin não administra nada
+    for fn, args in ((accounts.approve, ("carla", "carla")), (accounts.block, ("carla", "carla")), (accounts.delete, ("carla", "carla"))):
+        with pytest.raises(PermissionError):
+            fn(*args)
+    accounts.approve("chefe", "carla")
+    assert accounts.authenticate(" CARLA ", "senha-forte-1") == "carla" and accounts.is_active("carla") and not accounts.is_admin("carla")
+    assert accounts.pending_count() == 0 and "carla" in accounts.list_users() and "chefe" in accounts.list_users()
+    # bloquear: não entra mais e o link salvo deixa de valer; reativar volta
     tok = accounts.make_token("carla")
     assert accounts.verify_token(tok) == "carla" and accounts.verify_token(tok[:-2] + "xx") is None
-    accounts.change_password("carla", "senha-forte-1", "nova-senha-77")
-    assert accounts.verify_token(tok) is None and accounts.authenticate("carla", "nova-senha-77") == "carla"
+    accounts.block("chefe", "carla")
+    with pytest.raises(ValueError, match="bloqueado"):
+        accounts.authenticate("carla", "senha-forte-1")
+    assert accounts.verify_token(tok) is None and not accounts.is_active("carla")
+    accounts.unblock("chefe", "carla")
+    assert accounts.verify_token(tok) == "carla"
+    # promover a admin; o admin principal e a própria conta são protegidos
+    accounts.set_admin("chefe", "carla", True)
+    assert accounts.is_admin("carla")
+    with pytest.raises(ValueError, match="Secrets"):
+        accounts.block("carla", "chefe")
+    with pytest.raises(ValueError, match="própria"):
+        accounts.delete("carla", "carla")
+    accounts.set_admin("chefe", "carla", False)
+    # senha: admin redefine; trocar a senha invalida o link; erro de senha antiga
+    accounts.reset_password("chefe", "carla", "nova-senha-77")
+    assert accounts.verify_token(tok) is None
+    with pytest.raises(ValueError, match="incorretos"):
+        accounts.authenticate("carla", "senha-forte-1")
+    assert accounts.authenticate("carla", "nova-senha-77") == "carla"
+    accounts.change_password("carla", "nova-senha-77", "outra-nova-88")
     with pytest.raises(ValueError):
-        accounts.change_password("carla", "errada-errada", "outra-nova-88")
+        accounts.change_password("carla", "errada-errada", "mais-uma-99")
+    # excluir apaga a conta e os dados dela
+    storage.set_user("carla")
+    storage.save_json("settings.json", {"x": 1})
+    storage.set_user(None)
+    assert accounts.delete("chefe", "carla", wipe_data=True) >= 1
+    assert "carla" not in storage.load_json(storage.USERS_KEY, {}) and "u/carla/settings.json" not in storage.backend().names()
+    with pytest.raises(ValueError, match="incorretos"):
+        accounts.authenticate("carla", "outra-nova-88")
+    # bloqueio por tentativas erradas (5) e liberação depois do prazo
+    accounts.register("duda", "senha-forte-1", "convite")
+    accounts.approve("chefe", "duda")
+    for _ in range(5):
+        with pytest.raises(ValueError, match="incorretos"):
+            accounts.authenticate("duda", "errada-errada")
+    with pytest.raises(ValueError, match="bloqueada"):
+        accounts.authenticate("duda", "senha-forte-1")
+    users = storage.load_json(storage.USERS_KEY, {})
+    users["duda"]["locked_until"] = time.time() - 1
+    storage.save_json(storage.USERS_KEY, users)
+    assert accounts.authenticate("duda", "senha-forte-1") == "duda"
+    # link do admin principal muda se a senha dos Secrets mudar
+    tk = accounts.make_token("chefe")
+    assert accounts.verify_token(tk) == "chefe"
+    monkeypatch.setenv("ADMIN_PASSWORD", "outra-senha-do-chefe")
+    assert accounts.verify_token(tk) is None
     monkeypatch.setenv("ALLOW_SIGNUP", "false")
-    with pytest.raises(ValueError, match="fechado"):
+    with pytest.raises(ValueError, match="fechados"):
         accounts.register("eva", "senha-forte-1", "convite")
+
+
+def test_accounts_mode_autodetect(monkeypatch):
+    from core import accounts
+
+    for name in ("AUTH_MODE", "DATABASE_URL", "APP_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    assert not accounts.enabled()                                    # nada configurado: aberto (uso local)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    assert accounts.enabled()                                        # banco sem senha única: contas (não fica aberto por esquecimento)
+    monkeypatch.setenv("APP_PASSWORD", "x")
+    assert not accounts.enabled()                                    # senha única explícita
+    monkeypatch.setenv("AUTH_MODE", "contas")
+    assert accounts.enabled()
+    monkeypatch.setenv("AUTH_MODE", "aberto")
+    assert not accounts.enabled()
 
 
 def test_user_data_isolation_legacy_owner_and_backup(monkeypatch):
@@ -817,6 +886,8 @@ def test_accounts_work_on_postgres_and_table_is_private():
         assert storage.load_json("settings.json", "vazio") == "vazio"
         storage.set_user("pg_ana")
         assert storage.load_json("settings.json") == {"a": 1}
+        assert storage.delete_user_data("pg_ana") >= 1 and storage.load_json("settings.json", "apagado") == "apagado"
+        assert storage.delete_user_data("pg_bia") == 0
     finally:
         storage.set_user(None)
         storage._backend = old

@@ -121,6 +121,16 @@ class FileBackend:
     def names(self) -> list[str]:
         return sorted(p.relative_to(self.dir).as_posix() for p in self.dir.rglob("*.json"))
 
+    def delete_prefix(self, prefix: str) -> int:
+        n = 0
+        for name in self.names():
+            if name.startswith(prefix):
+                for path in (self.dir / name, (self.dir / name).with_suffix(".json.lock")):
+                    with contextlib.suppress(FileNotFoundError):
+                        path.unlink()
+                n += 1
+        return n
+
 
 class PostgresBackend:
     name = "Banco de dados Postgres"
@@ -192,6 +202,10 @@ class PostgresBackend:
 
     def names(self) -> list[str]:
         return [r[0] for r in self._run(lambda c: c.execute(f"SELECT name FROM {TABLE} ORDER BY name").fetchall())]
+
+    def delete_prefix(self, prefix: str) -> int:
+        like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        return self._run(lambda c: c.execute(f"DELETE FROM {TABLE} WHERE name LIKE %s", (like,)).rowcount)
 
 
 class GitHubBackend:
@@ -304,6 +318,14 @@ class GitHubBackend:
         with self._lock:
             return sorted(self._data)
 
+    def delete_prefix(self, prefix: str) -> int:
+        with self._lock:
+            gone = [k for k in self._data if k.startswith(prefix)]
+            for k in gone:
+                del self._data[k]
+            self._dirty = bool(gone) or self._dirty
+            return len(gone)
+
 
 _backend = None
 _backend_lock = threading.Lock()
@@ -385,6 +407,11 @@ def save_json(name: str, data: Any) -> None:
 def locked_update(name: str, default: Any, fn: Callable[[Any], Any]) -> Any:
     """Lê o valor, aplica ``fn`` (que altera e/ou devolve o objeto) e grava."""
     return backend().update(_key(name), default, fn)
+
+
+def delete_user_data(user: str) -> int:
+    """Apaga todos os dados pessoais de uma conta (configurações, carteira, extrato, log e planos)."""
+    return backend().delete_prefix(f"u/{user}/")
 
 
 def export_all() -> dict:

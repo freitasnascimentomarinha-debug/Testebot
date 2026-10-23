@@ -1,6 +1,6 @@
 # Contas de usuário com Supabase (passo a passo)
 
-Cada pessoa cria o seu **usuário e senha** e tem os próprios dados: banca, perda máxima por trade, metas do dia, ativo e tempo gráfico,
+Cada pessoa **pede** uma conta (usuário e senha) e **só entra depois que um administrador autorizar** no painel *Administração*. Cada conta tem os próprios dados: banca, perda máxima por trade, metas do dia, ativo e tempo gráfico,
 personalidade, alavancagem, carteira, extrato, log de decisões e planos armados. Tudo fica salvo no Supabase e volta igual ao entrar de
 qualquer aparelho. Estratégias criadas na página Personalidades continuam compartilhadas entre todos.
 
@@ -19,27 +19,42 @@ Não é preciso criar tabela: o app cria a `tradebot_kv` sozinho e **liga o RLS*
 ```toml
 DATABASE_URL = "postgresql://postgres.abcdefgh:SENHA@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
 AUTH_MODE = "contas"
-SIGNUP_CODE = "um-codigo-de-convite"       # só quem tem o código cria conta
+ADMIN_USER = "seu_usuario"                 # admin principal: existe só nos Secrets
+ADMIN_PASSWORD = "uma-senha-forte-so-sua"
+SIGNUP_CODE = "um-codigo-de-convite"       # opcional: filtra pedidos de estranhos
 AUTH_SECRET = "texto-longo-e-aleatorio"    # assina o link de "manter conectado"
 OPENROUTER_API_KEY = "sk-or-v1-..."        # opcional: IA compartilhada (paga por você)
 # LEGACY_OWNER = "seu_usuario"             # opcional: quem herda os dados de antes das contas
 ```
 Depois use **Reboot app**. Se mudar `AUTH_SECRET`, todos os links de "manter conectado" deixam de valer.
 
-## 3. Primeiro acesso
-* Abra o app → aba **Criar conta** → usuário, senha (mínimo 8 caracteres) e o código de convite.
-* Se você já usava o app antes (dados na versão de uma pessoa só), crie a sua conta com o mesmo nome definido em `LEGACY_OWNER`: no primeiro
-  login os dados antigos (configurações, carteira, extrato, log) são copiados para a sua conta, uma única vez.
-* Depois que todos tiverem conta, coloque `ALLOW_SIGNUP = "false"` para fechar o cadastro.
-* Em **Minha conta**: resumo das escolhas salvas, troca de senha e backup/restauração dos seus dados.
+## 3. Primeiro acesso e administração
+* **Você (admin):** entre na aba **Entrar** com `ADMIN_USER` e `ADMIN_PASSWORD`. Não há cadastro para esse nome, então ninguém consegue "tomá-lo".
+  Se você já usava o app antes, ponha o mesmo nome em `LEGACY_OWNER`: no primeiro login os dados antigos (configurações, carteira, extrato, log)
+  são copiados para a sua conta, uma única vez.
+* **Quem quer acesso:** aba **Pedir conta** (usuário, senha, o nome da pessoa e, se você definiu, o código). O pedido fica **pendente**: a senha
+  certa não basta, aparece "ainda não foi autorizada".
+* **Painel Administração** (menu lateral, só para admins; o menu mostra "⏳ N pedidos aguardando"):
+  * **Autorizar** ou **Recusar** pedidos (recusar apaga o pedido);
+  * **Bloquear** e **Reativar** contas (vale em até 1 minuto, inclusive para quem já está conectado);
+  * **Excluir** a conta, com a opção de apagar também os dados dela (carteira, extrato, configurações);
+  * **Senha provisória**: defina uma nova senha para quem esqueceu e informe por um canal seguro;
+  * **Tornar admin** / remover admin de outras contas (o admin principal, dos Secrets, não pode ser alterado por ali).
+* Quando todos tiverem conta, `ALLOW_SIGNUP = "false"` fecha os pedidos novos.
+* Em **Minha conta** cada pessoa vê o resumo das escolhas salvas, troca a senha e faz backup/restauração dos próprios dados.
+
+## Se o app não pedir login
+1. Os Secrets precisam estar **no topo do arquivo**, antes de qualquer linha `[secao]` (chaves abaixo de um `[título]` viram uma tabela e não são lidas).
+2. Depois de editar os Secrets use **Reboot app**; o app também precisa estar na versão mais recente do branch.
+3. Sem `AUTH_MODE`, o app liga as contas sozinho se houver `DATABASE_URL` e não houver `APP_PASSWORD`. Para deixar aberto de propósito, use `AUTH_MODE = "aberto"`.
+4. Sem nenhum Secret de acesso, o Painel mostra "🔓 Acesso aberto" no rodapé.
 
 ## 4. Como funciona e limites
 * **Senhas**: só o hash (scrypt com sal) é guardado; nunca a senha. Após 5 tentativas erradas a conta bloqueia por 5 minutos. A mensagem de erro
   não revela se o usuário existe.
 * **Manter conectado**: coloca um link assinado (14 dias) na barra de endereço; quem tiver esse link entra na conta, então não o compartilhe.
   Trocar a senha invalida os links antigos. Desmarque a opção em computador compartilhado.
-* **Esqueci a senha**: não há recuperação por e-mail. Quem administra o banco pode apagar o usuário na tabela `tradebot_kv` (linha `_users.json`)
-  para a pessoa se cadastrar de novo, ou redefinir editando o JSON.
+* **Esqueci a senha**: não há e-mail; use a senha provisória no painel Administração. Se a senha do admin principal for perdida, troque `ADMIN_PASSWORD` nos Secrets.
 * **Chave da IA**: a do Secrets vale para todos. Quem não tiver chave nos Secrets informa a própria na aba IA (fica só na sessão, não é salva).
 * **GitHub como armazenamento não serve para contas** (o branch pode ser público e exporia os hashes): o app recusa o login nesse modo.
 * **Piloto automático** continua rodando só com a página aberta. Para rodar sem navegador, use `python worker.py` num servidor com as mesmas

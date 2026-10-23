@@ -85,3 +85,11 @@ with st.expander("💾 Backup e restauração dos dados"):
         n = import_all(json.load(up))
         st.success(f"{n} conjuntos de dados restaurados.")
         st.rerun()
+
+
+from core import accounts  # noqa: E402
+from core.storage import get_secret  # noqa: E402
+
+if not accounts.enabled() and not get_secret("APP_PASSWORD"):
+    st.caption("🔓 Acesso aberto: qualquer pessoa com o link entra. Para exigir usuário e senha com aprovação do administrador, "
+               "veja docs/contas_e_supabase.md.")

@@ -63,7 +63,9 @@ pages = {
                     st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
                     st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")]
-    + ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else []),
+    + ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else [])
+    + ([st.Page("views/admin.py", title="Administração", icon="🛡️", url_path="admin")]
+       if accounts.enabled() and accounts.is_admin(st.session_state.get("_user")) else []),
     "Mercado Cripto": [
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
         st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),
@@ -81,7 +83,9 @@ with st.sidebar:
         st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")
     st.caption(f"Versão {APP_VERSION}")
     if current_user():
-        st.caption(f"👤 {current_user()}")
+        st.caption(f"👤 {current_user()}" + (" · admin" if accounts.is_admin(current_user()) else ""))
+        if accounts.is_admin(current_user()) and (n_pending := accounts.pending_count()):
+            st.warning(f"⏳ {n_pending} pedido(s) de conta aguardando você em **Administração**.")
     if password_configured():
         if st.button("Sair", icon="🚪", width="stretch"):
             logout()

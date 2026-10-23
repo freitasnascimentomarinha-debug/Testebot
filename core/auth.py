@@ -37,7 +37,15 @@ def current_user() -> str | None:
 
 def is_authenticated() -> bool:
     if accounts.enabled():
-        if st.session_state.get("_user"):
+        user = st.session_state.get("_user")
+        if user:
+            if time.time() - st.session_state.get("_chk", 0) > 45:  # um bloqueio/exclusão feito pelo admin vale em até 45 s
+                st.session_state["_chk"] = time.time()
+                if not accounts.is_active(user):
+                    st.session_state.clear()
+                    st.query_params.pop("s", None)
+                    st.session_state["_msg"] = "O seu acesso foi encerrado pelo administrador."
+                    return False
             return True
         user = accounts.verify_token(st.query_params.get("s"))
         if user:
@@ -110,9 +118,11 @@ def _accounts_login() -> None:
         if problem:
             st.warning(problem[0])
         st.markdown("## 🔒 TradeBot")
-        st.caption("Plataforma de bots de trade — entre com o seu usuário ou crie uma conta.")
+        st.caption("Plataforma de bots de trade — entre com o seu usuário ou peça uma conta (o administrador precisa autorizar).")
         locked_until = st.session_state.get("auth_locked_until", 0)
-        t_in, t_new = st.tabs(["Entrar", "Criar conta"])
+        if msg := st.session_state.pop("_msg", None):
+            st.warning(msg)
+        t_in, t_new = st.tabs(["Entrar", "Pedir conta"])
         with t_in:
             with st.form("login_user"):
                 user = st.text_input("Usuário")
@@ -141,15 +151,17 @@ def _accounts_login() -> None:
                     user = st.text_input("Escolha um usuário", help="3 a 20 caracteres: letras minúsculas, números, ponto, hífen e sublinhado.")
                     pw = st.text_input("Senha (mínimo 8 caracteres)", type="password")
                     pw2 = st.text_input("Repita a senha", type="password")
+                    note = st.text_input("Seu nome (para o administrador reconhecer você)", max_chars=80)
                     code = st.text_input("Código de convite", type="password") if accounts.needs_code() else None
-                    ok = st.form_submit_button("Criar conta", type="primary", width="stretch")
+                    ok = st.form_submit_button("Pedir conta", type="primary", width="stretch")
                 if ok:
                     if pw != pw2:
                         st.error("As senhas não conferem.")
                     else:
                         try:
-                            created = accounts.register(user, pw, code)
-                            _start_session(created, True)
+                            created = accounts.register(user, pw, code, note)
+                            st.success(f"Pedido enviado para **{created}**. O administrador precisa autorizar a conta; "
+                                       "depois disso você entra na aba **Entrar** com o usuário e a senha escolhidos.")
                         except ValueError as exc:
                             st.error(str(exc))
     st.stop()
