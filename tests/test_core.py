@@ -674,6 +674,24 @@ def test_ai_call_is_robust_to_bad_replies(monkeypatch):
     with pytest.raises(RuntimeError, match="2 tentativas"):
         run(R("", "length"), R("Não consigo.", "stop"))
 
+
+def test_personality_only_where_trained():
+    """Só é possível escolher personalidades treinadas e que se destacaram naquele mercado e tempo gráfico."""
+    from core import personalities as Pm
+
+    for market, interval in (("futures", "5m"), ("futures", "15m"), ("futures", "1h"), ("spot", "4h"), ("spot", "1d")):
+        got = Pm.allowed(market, interval)
+        assert got, (market, interval)
+        for p in got:
+            rs = p.get("research") or {}
+            assert rs["market"] == market and rs["interval"] == interval and rs["status"] in ("aprovado", "ressalva")
+    assert not any(p["id"] == "esp_5m_bb_reversal_2x1" for p in Pm.allowed("futures", "5m"))  # fraco no teste
+    assert Pm.allowed("futures", "30m") == [] and Pm.allowed("spot", "5m") == []
+    assert Pm.trained_intervals("futures") == ["5m", "15m", "1h"]
+    assert "experimental" not in Pm.allowed("futures", "5m")[0]["name"].lower()
+    for bot, pid in Pm.DEFAULT_BY_BOT.items():  # o padrão de cada bot vale no tempo gráfico padrão dele
+        assert Pm.is_allowed(pid, PROFILES[bot].market, PROFILES[bot].default_interval)
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

@@ -130,7 +130,10 @@ with tab_gal:
             using = [PROFILES[b].name for b, pid in in_use.items() if pid == p["id"]]
             b1, b2 = st.columns([1.2, 1])
             label = "✅ Em uso" if bot in in_use and in_use[bot] == p["id"] else f"Ativar no {PROFILES[bot].name}"
-            if b1.button(label, key=f"act_{p['id']}", type="primary", width="stretch", disabled=label.startswith("✅")):
+            weak = rs.get("status") not in ("aprovado", "ressalva") and bool(rs)
+            if weak:
+                label = "Fraco no teste"
+            if b1.button(label, key=f"act_{p['id']}", type="primary", width="stretch", disabled=label.startswith("✅") or weak):
                 activate(p, bot)
                 st.rerun()
             with b2.popover("Detalhes", width="stretch"):

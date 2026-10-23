@@ -67,7 +67,7 @@ with st.expander("Como funciona o fluxo de decisão"):
 1. **Dados reais** — candles e cotação da Binance (futuros USDⓈ-M ou spot), com fallback para a OKX.
 2. **Habilidades de programação** — 9 regras determinísticas (tendência, momentum, MACD, Bollinger, SuperTrend,
    VWAP, volume/OBV, estrutura de topos/fundos e suportes/resistências) votam de −1 a +1 com pesos por estilo.
-3. **IA (DeepSeek 4.1 Flash via OpenRouter)** — recebe o contexto completo e devolve um JSON com decisão,
+3. **IA (via OpenRouter)** — recebe o contexto completo e devolve um JSON com decisão,
    entrada, stop, alvo, confiança, riscos e condução.
 4. **Gestor de risco** — dimensiona a posição pela sua *perda máxima por trade*, valida R:R mínimo, metas diárias,
    limite de perda, posições simultâneas, alavancagem e liquidação.

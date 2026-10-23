@@ -3,7 +3,7 @@
   "id": "aula1",
   "titulo": "Como o sistema funciona",
   "resumo": "Do dado real à ordem na carteira simulada: quem decide, quem protege a banca e onde tudo fica guardado.",
-  "duracao_s": 175,
+  "duracao_s": 182,
   "video": "assets/aulas/aula1.mp4",
   "legenda": "assets/aulas/aula1.vtt",
   "capitulos": [
@@ -60,7 +60,7 @@
     ]
    },
    {
-    "t": 122,
+    "t": 123,
     "titulo": "Quem decide a operação?",
     "fala": [
      "Você precisa de inteligência artificial para operar? Não.",
@@ -73,14 +73,15 @@
     "t": 144,
     "titulo": "Onde ficam os seus dados",
     "fala": [
-     "No menu lateral ficam a chave da IA e o armazenamento.",
-     "Se o aviso disser arquivos locais, os dados somem quando o aplicativo reinicia no Streamlit Community.",
-     "Para guardar de forma permanente, configure um banco de dados ou um repositório do GitHub nos segredos.",
-     "E defina uma senha de acesso antes de publicar o endereço."
+     "Uma dúvida comum é onde ficam os seus dados.",
+     "Se o aplicativo usar arquivos locais, os dados somem quando ele reinicia no Streamlit Community.",
+     "Para guardar de forma permanente, configure um banco de dados ou um repositório do GitHub nos segredos do aplicativo.",
+     "Defina também uma senha de acesso nos segredos antes de publicar o endereço.",
+     "E a chave da IA, se não estiver nos segredos, você informa na aba IA das configurações de cada bot."
     ]
    },
    {
-    "t": 164,
+    "t": 172,
     "titulo": "Nas próximas aulas",
     "fala": [
      "Nas próximas aulas, vamos ao gráfico e à carteira, depois ao risco, aos bots especialistas e, por fim, à operação com o piloto automático.",
@@ -388,7 +389,7 @@
   "id": "aula5",
   "titulo": "Negociando com o bot",
   "resumo": "Do primeiro teste ao piloto automático: como o bot abre e fecha ordens, o papel da IA, o alvo fixo contra o stop móvel e um roteiro seguro de uso.",
-  "duracao_s": 287,
+  "duracao_s": 294,
   "video": "assets/aulas/aula5.mp4",
   "legenda": "assets/aulas/aula5.vtt",
   "capitulos": [
@@ -401,17 +402,17 @@
     ]
    },
    {
-    "t": 11,
+    "t": 12,
     "titulo": "O painel de controle do bot",
     "fala": [
-     "No Controle do bot você escolhe a personalidade, a estratégia que o bot vai seguir.",
+     "No Controle do bot você escolhe a personalidade, a estratégia que o bot vai seguir. A lista só mostra os bots treinados e testados naquele mercado e naquele tempo gráfico, o que evita usar um bot fora de onde ele foi validado.",
      "O botão Analisar agora faz uma análise pontual: o bot lê o gráfico e propõe uma ordem já dimensionada pelo seu risco.",
      "O botão Ligar bot ativa o piloto automático, que repete essa análise sozinho a cada candle fechado.",
      "O quadro Cérebro mostra se o bot está usando só as regras ou também a inteligência artificial."
     ]
    },
    {
-    "t": 36,
+    "t": 44,
     "titulo": "Uma análise, passo a passo",
     "fala": [
      "Veja o que acontece a cada candle fechado.",
@@ -423,7 +424,7 @@
     ]
    },
    {
-    "t": 62,
+    "t": 70,
     "titulo": "Quem abre e quem fecha",
     "fala": [
      "O sistema abre ordens sozinho quando o piloto está ligado e a ordem é aprovada pelo gestor de risco.",
@@ -434,7 +435,7 @@
     ]
    },
    {
-    "t": 96,
+    "t": 103,
     "titulo": "Alvo fixo ou surfar a tendência?",
     "fala": [
      "Existem dois estilos de saída.",
@@ -446,7 +447,7 @@
     ]
    },
    {
-    "t": 134,
+    "t": 141,
     "titulo": "O papel da IA",
     "fala": [
      "E a inteligência artificial? No modo filtro, que é o padrão, ela só confirma ou veta o sinal das regras.",
@@ -457,7 +458,7 @@
     ]
    },
    {
-    "t": 164,
+    "t": 171,
     "titulo": "A leitura do especialista",
     "fala": [
      "Quando você clica em Analisar agora, o sistema mostra também a leitura do especialista. Ela aparece até sem IA, calculada só por regras.",
@@ -468,7 +469,7 @@
     ]
    },
    {
-    "t": 220,
+    "t": 227,
     "titulo": "Roteiro seguro, passo a passo",
     "fala": [
      "Um roteiro seguro, passo a passo.",
@@ -481,7 +482,7 @@
     ]
    },
    {
-    "t": 250,
+    "t": 257,
     "titulo": "Cuidados finais",
     "fala": [
      "Para terminar, alguns cuidados.",
@@ -492,7 +493,7 @@
     ]
    },
    {
-    "t": 274,
+    "t": 281,
     "titulo": "Bons estudos e bons testes!",
     "fala": [
      "Chegamos ao fim. Você já conhece o caminho: dados reais, regras, risco, carteira e, só depois, o piloto automático.",

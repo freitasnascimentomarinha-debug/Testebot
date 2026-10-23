@@ -22,6 +22,12 @@ BOT_LABEL = {k: f"{p.icon} {p.name}" for k, p in PROFILES.items()}
 
 def use_in_bot(pid: str, bot: str) -> None:
     persona = P.get(pid)
+    rs = persona.get("research") or {}
+    if rs and (rs.get("market") != PROFILES[bot].market or rs.get("status") not in ("aprovado", "ressalva")):
+        st.toast(f"{persona['name']} só pode ser usada onde foi treinada e se destacou "
+                 f"({'futuros' if rs.get('market') == 'futures' else 'spot'}, {rs.get('interval')}"
+                 f"{'' if rs.get('status') in ('aprovado', 'ressalva') else '; ficou fraca no teste'}).", icon="🚫")
+        return
     cfg = load_settings(bot)
     cfg["personality"] = pid
     st.session_state[f"{bot}__personality"] = pid

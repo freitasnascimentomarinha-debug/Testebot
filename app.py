@@ -48,7 +48,7 @@ import core  # noqa: E402
 from core import APP_VERSION  # noqa: E402
 
 core.LOADED_COMMIT = _disk_version
-from core.storage import backend, get_secret  # noqa: E402
+from core.storage import backend  # noqa: E402
 
 st.markdown("""<style>
 [data-testid="stMetricValue"] {font-size: 1.35rem;}
@@ -62,7 +62,7 @@ pages = {
                     st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
                     st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")],
-    "Bots": [
+    "Mercado Cripto": [
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
         st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),
         st.Page("views/long_trade.py", title="Long Trade · Spot", icon="🏔️", url_path="long-trade"),
@@ -74,39 +74,12 @@ require_login()
 
 with st.sidebar:
     st.divider()
-    st.markdown("### 🔑 IA — OpenRouter")
-    if get_secret("OPENROUTER_API_KEY"):
-        st.success("Chave configurada nos Secrets ✅")
-    else:
-        st.text_input("API Key (somente nesta sessão)", type="password", key="openrouter_key",
-                      help="Para não precisar digitar, defina OPENROUTER_API_KEY nos Secrets do Streamlit "
-                           "(ou em .streamlit/secrets.toml) — este campo some automaticamente.")
-        if not st.session_state.get("openrouter_key"):
-            st.caption("Sem chave: os bots usam só as habilidades de programação.")
-    st.caption("Modelo padrão: `deepseek/deepseek-v4.1-flash`")
-    st.divider()
-    st.markdown("### 💾 Armazenamento")
     store = backend()
-    if store.persistent:
-        st.success(f"{store.name} — dados permanentes.")
-        if getattr(store, "last_error", None):
-            st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")
-    else:
-        st.warning("Arquivos locais: no Streamlit Community os dados somem quando o app reinicia. "
-                   "Configure `GITHUB_DATA_REPO` + `GITHUB_TOKEN` ou `DATABASE_URL` nos secrets.")
-        if getattr(store, "error", None):
-            st.error(f"Falha ao conectar no banco: {store.error[:200]}")
-    st.divider()
-    st.markdown("### 🏦 Execução")
-    st.info("**Carteira simulada** com preços reais.\n\nFase 2: Binance API Key (Testnet → Real).")
-    st.caption("Dados: Binance (spot/futuros) com fallback OKX. Nenhum dado aqui é recomendação de investimento.")
+    if getattr(store, "last_error", None):  # só avisa quando uma gravação realmente falhou
+        st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")
     st.caption(f"Versão {APP_VERSION}")
-
-    st.divider()
     if password_configured():
         if st.button("Sair", icon="🚪", width="stretch"):
             logout()
-    else:
-        st.caption("⚠️ Sem senha: defina `APP_PASSWORD` nos secrets antes de publicar.")
 
 nav.run()

@@ -14,7 +14,7 @@ import argparse
 import logging
 import time
 
-from core import engine
+from core import engine, personalities
 from core.broker import get_broker
 from core.data import get_funding_rate, get_klines, get_ticker, last_closed_candle_time
 from core.ai import get_api_key
@@ -34,6 +34,10 @@ def tick(bot: str, last_seen: dict) -> None:
     for ev in broker.sync(cfg["symbol"], raw, price, funding):
         log.info("[%s] %s %s", bot, ev["type"], ev.get("trade", {}).get("pnl", ""))
     if not cfg["autopilot"]:
+        return
+    if not personalities.is_allowed(cfg.get("personality"), profile.market, cfg["interval"]):
+        log.warning("[%s] personalidade %s não foi treinada/testada em %s %s: análise ignorada", bot, cfg.get("personality"),
+                    profile.market, cfg["interval"])
         return
     marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(raw, cfg['interval'])}"
     if last_seen.get(bot) == marker:

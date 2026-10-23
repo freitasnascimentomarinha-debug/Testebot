@@ -169,6 +169,38 @@ for _p in BUILTINS:
 DEFAULT_BY_BOT = {"day": "esp_15m_ema_3x1", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
 
 
+_STATUS_ORDER = {"aprovado": 0, "ressalva": 1}
+
+
+def allowed(market: str, interval: str) -> list[dict]:
+    """Personalidades que podem ser escolhidas neste mercado e tempo gráfico: as treinadas e testadas ali que não foram
+    fracas na pesquisa (aprovadas ou com ressalva), mais as criadas pelo usuário para o mercado. Evita usar um bot fora do
+    cenário em que ele foi validado."""
+    rows = []
+    for p in list_all():
+        rs = p.get("research") or {}
+        if rs:
+            if rs.get("market") == market and rs.get("interval") == interval and rs.get("status") in _STATUS_ORDER:
+                rows.append((_STATUS_ORDER[rs["status"]] + (0.5 if "experimental" in p["name"].lower() else 0),
+                             -(rs.get("monthly_pct") or 0), p))
+        elif not p.get("builtin") and market in (p.get("markets") or []):
+            rows.append((2, 0, p))  # criada por você, ainda sem teste
+    rows.sort(key=lambda r: (r[0], r[1]))
+    return [p for _, _, p in rows]
+
+
+def trained_intervals(market: str) -> list[str]:
+    """Tempos gráficos do mercado que têm pelo menos um bot treinado."""
+    order = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"]
+    found = {p["research"]["interval"] for p in list_all()
+             if (p.get("research") or {}).get("market") == market and p["research"].get("status") in _STATUS_ORDER}
+    return [i for i in order if i in found]
+
+
+def is_allowed(pid: str | None, market: str, interval: str) -> bool:
+    return any(p["id"] == pid for p in allowed(market, interval))
+
+
 def exit_text(p: dict) -> str:
     """Descrição curta da saída da personalidade (alvo fixo ou surfar com stop móvel)."""
     if p.get("trail_atr"):

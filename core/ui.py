@@ -83,7 +83,7 @@ def cached_votes(symbol: str, interval: str, market: str, days: int):
 
 
 def api_key() -> str | None:
-    return get_secret("OPENROUTER_API_KEY") or st.session_state.get("openrouter_key")
+    return get_secret("OPENROUTER_API_KEY") or st.session_state.get("_or_key")
 
 
 def fmt(v: float | None, d: int = 2) -> str:
@@ -145,6 +145,7 @@ def render_bot_page(bot: str) -> None:
     c2.selectbox("Timeframe", profile.intervals, key=_k(bot, "interval"))
     c3.number_input("Candles", 150, 1500, step=50, key=_k(bot, "candles"))
     c4.selectbox("Atualização (s)", (5, 10, 15, 30, 60, 120, 300, 600), key=_k(bot, "refresh_sec"))
+    ensure_personality(profile, st.session_state[_k(bot, "interval")])
     cfg = {name: st.session_state[_k(bot, name)] for name in cfg}
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
@@ -176,6 +177,26 @@ def render_bot_page(bot: str) -> None:
     ai_section(profile, cfg)
     portfolio_section(profile, cfg)
     settings_section(profile, cfg)
+
+
+def ensure_personality(profile: BotProfile, interval: str) -> None:
+    """A personalidade precisa ter sido treinada e testada neste mercado e tempo gráfico: se o tempo mudou e a atual não
+    serve mais, troca pela melhor disponível (ou mantém a atual, bloqueada, quando não há nenhuma)."""
+    bot = profile.key
+    pkey = _k(bot, "personality")
+    ids = [p["id"] for p in personalities.allowed(profile.market, interval)]
+    cur = st.session_state.get(pkey)
+    if ids and cur not in ids:
+        new = personalities.DEFAULT_BY_BOT[bot] if personalities.DEFAULT_BY_BOT[bot] in ids else ids[0]
+        old = (personalities.get(cur) or {}).get("name", "A personalidade anterior")
+        set_setting(bot, "personality", new)
+        st.toast(f"{old} não foi treinada no {interval}: personalidade trocada para "
+                 f"{(personalities.get(new) or {}).get('name', new)}.", icon="🧠")
+
+
+def personality_blocked(profile: BotProfile, cfg: dict) -> bool:
+    """True quando nenhum bot foi treinado e se destacou neste mercado e tempo gráfico."""
+    return not personalities.allowed(profile.market, cfg["interval"])
 
 
 def indicator_picker(bot: str, cfg: dict) -> None:
@@ -257,7 +278,11 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.caption(f"🧭 **Contexto do gráfico agora ({interval}):** {regime.label(ctx)} — {regime.REGIMES[ctx][1]}")
 
         if cfg_now.get("autopilot"):
-            autopilot_step(profile, cfg_now, df, price)
+            if personalities.is_allowed(cfg_now.get("personality"), profile.market, interval):
+                autopilot_step(profile, cfg_now, df, price)
+            else:
+                st.warning("Piloto automático em espera: não há bot treinado e testado neste tempo gráfico. Troque o tempo "
+                           "gráfico ou a personalidade.")
         if st.session_state.pop(f"{bot}__need_rerun", False):
             st.rerun()  # posição encerrada/ordem executada: atualiza linhas do gráfico e carteira
 
@@ -504,11 +529,13 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
     st.subheader("🤖 Controle do bot")
     key = api_key()
     on = bool(cfg.get("autopilot"))
-    options = [p["id"] for p in personalities.list_all()]
+    allowed = personalities.allowed(profile.market, cfg["interval"])
+    options = [p["id"] for p in allowed]
+    blocked = not options
     pkey = _k(bot, "personality")
-    if st.session_state.get(pkey) not in options:
-        st.session_state[pkey] = personalities.DEFAULT_BY_BOT[bot]
-    persona = personalities.get(st.session_state[pkey])
+    if options and st.session_state.get(pkey) not in options:
+        st.session_state[pkey] = options[0]
+    persona = personalities.get(st.session_state.get(pkey)) if options else None
 
     with st.container(border=True):
         c1, c2 = st.columns([1.3, 1])
@@ -521,18 +548,28 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                 st.caption("Ligue para o bot operar sozinho, ou use **Analisar agora** para uma análise pontual.")
             b1, b2 = st.columns(2)
             if b1.button("⏹️ Desligar bot" if on else "▶️ Ligar bot", type="secondary" if on else "primary",
-                         width="stretch", key=f"{bot}__power"):
+                         width="stretch", key=f"{bot}__power", disabled=blocked and not on):
                 set_setting(bot, "autopilot", not on)
                 st.session_state.pop(f"{bot}__autopilot_last", None)
                 st.rerun()
             run = b2.button("🔍 Analisar agora", width="stretch", key=f"{bot}__run_ai",
-                            type="primary" if not on else "secondary")
+                            type="primary" if not on else "secondary", disabled=blocked)
             st.toggle("Na análise manual, executar automaticamente se aprovado", key=_k(bot, "ai_auto_execute"))
         with c2:
-            st.selectbox("🧠 Personalidade (estratégia)", options, key=pkey,
-                         format_func=lambda pid: (personalities.get(pid) or {}).get("name", pid),
-                         help="Define como o bot pensa: indicadores, direção, filtros e stop/alvo. Compare o "
-                              "desempenho de cada uma na página Personalidades.")
+            if blocked:
+                trained = personalities.trained_intervals(profile.market)
+                st.warning(f"Nenhum bot foi treinado e se destacou no {cfg['interval']} em {profile.market_label.lower()}. "
+                           f"Escolha um tempo gráfico com bots treinados: {', '.join(trained) or '—'}.")
+            else:
+                def _label(pid):
+                    p_ = personalities.get(pid) or {}
+                    tag = {"aprovado": "✅", "ressalva": "🟡"}.get((p_.get("research") or {}).get("status"), "·")
+                    return f"{tag} {p_.get('name', pid)}"
+
+                st.selectbox("🧠 Personalidade (estratégia)", options, key=pkey, format_func=_label,
+                             help="Só aparecem os bots treinados e testados neste mercado e tempo gráfico, que se destacaram "
+                                  "na pesquisa (✅ aprovado · 🟡 aprovado com ressalva · · criado por você, sem teste). Para "
+                                  "ver outros, mude o tempo gráfico. Compare o desempenho na página Personalidades.")
             if persona:
                 st.caption(f"{persona.get('tip') or persona.get('summary') or persona.get('description', '')[:140]} · "
                            f"{personalities.DIRECTIONS[persona.get('direction', 'misto')]} · "
@@ -546,14 +583,12 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                                    " Veja os aprovados em 🤖 Bots especialistas.")
                     else:
                         st.caption(("✅ " if rs.get("status") == "aprovado" else "🟡 ") + line)
-                    if rs.get("interval") and rs["interval"] != cfg["interval"]:
-                        st.caption(f"ℹ️ Testada no {rs['interval']}; o bot está no {cfg['interval']}.")
             st.page_link("views/bots.py", label="Ver todos os bots especialistas", icon="🤖")
             mode_txt = "IA como filtro das regras" if cfg.get("ai_mode", "filtro") == "filtro" else "IA livre + regras"
             st.markdown(f"**Cérebro:** {mode_txt if key else 'somente regras (sem IA)'}")
             if not key:
                 st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "
-                           "OpenRouter, o DeepSeek interpreta o cenário antes de cada entrada e escreve a leitura do especialista "
+                           "OpenRouter, a IA interpreta o cenário antes de cada entrada e escreve a leitura do especialista "
                            "(cenário, melhor bot e plano condicional).")
         rs = (persona or {}).get("research") or {}
         best = rs.get("best_contexts") or []
@@ -608,7 +643,7 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
     result = st.session_state.get(f"{bot}__analysis")
     if not result:
         st.caption("Clique em **Analisar agora** para o bot executar as habilidades da personalidade escolhida"
-                   + (", consultar o DeepSeek" if key else "") + " e propor a ordem já dimensionada pela sua perda "
+                   + (", consultar a IA" if key else "") + " e propor a ordem já dimensionada pela sua perda "
                    "máxima por trade — ou **Ligar bot** para ele fazer isso sozinho a cada candle.")
         return
     render_analysis(profile, cfg, result)
@@ -628,7 +663,7 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
         h[3].metric("Stop", fmt_price(d.stop_loss))
         h[4].metric("Alvo", fmt_price(d.take_profit))
         h[5].metric("Placar regras", f"{result.plan['score']:+.0f}", result.plan["regime"], delta_color="off")
-        st.markdown(f"**Análise ({'IA · ' + d.model if d.source == 'ia' else 'somente regras'}):** {d.reasoning}")
+        st.markdown(f"**Análise ({'IA' if d.source == 'ia' else 'somente regras'}):** {d.reasoning}")
         if d.risks:
             st.markdown(f"**Riscos:** {d.risks}")
         if d.invalidation:
@@ -674,108 +709,6 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
             lv = result.plan["levels"]
             st.caption("Suportes: " + ", ".join(fmt_price(x["price"]) for x in lv["supports"]) +
                        " · Resistências: " + ", ".join(fmt_price(x["price"]) for x in lv["resistances"]))
-        if d.raw:
-            with st.expander("Resposta bruta da IA"):
-                st.code(d.raw, language="json")
-                if d.usage:
-                    st.caption(f"Tokens: {d.usage}")
-
-
-def armed_panel(profile: BotProfile, cfg: dict) -> None:
-    """Mostra o plano condicional armado (se houver) e permite desarmar."""
-    from core import advisor
-
-    bot = profile.key
-    rec = advisor.armed(bot)
-    if not rec:
-        return
-    with st.container(border=True):
-        c1, c2 = st.columns([4, 1])
-        c1.markdown("**📌 Plano condicional armado** — o sistema confere o gatilho a cada candle fechado.")
-        c1.write(rec["descricao"])
-        df = st.session_state.get(f"{bot}__df")
-        extra = ""
-        if rec["ativo"] != cfg["symbol"] or rec["tempo"] != cfg["interval"]:
-            extra = f" ⚠️ Plano de {rec['ativo']} no {rec['tempo']}: só é conferido enquanto o bot estiver nesse ativo e tempo gráfico."
-        elif df is not None:
-            state, info = advisor.evaluate(rec, df, cfg["interval"])
-            extra = f" Situação: **{state}**" + (f" ({info['candles']} de {rec['plano']['validade_candles']} candles)" if "candles" in info else "")
-        c1.caption(f"Armado em {rec['criado'][:16].replace('T', ' ')} UTC · origem: {rec['origem']}.{extra}"
-                   + ("" if cfg.get("autopilot") else " O bot está desligado: ligue o piloto automático para o plano abrir a ordem."))
-        if c2.button("Desarmar", key=f"{bot}__disarm", width="stretch"):
-            advisor.disarm(bot, "desarmado pelo usuário")
-            st.rerun()
-
-
-def render_advice(profile: BotProfile, cfg: dict, result: engine.AnalysisResult) -> None:
-    """Leitura do especialista: cenário, oportunidade, dica, bot recomendado e plano condicional."""
-    from core import advisor
-
-    bot = profile.key
-    adv = result.decision.advice
-    if not adv:
-        return
-    fonte = f"IA · {result.decision.model}" if adv.get("fonte") == "ia" else "regras (sem IA)"
-    st.divider()
-    st.markdown(f"#### 🎓 Leitura do especialista · {result.symbol} no {result.interval}")
-    st.caption(f"Fonte: {fonte}. Conteúdo educativo; não é recomendação de investimento.")
-    st.markdown(adv.get("cenario", ""))
-    if adv.get("leitura_tecnica"):
-        st.markdown("**Leitura técnica**\n" + "\n".join(f"- {x}" for x in adv["leitura_tecnica"]))
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"**🎯 Melhor oportunidade no {result.interval}**")
-        st.info(adv.get("oportunidade", "—"))
-    with c2:
-        st.markdown("**💡 Dica**")
-        st.success(adv.get("dica", "—"))
-
-    best = adv.get("bot")
-    st.markdown("**🤖 Melhor bot para este momento**")
-    if best and best.get("id"):
-        p = personalities.get(best["id"]) or {}
-        rs = p.get("research") or {}
-        tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}.get(rs.get("status"), "")
-        st.markdown(f"{tag} **{best['nome']}** — {best['motivo']}")
-        if p.get("tip"):
-            st.caption(p["tip"])
-        b1, b2 = st.columns([1.2, 2])
-        if best.get("ativo"):
-            b1.success("Já é o bot ativo")
-        elif b1.button("Usar este bot", key=f"{bot}__use_best", type="primary", width="stretch"):
-            set_setting(bot, "personality", best["id"])
-            st.session_state[_k(bot, "personality")] = best["id"]
-            tested = p.get("tested_interval")
-            if tested and tested in profile.intervals:
-                set_setting(bot, "interval", tested)
-            st.rerun()
-        if best.get("alternativas"):
-            b2.caption("Alternativas: " + " · ".join(a["nome"] for a in best["alternativas"]))
-    elif best:
-        st.warning(best.get("motivo", "Nenhum bot com vantagem comprovada agora: aguardar."))
-
-    plan = adv.get("plano")
-    st.markdown("**📌 Plano condicional (a ordem só abre se o mercado confirmar)**")
-    if not plan:
-        st.caption("Nenhum gatilho claro no momento.")
-        return
-    st.write(advisor.describe_plan(plan, result.symbol, result.interval))
-    if plan.get("explicacao"):
-        st.caption("Por quê: " + plan["explicacao"])
-    rec = advisor.armed(bot)
-    same = rec and rec["plano"] == plan and rec["ativo"] == result.symbol
-    if same:
-        st.success("Este plano está armado. O sistema confere o gatilho a cada candle fechado.")
-    else:
-        auto = cfg.get("autopilot") and cfg.get("ai_auto_arm") and adv.get("fonte") == "ia"
-        st.caption(("O piloto automático arma planos da IA sozinho. " if auto else "") +
-                   "Armar não abre ordem agora: só se o candle fechar confirmando o gatilho, e ainda passa pelo gestor de risco. "
-                   "Esse tipo de entrada condicional não tem backtest.")
-        if st.button("📌 Armar este plano", key=f"{bot}__arm_plan", type="primary"):
-            df = st.session_state.get(f"{bot}__df")
-            if df is not None:
-                engine.arm_plan(profile, cfg, plan, df, "ia" if adv.get("fonte") == "ia" else "regras")
-                st.rerun()
 
 
 # ------------------------------------------------------------- carteira
@@ -1013,6 +946,13 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
         if cfg["ai_model"] not in AI_MODELS:
             st.session_state[k("ai_model")] = DEFAULT_MODEL
         c[0].selectbox("Modelo (OpenRouter)", AI_MODELS, key=k("ai_model"), accept_new_options=True)
+        if not get_secret("OPENROUTER_API_KEY"):  # sem chave nos Secrets: informe aqui (vale para todas as páginas, só nesta sessão)
+            def _save_key():
+                st.session_state["_or_key"] = st.session_state[f"{bot}__or_key_w"]
+
+            st.text_input("Chave da OpenRouter (somente nesta sessão)", type="password", key=f"{bot}__or_key_w",
+                          value=st.session_state.get("_or_key", ""), on_change=_save_key,
+                          help="Para não digitar sempre, defina OPENROUTER_API_KEY nos Secrets do Streamlit.")
         st.radio("Papel da IA", ["filtro", "livre"], key=k("ai_mode"), horizontal=True,
                  format_func=lambda m: {"filtro": "🛡️ Filtro — confirma ou veta o sinal das regras (recomendado)",
                                         "livre": "🧠 Livre — a IA decide entrada, stop e alvo"}[m],
