@@ -242,7 +242,8 @@ for _p in BUILTINS:
 for _p in BUILTINS:
     _p["builtin"] = True
 
-DEFAULT_BY_BOT = {"day": "scalper_vwap", "swing": "tendencia", "long": "posicional"}
+# Padrões: especialistas aprovados na prova final (moedas inéditas) da pesquisa de out/2026
+DEFAULT_BY_BOT = {"day": "esp_15m_ema_3x1", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
 
 
 def _now() -> str:

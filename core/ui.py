@@ -482,10 +482,21 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                          help="Define como o bot pensa: indicadores, direção, filtros e stop/alvo. Compare o "
                               "desempenho de cada uma na página Personalidades.")
             if persona:
-                st.caption(f"{persona.get('summary') or persona.get('description', '')[:140]} · "
+                st.caption(f"{persona.get('tip') or persona.get('summary') or persona.get('description', '')[:140]} · "
                            f"{personalities.DIRECTIONS[persona.get('direction', 'misto')]} · "
                            f"indicado: {persona.get('timeframes', '—')}")
-            st.page_link("views/personalities.py", label="Ranking e criar estratégia", icon="🏆")
+                rs = persona.get("research") or {}
+                if rs.get("monthly_pct") is not None:
+                    line = (f"Simulado: {rs['ret_pct']:+.1f}% em {rs['period_label']} (≈ {rs['monthly_pct']:+.1f}% ao mês) "
+                            f"no {rs['interval']}, acerto {rs['win_pct']:.0f}%.")
+                    if rs.get("status") == "fraco":
+                        st.warning("⚠️ Esta personalidade foi fraca na simulação recente. " + line +
+                                   " Veja os aprovados em 🤖 Bots especialistas.")
+                    else:
+                        st.caption(("✅ " if rs.get("status") == "aprovado" else "🟡 ") + line)
+                    if rs.get("interval") and rs["interval"] != cfg["interval"]:
+                        st.caption(f"ℹ️ Testada no {rs['interval']}; o bot está no {cfg['interval']}.")
+            st.page_link("views/bots.py", label="Ver todos os bots especialistas", icon="🤖")
             st.markdown(f"**Cérebro:** {'IA DeepSeek + regras' if key else 'somente regras (sem IA)'}")
             if not key:
                 st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "

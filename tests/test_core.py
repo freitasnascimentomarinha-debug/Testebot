@@ -374,3 +374,20 @@ def test_lean_indicator_defaults_and_migration():
     old = {k: v for k, v in d.items() if k != "ema_trend_on"}
     S.save_settings("swing", {**old, "rsi_on": True, "macd_on": True})  # formato antigo: migra
     assert S.load_settings("swing")["rsi_on"] is False
+
+
+def test_native_bots_have_card_data():
+    from core import personalities as Pm
+
+    natives = [p for p in Pm.BUILTINS if p["id"].startswith("esp_")]
+    assert len(natives) >= 15
+    keys = {"period_label", "period_days", "ret_pct", "monthly_pct", "win_pct", "dd_pct", "trades_month",
+            "pos_coins", "per_symbol", "status", "interval"}
+    for p in Pm.BUILTINS:
+        assert p.get("specialty") and p.get("tip") and p.get("bot") in PROFILES, p["id"]
+        assert keys <= set(p.get("research", {})), p["id"]
+        rs = p["research"]
+        expected = ((1 + rs["ret_pct"] / 100) ** (30 / rs["period_days"]) - 1) * 100
+        assert rs["monthly_pct"] == pytest.approx(expected, abs=0.02)
+    for bot, pid in Pm.DEFAULT_BY_BOT.items():
+        assert Pm.get(pid)["research"]["status"] == "aprovado"

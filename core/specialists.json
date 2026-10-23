@@ -1,0 +1,576 @@
+[
+ {
+  "id": "esp_5m_bollinger_2x1",
+  "name": "🎯 Sniper Bollinger 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Reversão 5m · Bollinger · 2:1",
+  "tip": "Atira nos exageros: preço fora das Bandas de Bollinger em 5 minutos, buscando a volta.",
+  "summary": "Atira nos exageros: preço fora das Bandas de Bollinger em 5 minutos, buscando a volta.",
+  "description": "Especialista em reversão no 5 minutos: espera o preço esticar fora das Bandas de Bollinger com RSI em extremo e entra buscando a volta à média. Alvo de 2× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "misto",
+  "threshold": 50,
+  "sl_atr": 2.5,
+  "tp_atr": 5.0,
+  "skills": {
+   "bollinger": 2.0,
+   "reversao": 2.0
+  },
+  "filters": {
+   "trend_ema": true,
+   "volume_confirm": true,
+   "adx_min": 20,
+   "adx_max": 25
+  },
+  "selection": {
+   "busca_r": 0.291,
+   "validacao_r": 0.204,
+   "busca_n": 87,
+   "validacao_n": 46
+  }
+ },
+ {
+  "id": "esp_15m_volume_2x1",
+  "name": "📊 Caçador de Volume 15m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Volume + rompimento 15m · 2:1",
+  "tip": "Só entra quando o volume confirma o rompimento de máximas ou mínimas.",
+  "summary": "Só entra quando o volume confirma o rompimento de máximas ou mínimas.",
+  "description": "Especialista em volume no 15 minutos: procura rompimentos do canal de 20 candles acompanhados de volume acima da média (dinheiro entrando). Alvo de 2× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "15m",
+  "timeframes": "15m (testado)",
+  "direction": "misto",
+  "threshold": 10,
+  "sl_atr": 3.0,
+  "tp_atr": 6.0,
+  "skills": {
+   "volume": 1.0,
+   "rompimento": 2.0
+  },
+  "filters": {
+   "volume_confirm": true,
+   "rsi_guard": true,
+   "adx_min": 15,
+   "adx_max": 35
+  },
+  "selection": {
+   "busca_r": 0.241,
+   "validacao_r": 0.231,
+   "busca_n": 229,
+   "validacao_n": 98
+  }
+ },
+ {
+  "id": "esp_15m_fibo_2x1",
+  "name": "📐 Fibonacci 15m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Retração de Fibonacci 15m · 2:1",
+  "tip": "Entra na zona de ouro (38,2%–61,8%) da última perna, a favor da tendência.",
+  "summary": "Entra na zona de ouro (38,2%–61,8%) da última perna, a favor da tendência.",
+  "description": "Especialista em Fibonacci no 15 minutos: mede a última perna de alta ou de baixa e entra quando o preço corrige até a zona 38,2%–61,8%, apostando na retomada do movimento. Alvo de 2× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "15m",
+  "timeframes": "15m (testado)",
+  "direction": "venda",
+  "threshold": 50,
+  "sl_atr": 3.0,
+  "tp_atr": 6.0,
+  "skills": {
+   "fibonacci": 2.0,
+   "supertrend": 1.0,
+   "suporte_resistencia": 0.5
+  },
+  "filters": {
+   "trend_ema": true,
+   "adx_max": 25
+  },
+  "selection": {
+   "busca_r": 0.221,
+   "validacao_r": 0.113,
+   "busca_n": 38,
+   "validacao_n": 25
+  }
+ },
+ {
+  "id": "esp_15m_bollinger_1x1",
+  "name": "🎢 Bollinger 15m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Bandas de Bollinger 15m · 1:1",
+  "tip": "Opera os toques nas bandas de Bollinger com alvo igual ao stop.",
+  "summary": "Opera os toques nas bandas de Bollinger com alvo igual ao stop.",
+  "description": "Especialista em Bandas de Bollinger no 15 minutos: compra perto da banda inferior e vende perto da superior quando o contexto favorece a volta à média. Alvo do tamanho do stop.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "15m",
+  "timeframes": "15m (testado)",
+  "direction": "venda",
+  "threshold": 45,
+  "sl_atr": 2.5,
+  "tp_atr": 2.5,
+  "skills": {
+   "bollinger": 1.5,
+   "estocastico": 0.5,
+   "volume": 1.0
+  },
+  "filters": {
+   "avoid_lateral": true
+  },
+  "selection": {
+   "busca_r": 0.096,
+   "validacao_r": 0.103,
+   "busca_n": 105,
+   "validacao_n": 54
+  }
+ },
+ {
+  "id": "esp_15m_ema_3x1",
+  "name": "📈 Tendência EMA 15m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Médias móveis 15m · 3:1",
+  "tip": "Surfa o alinhamento das médias no 15 minutos buscando 3× o risco.",
+  "summary": "Surfa o alinhamento das médias no 15 minutos buscando 3× o risco.",
+  "description": "Especialista em médias móveis no 15 minutos: opera a favor do cruzamento e da inclinação das EMAs, com alvo de 3× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "15m",
+  "timeframes": "15m (testado)",
+  "direction": "venda",
+  "threshold": 35,
+  "sl_atr": 3.0,
+  "tp_atr": 9.0,
+  "skills": {
+   "tendencia": 1.5,
+   "supertrend": 1.0
+  },
+  "filters": {
+   "avoid_lateral": true,
+   "ignore_regime": true,
+   "adx_min": 25,
+   "adx_max": 30
+  },
+  "selection": {
+   "busca_r": 0.26,
+   "validacao_r": 0.519,
+   "busca_n": 90,
+   "validacao_n": 45
+  }
+ },
+ {
+  "id": "esp_1h_macd_3x1",
+  "name": "〽️ MACD 1h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "MACD 1h · 3:1",
+  "tip": "Cruzamentos e aceleração do MACD no gráfico de 1 hora, alvo de 3× o risco.",
+  "summary": "Cruzamentos e aceleração do MACD no gráfico de 1 hora, alvo de 3× o risco.",
+  "description": "Especialista em MACD no gráfico de 1 hora: entra quando a linha do MACD cruza o sinal e o histograma acelera a favor. Alvo de 3× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "direction": "misto",
+  "threshold": 10,
+  "sl_atr": 1.0,
+  "tp_atr": 3.0,
+  "skills": {
+   "macd": 2.0
+  },
+  "filters": {
+   "trend_ema": true,
+   "avoid_lateral": true,
+   "adx_min": 25,
+   "adx_max": 35
+  },
+  "selection": {
+   "busca_r": 0.235,
+   "validacao_r": 0.217,
+   "busca_n": 92,
+   "validacao_n": 46
+  }
+ },
+ {
+  "id": "esp_1h_fibo_3x1",
+  "name": "📐 Fibonacci 1h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Retração de Fibonacci 1h · 3:1",
+  "tip": "Correções até 38,2%–61,8% no gráfico de 1 hora, alvo de 3× o risco.",
+  "summary": "Correções até 38,2%–61,8% no gráfico de 1 hora, alvo de 3× o risco.",
+  "description": "Especialista em Fibonacci no gráfico de 1 hora: entra na zona de retração da última perna, a favor da tendência, buscando a continuação. Alvo de 3× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "direction": "venda",
+  "threshold": 45,
+  "sl_atr": 2.5,
+  "tp_atr": 7.5,
+  "skills": {
+   "fibonacci": 2.0
+  },
+  "filters": {
+   "adx_max": 25
+  },
+  "selection": {
+   "busca_r": 0.462,
+   "validacao_r": 1.068,
+   "busca_n": 22,
+   "validacao_n": 14
+  }
+ },
+ {
+  "id": "esp_1h_bollinger_1x1",
+  "name": "🎢 Bollinger 1h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Bandas de Bollinger 1h · 1:1",
+  "tip": "Volta à média nas bandas de Bollinger no gráfico de 1 hora.",
+  "summary": "Volta à média nas bandas de Bollinger no gráfico de 1 hora.",
+  "description": "Especialista em Bandas de Bollinger no gráfico de 1 hora, com alvo igual ao stop e foco em mercados sem tendência forte.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "direction": "compra",
+  "threshold": 20,
+  "sl_atr": 2.5,
+  "tp_atr": 2.5,
+  "skills": {
+   "bollinger": 2.0,
+   "estocastico": 0.5,
+   "volume": 1.0
+  },
+  "filters": {
+   "trend_ema": true,
+   "rsi_guard": true,
+   "adx_max": 35
+  },
+  "selection": {
+   "busca_r": 0.396,
+   "validacao_r": 0.53,
+   "busca_n": 37,
+   "validacao_n": 5
+  }
+ },
+ {
+  "id": "esp_swing_4h_ema_3x1",
+  "name": "🌊 Swing Médias 4h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Swing 4h · médias móveis · 3:1",
+  "tip": "Compra tendências de alta confirmadas pelas médias no gráfico de 4 horas.",
+  "summary": "Compra tendências de alta confirmadas pelas médias no gráfico de 4 horas.",
+  "description": "Especialista em swing trade no gráfico de 4 horas (spot, só compra): entra quando as médias móveis confirmam tendência de alta e segura por dias, com alvo de 3× o risco.",
+  "bot": "swing",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "4h",
+  "timeframes": "4h (testado)",
+  "direction": "compra",
+  "threshold": 40,
+  "sl_atr": 3.0,
+  "tp_atr": 9.0,
+  "skills": {
+   "tendencia": 1.0,
+   "estrutura": 0.5,
+   "adx": 0.5
+  },
+  "filters": {
+   "adx_max": 25
+  },
+  "selection": {
+   "busca_r": 0.357,
+   "validacao_r": 0.427,
+   "busca_n": 21,
+   "validacao_n": 10
+  }
+ },
+ {
+  "id": "esp_swing_4h_fibo_2x1",
+  "name": "📐 Swing Fibonacci 4h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Swing 4h · Fibonacci · 2:1",
+  "tip": "Compra correções até a zona de Fibonacci em tendência de alta (4 horas).",
+  "summary": "Compra correções até a zona de Fibonacci em tendência de alta (4 horas).",
+  "description": "Especialista em Fibonacci no swing de 4 horas (spot, só compra): espera a correção de uma perna de alta até 38,2%–61,8% e compra a retomada. Alvo de 2× o risco.",
+  "bot": "swing",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "4h",
+  "timeframes": "4h (testado)",
+  "direction": "compra",
+  "threshold": 20,
+  "sl_atr": 2.0,
+  "tp_atr": 4.0,
+  "skills": {
+   "fibonacci": 1.0
+  },
+  "filters": {
+   "ignore_regime": true
+  },
+  "selection": {
+   "busca_r": 0.232,
+   "validacao_r": 0.24,
+   "busca_n": 50,
+   "validacao_n": 23
+  }
+ },
+ {
+  "id": "esp_swing_4h_rsi_2x1",
+  "name": "💎 Swing RSI 4h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Swing 4h · RSI sobrevendido · 2:1",
+  "tip": "Compra quando o RSI mostra exagero de queda no gráfico de 4 horas.",
+  "summary": "Compra quando o RSI mostra exagero de queda no gráfico de 4 horas.",
+  "description": "Especialista em RSI no swing de 4 horas (spot, só compra): compra sobrevendas e correções exageradas, buscando 2× o risco no repique.",
+  "bot": "swing",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "4h",
+  "timeframes": "4h (testado)",
+  "direction": "compra",
+  "threshold": 20,
+  "sl_atr": 3.0,
+  "tp_atr": 6.0,
+  "skills": {
+   "momentum": 1.0,
+   "reversao": 1.5
+  },
+  "filters": {
+   "adx_min": 15,
+   "adx_max": 30
+  },
+  "selection": {
+   "busca_r": 0.539,
+   "validacao_r": 0.448,
+   "busca_n": 11,
+   "validacao_n": 8
+  }
+ },
+ {
+  "id": "esp_swing_4h_breakout_3x1",
+  "name": "🚀 Swing Rompimento 4h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Swing 4h · rompimento + volume · 3:1",
+  "tip": "Compra rompimentos de máximas com volume no gráfico de 4 horas.",
+  "summary": "Compra rompimentos de máximas com volume no gráfico de 4 horas.",
+  "description": "Especialista em rompimentos no swing de 4 horas (spot, só compra): entra quando o preço rompe a máxima de 20 candles com volume acima da média. Alvo de 3× o risco.",
+  "bot": "swing",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "4h",
+  "timeframes": "4h (testado)",
+  "direction": "compra",
+  "threshold": 45,
+  "sl_atr": 2.5,
+  "tp_atr": 7.5,
+  "skills": {
+   "rompimento": 1.5,
+   "volume": 1.0,
+   "tendencia": 0.5,
+   "adx": 0.5
+  },
+  "filters": {
+   "avoid_lateral": true,
+   "adx_min": 25
+  },
+  "selection": {
+   "busca_r": 0.609,
+   "validacao_r": 0.697,
+   "busca_n": 25,
+   "validacao_n": 8
+  }
+ },
+ {
+  "id": "esp_swing_1h_bollinger_1x1",
+  "name": "🎢 Swing Bollinger 1h",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Swing 1h · Bollinger · 1:1",
+  "tip": "Compra perto da banda inferior de Bollinger no gráfico de 1 hora (spot).",
+  "summary": "Compra perto da banda inferior de Bollinger no gráfico de 1 hora (spot).",
+  "description": "Especialista em Bandas de Bollinger no spot, gráfico de 1 hora, só compra: entra perto da banda inferior buscando a volta à média, com alvo igual ao stop.",
+  "bot": "swing",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "direction": "compra",
+  "threshold": 45,
+  "sl_atr": 2.5,
+  "tp_atr": 2.5,
+  "skills": {
+   "bollinger": 1.0,
+   "volume": 1.0,
+   "estocastico": 0.5
+  },
+  "filters": {
+   "trend_ema": true,
+   "avoid_lateral": true,
+   "adx_min": 20
+  },
+  "selection": {
+   "busca_r": 0.262,
+   "validacao_r": 0.378,
+   "busca_n": 26,
+   "validacao_n": 4
+  }
+ },
+ {
+  "id": "esp_long_1d_trend_4x1",
+  "name": "🏔️ Longo Prazo Tendência",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Diário · médias 50/200 · 4:1",
+  "tip": "Compra a tendência primária de alta no diário e segura por semanas.",
+  "summary": "Compra a tendência primária de alta no diário e segura por semanas.",
+  "description": "Especialista em longo prazo no gráfico diário (spot, só compra): entra quando as médias de 50 e 200 dias confirmam tendência de alta. Stop largo e alvo de 4× o risco.",
+  "bot": "long",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "1d",
+  "timeframes": "1d (testado)",
+  "direction": "compra",
+  "threshold": 30,
+  "sl_atr": 1.5,
+  "tp_atr": 6.0,
+  "skills": {
+   "tendencia": 1.0,
+   "supertrend": 0.5,
+   "macd": 1.0
+  },
+  "filters": {
+   "trend_ema": true,
+   "volume_confirm": true,
+   "adx_min": 15,
+   "adx_max": 35
+  },
+  "selection": {
+   "busca_r": 0.154,
+   "validacao_r": 0.622,
+   "busca_n": 71,
+   "validacao_n": 12
+  }
+ },
+ {
+  "id": "esp_long_1d_ichimoku_4x1",
+  "name": "☁️ Longo Prazo Ichimoku",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Diário · Ichimoku · 4:1",
+  "tip": "Compra quando o preço está acima da nuvem do Ichimoku no diário.",
+  "summary": "Compra quando o preço está acima da nuvem do Ichimoku no diário.",
+  "description": "Especialista em Ichimoku no gráfico diário (spot, só compra): opera tendências de alta com preço acima da nuvem e Tenkan acima da Kijun. Alvo de 4× o risco.",
+  "bot": "long",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "1d",
+  "timeframes": "1d (testado)",
+  "direction": "compra",
+  "threshold": 55,
+  "sl_atr": 2.5,
+  "tp_atr": 10.0,
+  "skills": {
+   "ichimoku": 1.5
+  },
+  "filters": {
+   "volume_confirm": true,
+   "ignore_regime": true,
+   "adx_min": 15,
+   "adx_max": 30
+  },
+  "selection": {
+   "busca_r": 0.67,
+   "validacao_r": 0.673,
+   "busca_n": 32,
+   "validacao_n": 11
+  }
+ },
+ {
+  "id": "esp_long_1d_fibo_3x1",
+  "name": "📐 Longo Prazo Fibonacci",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Diário · Fibonacci · 3:1",
+  "tip": "Compra correções profundas (38,2%–61,8%) de pernas de alta no diário.",
+  "summary": "Compra correções profundas (38,2%–61,8%) de pernas de alta no diário.",
+  "description": "Especialista em Fibonacci no gráfico diário (spot, só compra): acumula nas retrações da última grande perna de alta, buscando 3× o risco.",
+  "bot": "long",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "1d",
+  "timeframes": "1d (testado)",
+  "direction": "compra",
+  "threshold": 25,
+  "sl_atr": 1.5,
+  "tp_atr": 4.5,
+  "skills": {
+   "fibonacci": 1.5,
+   "estrutura": 1.0
+  },
+  "filters": {
+   "adx_min": 15,
+   "adx_max": 25
+  },
+  "selection": {
+   "busca_r": 0.206,
+   "validacao_r": 0.463,
+   "busca_n": 61,
+   "validacao_n": 16
+  }
+ },
+ {
+  "id": "esp_long_1d_rsi_2x1",
+  "name": "💎 Longo Prazo RSI",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Diário · RSI · 2:1",
+  "tip": "Compra quando o RSI diário marca exagero de queda.",
+  "summary": "Compra quando o RSI diário marca exagero de queda.",
+  "description": "Especialista em RSI no gráfico diário (spot, só compra): compra sobrevendas de longo prazo, buscando 2× o risco no repique.",
+  "bot": "long",
+  "markets": [
+   "spot"
+  ],
+  "tested_interval": "1d",
+  "timeframes": "1d (testado)",
+  "direction": "compra",
+  "threshold": 10,
+  "sl_atr": 2.0,
+  "tp_atr": 4.0,
+  "skills": {
+   "momentum": 1.0,
+   "suporte_resistencia": 1.0
+  },
+  "filters": {
+   "ignore_regime": true
+  },
+  "selection": {
+   "busca_r": 0.108,
+   "validacao_r": 0.1,
+   "busca_n": 117,
+   "validacao_n": 38
+  }
+ }
+]
