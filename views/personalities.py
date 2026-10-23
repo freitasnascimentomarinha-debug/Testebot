@@ -1,6 +1,7 @@
 """Personalidades: ranking de desempenho, biblioteca, criação de estratégias e backtest."""
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from core import fastsim, personalities as P
@@ -430,7 +431,14 @@ with tab_bt:
         m[3].metric("Resultado por operação", f"{fmt(pnl / len(rows))} USDT" if rows else "—")
         if res["curve"]:
             curve = pd.DataFrame([{"time": res["rows"][0]["entrada"], "Banca (USDT)": res["bank0"]}] + res["curve"])
-            st.line_chart(curve.set_index("time"), height=260)
+            color = "#26a69a" if res["bank"] >= res["bank0"] else "#ef5350"
+            fig = go.Figure(go.Scatter(x=curve["time"], y=curve["Banca (USDT)"], mode="lines", line=dict(color=color, width=2),
+                                       hovertemplate="%{x|%d/%m %H:%M}<br>%{y:,.2f} USDT"))
+            fig.add_hline(y=res["bank0"], line=dict(color="#8a8f98", dash="dot", width=1),
+                          annotation_text="banca inicial", annotation_position="bottom right")
+            fig.update_layout(height=280, template="plotly_dark", margin=dict(l=10, r=10, t=20, b=10),
+                              yaxis_title="Banca (USDT)", showlegend=False)
+            st.plotly_chart(fig, config={"displayModeBar": False})
             st.dataframe(pd.DataFrame(res["per_coin"]), hide_index=True, column_config={
                 "Acerto": st.column_config.NumberColumn(format="%.0f%%"),
                 "R médio": st.column_config.NumberColumn(format="%+.2f"),
