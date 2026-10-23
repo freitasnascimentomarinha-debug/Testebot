@@ -1659,7 +1659,9 @@
    "pos_coins": "6/10",
    "trades_month": 14.7,
    "status": "ressalva"
-  }
+  },
+  "prev_ret_pct": 0.33,
+  "prev_pos_coins": "5/10"
  },
  "esp_15m_volume_2x1": {
   "period_label": "40 dias",
@@ -5215,7 +5217,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 282,
@@ -5393,7 +5395,9 @@
    "pos_coins": "9/10",
    "trades_month": 9.7,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -4.39,
+  "prev_pos_coins": "1/10"
  },
  "esp_5m_rsi_reversal": {
   "period_label": "40 dias",
@@ -5421,7 +5425,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 333,
@@ -5599,7 +5603,9 @@
    "pos_coins": "8/10",
    "trades_month": 9.5,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -3.2,
+  "prev_pos_coins": "1/10"
  },
  "esp_5m_bb_reversal_2x1": {
   "period_label": "40 dias",
@@ -5627,7 +5633,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 0,
@@ -5805,7 +5811,9 @@
    "pos_coins": "8/10",
    "trades_month": 10.1,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -7.23,
+  "prev_pos_coins": "1/10"
  },
  "esp_5m_stoch_reversal": {
   "period_label": "40 dias",
@@ -5833,7 +5841,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 0,
@@ -6012,7 +6020,9 @@
    "pos_coins": "7/10",
    "trades_month": 37.6,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -4.3,
+  "prev_pos_coins": "1/10"
  },
  "esp_5m_sr_reversal": {
   "period_label": "40 dias",
@@ -6040,7 +6050,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 659,
@@ -6218,7 +6228,9 @@
    "pos_coins": "7/10",
    "trades_month": 12.2,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -5.76,
+  "prev_pos_coins": "1/10"
  },
  "esp_5m_fibo_reversal": {
   "period_label": "40 dias",
@@ -6246,7 +6258,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 833,
@@ -6424,7 +6436,9 @@
    "pos_coins": "7/10",
    "trades_month": 12.0,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -6.28,
+  "prev_pos_coins": "1/10"
  },
  "esp_5m_volume_climax": {
   "period_label": "40 dias",
@@ -6452,7 +6466,7 @@
   "tested_at": "23/10/2026",
   "market": "futures",
   "interval": "5m",
-  "status": "aprovado",
+  "status": "fraco",
   "contexts": {
    "rompimento_alta": {
     "n": 833,
@@ -6630,7 +6644,9 @@
    "pos_coins": "8/10",
    "trades_month": 10.2,
    "status": "aprovado"
-  }
+  },
+  "prev_ret_pct": -5.75,
+  "prev_pos_coins": "1/10"
  },
  "esp_1h_priceaction_1x1": {
   "period_label": "40 dias",

@@ -111,6 +111,9 @@ with tab_gal:
                 status = {"aprovado": "✅ Aprovado na prova final", "ressalva": "🟡 Aprovado com ressalva",
                           "fraco": "⚠️ Fraco no período"}.get(rs.get("status"), "")
                 st.caption(f"{status} · ~{rs['trades_month']:.0f} operações/mês · {rs['pos_coins']} moedas positivas")
+                if rs.get("prev_ret_pct") is not None:
+                    st.caption(f"{'🔴' if rs['prev_ret_pct'] < 0 else '🟢'} Nos 40 dias anteriores: {rs['prev_ret_pct']:+.1f}% "
+                               f"({rs['prev_pos_coins']} moedas positivas) — teste de outro regime de mercado.")
                 best, filt = rs.get("best_contexts") or [], rs.get("context_filtered")
                 if best and filt:
                     better = filt["ret_pct"] > rs["ret_pct"] and filt["status"] == "aprovado"
