@@ -115,6 +115,10 @@ def futures_symbols() -> list[str]:
 
 
 def max_leverage(symbol: str, market: str = "futures", margin_mode: str = "Isolada") -> int:
+    from core import markets
+
+    if market in markets.MARKETS:
+        return markets.MARKETS[market].max_leverage
     if market != "futures":
         return SPOT_MARGIN_MAX.get(margin_mode, 3)
     return brackets(symbol)[0][0].max_leverage
@@ -131,8 +135,21 @@ def max_notional(symbol: str, leverage: float) -> float:
     return max(allowed) if allowed else 0.0
 
 
+OTHER_MMR = 0.005  # margem de manutenção (0,5% do nocional) nos mercados simulados fora da cripto
+
+
 def liquidation_price(*, side: str, entry: float, qty: float, leverage: float, market: str, symbol: str,
-                      margin_mode: str = "Isolada", free_balance: float = 0.0) -> float | None:
+                      margin_mode: str = "Isolada", free_balance: float = 0.0, fx: float = 1.0) -> float | None:
+    from core import markets
+
+    if market in markets.MARKETS:  # forex, commodities, índices, ações: margem isolada simples (valores em dólar via fx)
+        if qty <= 0 or (leverage <= 1 and side == "BUY"):
+            return None
+        notional = entry * qty * fx
+        wb = notional / leverage + (max(free_balance, 0.0) if margin_mode == "Cruzada" else 0.0)
+        s = 1 if side == "BUY" else -1
+        lp = entry - s * (wb - OTHER_MMR * notional) / (qty * fx)
+        return lp if lp > 0 else None
     if qty <= 0 or leverage <= 1 and market == "spot" and side == "BUY":
         return None
     notional = entry * qty

@@ -169,7 +169,12 @@ def tradingview_widget(symbol: str, interval: str, market: str, height: int = 76
     "Posição comprada/vendida" para cálculo de risco:retorno)."""
     tv_interval = {"1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120",
                    "4h": "240", "6h": "360", "12h": "720", "1d": "D", "3d": "3D", "1w": "W", "1M": "M"}[interval]
-    tv_symbol = f"BINANCE:{symbol}{'.P' if market == 'futures' else ''}"
+    from core import markets
+
+    if markets.is_crypto(market):
+        tv_symbol = f"BINANCE:{symbol}{'.P' if market == 'futures' else ''}"
+    else:
+        tv_symbol = markets.tv_symbol(market, symbol)
     return f"""
 <div class="tradingview-widget-container" style="height:{height}px;width:100%">
   <div id="tv_chart" style="height:{height}px;width:100%"></div>

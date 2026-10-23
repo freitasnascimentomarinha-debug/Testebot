@@ -10,6 +10,7 @@ import math
 from dataclasses import asdict, dataclass, field
 
 from core import leverage as lev_rules
+from core import markets
 
 MAINT_MARGIN_RATE = 0.004  # taxa de manutenção típica dos perpétuos (faixa inicial)
 
@@ -33,6 +34,7 @@ class TradeCalc:
     stop_pct: float | None
     tp_pct: float | None
     warnings: list[str] = field(default_factory=list)
+    fx: float = 1.0           # dólares por unidade da moeda de cotação (1 na cripto)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -81,13 +83,21 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
               leverage: float = 1.0, fee_pct: float = 0.1, qty: float | None = None,
               risk_usdt: float | None = None, margin_usdt: float | None = None,
               available: float | None = None, symbol: str | None = None, market: str = "futures",
-              margin_mode: str = "Isolada") -> TradeCalc:
+              margin_mode: str = "Isolada", fx: float | None = None) -> TradeCalc:
     """Dimensiona a posição.
 
     Prioridade do tamanho: ``qty`` explícita → ``risk_usdt`` (perda máxima,
     exige stop) → ``margin_usdt`` (valor a alocar).
     """
     warnings: list[str] = []
+    if markets.is_crypto(market) or not symbol:
+        fx = 1.0
+    elif fx is None:
+        try:
+            fx = markets.fx_for(market, symbol)
+        except Exception as exc:  # noqa: BLE001
+            fx = 1.0
+            warnings.append(f"Sem cotação para converter a moeda do ativo em dólar ({exc}); valores sem conversão.")
     fee = fee_pct / 100
     sign = 1 if side == "BUY" else -1
     lev = max(1.0, float(leverage))
@@ -101,14 +111,14 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
 
     if qty is None:
         if risk_usdt and stop_dist:
-            per_unit_loss = stop_dist + fee * (entry + stop)
+            per_unit_loss = (stop_dist + fee * (entry + stop)) * fx
             qty = risk_usdt / per_unit_loss
         elif margin_usdt:
-            qty = margin_usdt * lev / entry
+            qty = margin_usdt * lev / (entry * fx)
         else:
             qty = 0.0
-    if available is not None and qty * entry / lev * (1 + fee * lev) > available:
-        max_qty = available / (entry / lev + fee * entry)
+    if available is not None and qty * entry * fx / lev * (1 + fee * lev) > available:
+        max_qty = available / ((entry / lev + fee * entry) * fx)
         warnings.append(f"Quantidade reduzida pelo saldo disponível ({available:,.2f} USDT).")
         qty = max_qty
     if symbol and market == "futures" and lev > 1:
@@ -117,19 +127,19 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
             warnings.append(f"Pela tabela da Binance, com {lev:g}× a posição máxima em {symbol} é "
                             f"{cap:,.0f} USDT — quantidade reduzida.")
             qty = cap / entry
-    qty = round_qty(qty, entry)
+    qty = round_qty(qty, entry) if markets.is_crypto(market) else markets.round_qty(market, qty)
 
-    notional = qty * entry
+    notional = qty * entry * fx
     margin = notional / lev
     fees_open = notional * fee
-    risk = qty * stop_dist + fees_open + qty * stop * fee if stop_dist else float("nan")
-    reward = (qty * abs(take_profit - entry) - fees_open - qty * take_profit * fee) if take_profit else float("nan")
+    risk = qty * stop_dist * fx + fees_open + qty * stop * fx * fee if stop_dist else float("nan")
+    reward = (qty * abs(take_profit - entry) * fx - fees_open - qty * take_profit * fx * fee) if take_profit else float("nan")
     rr = reward / risk if stop_dist and take_profit and risk > 0 else None
     breakeven = entry * (1 + sign * 2 * fee)
     if symbol:
         free = (available - margin - fees_open) if available is not None else 0.0
         liq = lev_rules.liquidation_price(side=side, entry=entry, qty=qty, leverage=lev, market=market,
-                                          symbol=symbol, margin_mode=margin_mode, free_balance=free)
+                                          symbol=symbol, margin_mode=margin_mode, free_balance=free, fx=fx)
     else:
         liq = liquidation_price(side, entry, lev) if lev > 1 or side == "SELL" else None
 
@@ -139,7 +149,9 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
         warnings.append(f"Posição de {qty * entry:,.2f} USDT abaixo do mínimo da Binance para {symbol} "
                         f"({MIN_NOTIONAL.get(symbol, 5.0):g} USDT): aumente o risco por trade ou a banca.")
     if qty <= 0:
-        warnings.append("Quantidade resultante igual a zero — ajuste risco, stop ou saldo.")
+        step = markets.MARKETS[market].qty_step if market in markets.MARKETS else None
+        warnings.append("Quantidade resultante igual a zero — ajuste risco, stop ou saldo."
+                        + (f" Neste mercado a menor quantidade é {step:g}." if step else ""))
 
     return TradeCalc(
         side=side, entry=entry, stop=stop, take_profit=take_profit, qty=qty, notional=notional,
@@ -147,7 +159,7 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
         fees_usdt=fees_open * 2, breakeven=breakeven, liquidation=liq,
         stop_pct=(stop_dist / entry * 100) if stop_dist else None,
         tp_pct=(abs(take_profit - entry) / entry * 100) if take_profit else None,
-        warnings=warnings,
+        warnings=warnings, fx=fx,
     )
 
 

@@ -1,4 +1,4 @@
-"""Painel geral: resumo das três subcontas simuladas."""
+"""Painel geral: resumo das subcontas simuladas (cripto e demais mercados)."""
 import pandas as pd
 import streamlit as st
 
@@ -13,14 +13,23 @@ from core.ui import cached_ticker, fmt
 
 st.title("📊 Plataforma de Bots de Trade")
 mode = paper.wallet_config()["mode"]
-st.caption("Três bots operando com cotações reais — "
+st.caption("Bots operando com cotações reais — "
            + ("todos na mesma **carteira única**, junto com as suas ordens manuais." if mode == "única"
               else "cada um com a sua **banca separada**."))
 st.page_link("views/wallet.py", label="Abrir Carteira (banca, aportes, extrato e histórico completo)", icon="💰")
 
-cols = st.columns(3)
+PAGES = {"day": "day_trade", "swing": "swing_trade", "long": "long_trade", "forex": "forex", "commodities": "commodities",
+         "indices": "indices", "stocks": "acoes"}
+GROUPS = [("Mercado Cripto", ["day", "swing", "long"]), ("Outros mercados", ["forex", "commodities", "indices", "stocks"])]
 curves = []
-for col, (key, profile) in zip(cols, PROFILES.items()):
+cells = []  # (coluna, chave): uma linha de cartões por grupo de mercados
+for title, keys in GROUPS:
+    keys = [k for k in keys if k in PROFILES]
+    st.markdown(f"##### {title}")
+    row = st.columns(len(keys))
+    cells += list(zip(row, keys))
+for col, key in cells:
+    profile = PROFILES[key]
     cfg = load_settings(key)
     acct = paper.get_account(paper.account_id(key))
     prices = {}
@@ -41,8 +50,7 @@ for col, (key, profile) in zip(cols, PROFILES.items()):
         b.metric("Acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
         st.caption(f"Piloto automático: {'🟢 ligado' if cfg['autopilot'] else '⚪ desligado'} · "
                    f"Perda máx./trade: {fmt(cfg['max_loss_usdt']) + ' USDT' if cfg['risk_mode'] == 'USDT' else str(cfg['max_loss_pct']) + '%'}")
-        st.page_link(f"views/{ {'day': 'day_trade', 'swing': 'swing_trade', 'long': 'long_trade'}[key] }.py",
-                     label="Abrir bot", icon="➡️")
+        st.page_link(f"views/{PAGES[key]}.py", label="Abrir bot", icon="➡️")
     curve = pd.DataFrame(acct["equity_curve"])
     if len(curve) and (mode == "separada" or not curves):
         curve["time"] = pd.to_datetime(curve["time"])

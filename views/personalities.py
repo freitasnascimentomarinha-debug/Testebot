@@ -17,6 +17,13 @@ st.caption("Cada personalidade é uma estratégia: quais indicadores o bot usa, 
            "stop/alvo. Escolha a que performa melhor no ranking, crie a sua e compartilhe com todos.")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
+MARKET_LABEL = {"futures": "Futuros", "spot": "Spot (só compra)", **{k: m.label for k, m in P.markets.MARKETS.items()}}
+
+
+def mlabel(m: str) -> str:
+    return MARKET_LABEL.get(m, m)
+
+
 BOT_LABEL = {k: f"{p.icon} {p.name}" for k, p in PROFILES.items()}
 
 
@@ -25,7 +32,7 @@ def use_in_bot(pid: str, bot: str) -> None:
     rs = persona.get("research") or {}
     if rs and (rs.get("market") != PROFILES[bot].market or rs.get("status") not in ("aprovado", "ressalva")):
         st.toast(f"{persona['name']} só pode ser usada onde foi treinada e se destacou "
-                 f"({'futuros' if rs.get('market') == 'futures' else 'spot'}, {rs.get('interval')}"
+                 f"({mlabel(rs.get('market')).lower()}, {rs.get('interval')}"
                  f"{'' if rs.get('status') in ('aprovado', 'ressalva') else '; ficou fraca no teste'}).", icon="🚫")
         return
     cfg = load_settings(bot)
@@ -368,20 +375,25 @@ with tab_bt:
     rs = persona.get("research") or {}
     # mercado e timeframe começam nos que o bot foi testado (podem ser trocados)
     if st.session_state.get("sim_last_bot") != pid:
-        st.session_state["sim_market"] = rs.get("market") or ("futures" if "futures" in persona.get("markets", []) else "spot")
+        st.session_state["sim_market"] = rs.get("market") or (persona.get("markets") or ["spot"])[0]
         st.session_state["sim_itv"] = rs.get("interval") or persona.get("tested_interval") or "1h"
         st.session_state["sim_last_bot"] = pid
-    market = c2.selectbox("Mercado", ["futures", "spot"], key="sim_market",
-                          format_func=lambda m: "Futuros" if m == "futures" else "Spot (só compra)")
+    market = c2.selectbox("Mercado", list(MARKET_LABEL), key="sim_market", format_func=mlabel)
     itv = c3.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], key="sim_itv")
     st.caption(f"💡 {persona.get('tip') or persona.get('summary', '')}"
-               + (f" · testado em {rs['interval']} ({'futuros' if rs['market'] == 'futures' else 'spot'})" if rs else ""))
+               + (f" · testado em {rs['interval']} ({mlabel(rs['market']).lower()})" if rs else ""))
 
     c1, c2, c3, c4 = st.columns([2.2, 1, 1, 1])
     symbols = cached_symbols(market)
-    coins = c1.multiselect("Moedas", symbols, default=[s_ for s_ in ("BTCUSDT",) if s_ in symbols], key="sim_coins",
-                           help="Cada moeda é simulada e as operações entram na mesma banca, na ordem em que fecharam.")
+    default_sym = ("BTCUSDT",) if P.markets.is_crypto(market) else (P.markets.MARKETS[market].default_symbol,)
+    if st.session_state.get("sim_coins_market") != market:  # trocou de mercado: os ativos antigos não existem no novo
+        st.session_state["sim_coins"] = [s_ for s_ in default_sym if s_ in symbols]
+        st.session_state["sim_coins_market"] = market
+    coins = c1.multiselect("Ativos", symbols, key="sim_coins",
+                           help="Cada ativo é simulado e as operações entram na mesma banca, na ordem em que fecharam.")
     max_days = {"5m": 60, "15m": 120, "1h": 365, "4h": 900, "1d": 1500}[itv]
+    if not P.markets.is_crypto(market):  # histórico intradiário do Yahoo é limitado
+        max_days = {"5m": 55, "15m": 55, "1h": 700, "4h": 700, "1d": 1500}[itv]
     period_opts = [d for d in (7, 15, 30, 40, 60, 90, 180, 365, 730) if d <= max_days]
     days = c2.selectbox("Período (dias)", period_opts, index=period_opts.index(40) if 40 in period_opts else 0,
                         key="sim_days")
@@ -406,7 +418,7 @@ with tab_bt:
             for t in trades:
                 rows.append({**t, "moeda": sym})
             rs_ = [t["r"] for t in trades]
-            per_coin.append({"Moeda": sym.replace("USDT", ""), "Operações": len(rs_),
+            per_coin.append({"Moeda": sym.replace("USDT", "") if P.markets.is_crypto(market) else sym, "Operações": len(rs_),
                              "Acerto": (np.mean([r > 0 for r in rs_]) * 100) if rs_ else 0.0,
                              "R médio": float(np.mean(rs_)) if rs_ else 0.0})
             bar.progress(n_ / len(coins), text=f"{sym}: {len(trades)} operações")

@@ -19,7 +19,8 @@ if msg := st.session_state.pop("bots_toast", None):
     st.toast(msg, icon="✅")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
-STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}
+STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo", "forex": "💱 Forex", "commodities": "🛢️ Commodities",
+         "indices": "📈 Índices", "stocks": "🇧🇷 Ações B3"}
 
 
 def rr_label(p: dict) -> str:
@@ -92,7 +93,7 @@ with tab_gal:
         with cols[n % 3].container(border=True):
             st.markdown(f"#### {p['name']}")
             mk = rs.get("market") or ("futures" if "futures" in p.get("markets", ["futures"])[:1] else "spot")
-            market = "Futuros" if mk == "futures" else "Spot"
+            market = {"futures": "Futuros", "spot": "Spot"}.get(mk) or (P.markets.MARKETS[mk].label if mk in P.markets.MARKETS else mk)
             badges = [STYLE.get(bot, bot), rs.get("interval") or p.get("tested_interval") or p.get("timeframes", ""), market,
                       f"R:R {rr_label(p)}"]
             st.markdown(" ".join(f"`{b}`" for b in badges if b))
@@ -112,8 +113,8 @@ with tab_gal:
                           "fraco": "⚠️ Fraco no período"}.get(rs.get("status"), "")
                 st.caption(f"{status} · ~{rs['trades_month']:.0f} operações/mês · {rs['pos_coins']} moedas positivas")
                 if rs.get("prev_ret_pct") is not None:
-                    st.caption(f"{'🔴' if rs['prev_ret_pct'] < 0 else '🟢'} Nos 40 dias anteriores: {rs['prev_ret_pct']:+.1f}% "
-                               f"({rs['prev_pos_coins']} moedas positivas) — teste de outro regime de mercado.")
+                    st.caption(f"{'🔴' if rs['prev_ret_pct'] < 0 else '🟢'} {rs.get('prev_label', 'Nos 40 dias anteriores')}: {rs['prev_ret_pct']:+.1f}% "
+                               f"({rs['prev_pos_coins']} {'moedas' if rs.get('market') in ('futures', 'spot') else 'ativos'} positivos) — teste de outro regime de mercado.")
                 best, filt = rs.get("best_contexts") or [], rs.get("context_filtered")
                 if best and filt:
                     better = filt["ret_pct"] > rs["ret_pct"] and filt["status"] == "aprovado"

@@ -57,8 +57,9 @@ def scenario(df: pd.DataFrame, cfg: dict) -> dict:
     atr = float(last.atr)
     levels = ind.support_resistance(data)
     ctx = str(regime_mod.classify(data.tail(300)).iloc[-1])
-    rel = float(last.volume / last.vol_sma) if last.vol_sma else None
-    rel3 = float(data["volume"].tail(3).mean() / last.vol_sma) if last.vol_sma else None
+    no_vol = data["volume"].tail(60).nunique() <= 1  # forex e alguns índices: sem volume centralizado (candles com volume constante)
+    rel = float(last.volume / last.vol_sma) if last.vol_sma and not no_vol else None
+    rel3 = float(data["volume"].tail(3).mean() / last.vol_sma) if last.vol_sma and not no_vol else None
     width = (last.bb_up - last.bb_low) / last.bb_mid * 100 if last.bb_mid else None
     band_pos = (price - last.bb_low) / (last.bb_up - last.bb_low) * 100 if last.bb_up != last.bb_low else 50.0
     hi20, lo20 = float(data["high"].tail(20).max()), float(data["low"].tail(20).min())
@@ -81,7 +82,7 @@ def scenario(df: pd.DataFrame, cfg: dict) -> dict:
         "contexto": ctx, "contexto_nome": regime_mod.label(ctx), "contexto_regra": regime_mod.REGIMES.get(ctx, ("", ""))[1],
         "adx": _f(last.adx, 1), "di_mais": _f(last.di_plus, 1), "di_menos": _f(last.di_minus, 1), "rsi": _f(last.rsi, 1),
         "ema_rapida": _f(ef, 6), "ema_lenta": _f(es, 6), "ema_tendencia": _f(et, 6), "alinhamento_medias": align,
-        "volume_relativo": _f(rel, 2), "volume_relativo_3": _f(rel3, 2),
+        "volume_relativo": _f(rel, 2), "volume_relativo_3": _f(rel3, 2), "sem_volume": bool(no_vol),
         "bollinger_largura_pct": _f(width, 2), "posicao_na_banda_pct": _f(band_pos, 0),
         "maxima_20": _f(hi20, 6), "minima_20": _f(lo20, 6),
         "dist_maxima_20_atr": _f((hi20 - price) / atr, 1), "dist_minima_20_atr": _f((price - lo20) / atr, 1),
@@ -168,6 +169,8 @@ def _htf_txt(sc: dict) -> str:
 
 def _vol_txt(sc: dict) -> str:
     r = sc.get("volume_relativo")
+    if sc.get("sem_volume"):
+        return "Este ativo não informa volume (comum no forex e em alguns índices): a leitura de volume não entra na análise."
     if r is None:
         return ""
     leitura = ("volume forte, que confirma o movimento" if r >= 1.5 else "volume acima da média" if r >= 1.1
@@ -192,7 +195,7 @@ def rules_advice(sc: dict, cands: list[dict], plan_d: dict, cfg: dict, price: fl
     cenario = (f"No {itv}, {sym} está em **{sc['contexto_nome']}** — {sc['contexto_regra']} {_tendencia_txt(sc)} {_htf_txt(sc)} "
                f"{_vol_txt(sc)} {rsi_txt}" + (f" Estrutura: {'; '.join(sr)}." if sr else "")).replace("  ", " ")
     leitura = [f"Contexto: {sc['contexto_nome']} · viés {vies}", f"ADX {sc['adx']:.0f} (+DI {sc['di_mais']:.0f} / −DI {sc['di_menos']:.0f}) · RSI {rsi:.0f}",
-               f"Volume relativo {n(sc['volume_relativo'], 2)}× · ATR {n(sc['atr_pct'], 2)}% do preço",
+               (f"Volume relativo {n(sc['volume_relativo'], 2)}× · " if not sc.get("sem_volume") else "Sem volume neste ativo · ") + f"ATR {n(sc['atr_pct'], 2)}% do preço",
                f"Faixa dos últimos 20 candles: {_p(sc['minima_20'])} – {_p(sc['maxima_20'])}"]
     plano = _rule_plan(sc, cands, vies, price)
     opp = {

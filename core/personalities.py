@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core import markets
 from core.storage import load_json, locked_update
 
 CUSTOM_FILE = "personalities.json"
@@ -167,6 +168,13 @@ for _p in BUILTINS:
 
 # Padrões: especialistas aprovados na prova final (moedas inéditas) da pesquisa de out/2026
 DEFAULT_BY_BOT = {"day": "esp_15m_ema_3x1", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
+
+# Demais mercados: padrão = o aprovado com melhor retorno mensal simulado no tempo gráfico padrão do mercado (se houver)
+for _mk, _info in markets.MARKETS.items():
+    _rows = [b for b in BUILTINS if (b.get("research") or {}).get("market") == _mk and b["research"].get("interval") == _info.default_interval
+             and b["research"].get("status") == "aprovado"]
+    if _rows:
+        DEFAULT_BY_BOT[_mk] = max(_rows, key=lambda b: b["research"].get("monthly_pct") or 0)["id"]
 
 
 _STATUS_ORDER = {"aprovado": 0, "ressalva": 1}

@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import engine, personalities, regime, risk
+from core import engine, markets, paper, personalities, regime, risk
 from core.broker import get_broker
 from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
 from core import leverage as lev_rules
@@ -66,6 +66,8 @@ def cached_votes(symbol: str, interval: str, market: str, days: int):
     from core import fastsim
 
     cfg = {**default_settings(PROFILES[fastsim.bot_for(market, interval)]), "symbol": symbol, "interval": interval}
+    if not markets.is_crypto(market):  # custo total por lado = spread/corretagem + derrapagem (mesmo da pesquisa)
+        cfg["fee_pct"] = markets.MARKETS[market].fee_pct + markets.MARKETS[market].slippage_pct
     n = int(days * fastsim.PER_DAY[interval]) + 260
     from core import htf
 
@@ -135,11 +137,19 @@ def render_bot_page(bot: str) -> None:
 
     # Seleção de ativo e timeframe -------------------------------------------
     c1, c2, c3, c4 = st.columns([2, 1.2, 1, 1.2])
-    all_symbols = cached_symbols(profile.market)
-    options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
-    c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
-                 help="Clique e digite para buscar qualquer moeda negociada na Binance "
-                      f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
+    if profile.is_crypto:
+        all_symbols = cached_symbols(profile.market)
+        options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
+        c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
+                     help="Clique e digite para buscar qualquer moeda negociada na Binance "
+                          f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
+    else:
+        codes = markets.symbols(profile.market)
+        if st.session_state.get(_k(bot, "symbol")) not in codes:
+            st.session_state[_k(bot, "symbol")] = markets.MARKETS[profile.market].default_symbol
+        c1.selectbox(f"Ativo ({len(codes)} em {markets.MARKETS[profile.market].label})", codes, key=_k(bot, "symbol"),
+                     format_func=lambda c: markets.display_name(profile.market, c),
+                     help="Digite para buscar pelo código ou pelo nome do ativo.")
     if st.session_state[_k(bot, "interval")] not in profile.intervals:
         st.session_state[_k(bot, "interval")] = profile.default_interval
     c2.selectbox("Timeframe", profile.intervals, key=_k(bot, "interval"))
@@ -153,17 +163,22 @@ def render_bot_page(bot: str) -> None:
     col_chart, col_ticket = st.columns([3.2, 1.25], gap="medium")
     with col_chart:
         indicator_picker(bot, cfg)
-        tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
-                                             "🖊️ TradingView — ferramentas de desenho"])
-        with tab_rt:
-            positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
-            height = chart_height(cfg)
-            components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
-                                                cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
-                                                height=height), height=height + 5)
-            st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
-                       "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
-                       "descontadas as taxas de entrada e saída).")
+        if profile.is_crypto:
+            tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
+                                                 "🖊️ TradingView — ferramentas de desenho"])
+        else:  # sem WebSocket público: o gráfico se atualiza sozinho a cada consulta ao Yahoo Finance
+            tab_chart, tab_tv = st.tabs(["⚡ Ao vivo (atualiza sozinho) + indicadores", "🖊️ TradingView — ferramentas de desenho"])
+            tab_rt = None
+        if tab_rt is not None:
+            with tab_rt:
+                positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
+                height = chart_height(cfg)
+                components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
+                                                    cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
+                                                    height=height), height=height + 5)
+                st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
+                           "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
+                           "descontadas as taxas de entrada e saída).")
         with tab_chart:
             analysis_chart(profile, cfg)
         with tab_tv:
@@ -187,7 +202,7 @@ def ensure_personality(profile: BotProfile, interval: str) -> None:
     ids = [p["id"] for p in personalities.allowed(profile.market, interval)]
     cur = st.session_state.get(pkey)
     if ids and cur not in ids:
-        new = personalities.DEFAULT_BY_BOT[bot] if personalities.DEFAULT_BY_BOT[bot] in ids else ids[0]
+        new = personalities.DEFAULT_BY_BOT.get(bot) if personalities.DEFAULT_BY_BOT.get(bot) in ids else ids[0]
         old = (personalities.get(cur) or {}).get("name", "A personalidade anterior")
         set_setting(bot, "personality", new)
         st.toast(f"{old} não foi treinada no {interval}: personalidade trocada para "
@@ -249,6 +264,13 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.session_state[f"{bot}__atr"] = float(df["atr"].iloc[-2])
         st.session_state[f"{bot}__df"] = df
         st.session_state[f"{bot}__source"] = f"{df.attrs.get('source')} · cotação: {ticker.source}"
+        mkt_open = True
+        if not profile.is_crypto:
+            mkt_open = markets.is_open(ticker.market_time)
+            st.session_state[f"{bot}__market_open"] = mkt_open
+            last_trade = (datetime.fromtimestamp(ticker.market_time).strftime("%d/%m %H:%M") + " UTC") if ticker.market_time else "—"
+            st.caption(("🟢 **Mercado aberto**" if mkt_open else f"🔴 **Mercado fechado** (último negócio {last_trade})")
+                       + " · " + markets.MARKETS[profile.market].delay_note)
 
         broker = get_broker(bot)
         funding = cached_funding(symbol) if profile.market == "futures" else None
@@ -262,7 +284,7 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         s = broker.stats({symbol: price})
 
         m = st.columns(6)
-        m[0].metric(symbol, fmt_price(price), f"{ticker.change_pct:+.2f}% 24h")
+        m[0].metric(symbol, fmt_price(price), f"{ticker.change_pct:+.2f}% {'24h' if profile.is_crypto else 'no dia'}")
         m[1].metric("Banca", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)",
                     help="Patrimônio da carteira simulada (saldo livre + margens + P&L em aberto), em USDT.")
         m[2].metric("Resultado hoje", fmt(s["pnl_today"]), f"meta {fmt(cfg_now['daily_profit_target'], 0)}")
@@ -278,7 +300,9 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.caption(f"🧭 **Contexto do gráfico agora ({interval}):** {regime.label(ctx)} — {regime.REGIMES[ctx][1]}")
 
         if cfg_now.get("autopilot"):
-            if personalities.is_allowed(cfg_now.get("personality"), profile.market, interval):
+            if not mkt_open:
+                st.caption("🤖 Piloto automático em espera: mercado fechado.")
+            elif personalities.is_allowed(cfg_now.get("personality"), profile.market, interval):
                 autopilot_step(profile, cfg_now, df, price)
             else:
                 st.warning("Piloto automático em espera: não há bot treinado e testado neste tempo gráfico. Troque o tempo "
@@ -412,7 +436,8 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
     leverage_controls(profile, cfg)
     cfg = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ("leverage_on", "leverage", "margin_mode")}}
     lev = risk.effective_leverage(cfg)
-    can_short = cfg["allow_short"] and (profile.market == "futures" or cfg["leverage_on"])
+    can_short = cfg["allow_short"] and (profile.market == "futures" or not profile.is_crypto or cfg["leverage_on"])
+    market_closed = not profile.is_crypto and not st.session_state.get(f"{bot}__market_open", True)
     sides = ["Compra (long)", "Venda (short)"] if can_short else ["Compra (long)"]
     side_label = st.segmented_control("Lado", sides, default=sides[0], key=f"{bot}__t_side") or sides[0]
     side = "BUY" if side_label.startswith("Compra") else "SELL"
@@ -454,7 +479,7 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
         f"""
 | | |
 |---|---|
-| Quantidade | **{calc.qty:g}** |
+| Quantidade | **{calc.qty:g}**{'' if profile.is_crypto else ' ' + markets.MARKETS[profile.market].unit} |
 | Nocional | {fmt(calc.notional)} USDT |
 | Margem ({calc.leverage:g}×) | {fmt(calc.margin)} USDT |
 | Risco (stop) | <span style="color:#ef5350">−{fmt(calc.risk_usdt)} USDT</span> ({fmt(calc.stop_pct)}%) |
@@ -467,8 +492,10 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
     for w in calc.warnings:
         st.warning(w)
 
+    if market_closed and otype == "Mercado":
+        st.warning("Mercado fechado: ordens a mercado ficam bloqueadas (o preço não anda). Use uma ordem limitada ou aguarde a abertura.")
     if st.button(f"Enviar ordem simulada — {'COMPRAR' if side == 'BUY' else 'VENDER'}", type="primary",
-                 width="stretch", key=f"{bot}__t_send", disabled=calc.qty <= 0):
+                 width="stretch", key=f"{bot}__t_send", disabled=calc.qty <= 0 or (market_closed and otype == "Mercado")):
         check = risk.check_trade(cfg, broker.limit_stats(cfg, {cfg["symbol"]: price}, manual=True),
                                  side, entry, sl, tp, profile.market)
         blocks = risk.MANUAL_BLOCKS[cfg.get("manual_limits", "livre")]
@@ -487,7 +514,7 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
                                          limit_price=entry if otype == "Limitada" else None, stop_loss=sl,
                                          take_profit=tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
                                          slippage_pct=float(cfg["slippage_pct"]), source="manual",
-                                         max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"])
+                                         max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"], fx=calc.fx)
                 st.success(f"Ordem {out['status'].lower()}.")
                 st.rerun()
             except ValueError as exc:
@@ -500,6 +527,21 @@ def leverage_controls(profile: BotProfile, cfg: dict) -> None:
     """Alavancagem e modo de margem no topo da boleta, com os limites da Binance."""
     bot = profile.key
     futures = profile.market == "futures"
+    if not profile.is_crypto:
+        mk = markets.MARKETS[profile.market]
+        if mk.max_leverage <= 1:
+            st.session_state[_k(bot, "leverage_on")] = False
+            st.caption("Ações à vista: sem alavancagem (1×) e só compradas.")
+            return
+        c1, c2 = st.columns([1, 1.2])
+        c1.toggle("Alavancado", key=_k(bot, "leverage_on"), help=f"Alavancagem simulada de até {mk.max_leverage}×.")
+        c2.radio("Margem", ["Isolada", "Cruzada"], key=_k(bot, "margin_mode"), horizontal=True,
+                 help="Isolada: o risco fica limitado à margem da posição. Cruzada: todo o saldo livre sustenta a posição.")
+        key = _k(bot, "leverage")
+        st.session_state[key] = int(min(max(1, st.session_state.get(key, 1)), mk.max_leverage))
+        if st.session_state.get(_k(bot, "leverage_on")):
+            st.slider(f"Alavancagem (máx. {mk.max_leverage}×)", 1, mk.max_leverage, key=key)
+        return
     c1, c2 = st.columns([1, 1.2])
     c1.toggle("Alavancado", key=_k(bot, "leverage_on"),
               help="Futuros: alavancagem do contrato perpétuo. Spot: conta de Margem da Binance.")
@@ -882,8 +924,8 @@ def open_positions(profile: BotProfile, cfg: dict) -> None:
             st.caption("Nenhuma posição aberta.")
         for p in acct["positions"]:
             p_price = price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]
-            gross = (p_price - p["entry"]) * p["qty"] * (1 if p["side"] == "BUY" else -1)
-            net = gross - p["fees_paid"] - p_price * p["qty"] * p["fee_pct"] / 100
+            gross = paper.pnl_of(p, p_price)
+            net = gross - p["fees_paid"] - p_price * p["qty"] * p.get("fx", 1.0) * p["fee_pct"] / 100
             with st.container(border=True):
                 c = st.columns([1.6, 1, 1.1, 1, 1, 1.2, 1])
                 bot_name = PROFILES[p["bot"]].name if p.get("bot") in PROFILES else ""
@@ -985,6 +1027,13 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                 st.caption(f"Com {cfg['leverage']}× (isolada) uma posição comprada pequena é liquidada com queda de "
                            f"≈{100 - (liq or 0):.2f}%. A conta simulada usa a fórmula oficial da Binance e cobra o "
                            "financiamento (funding) a cada 8 h.")
+        elif not profile.is_crypto:
+            mk = markets.MARKETS[profile.market]
+            st.markdown(f"**{mk.label} (simulação):** alavancagem de até **{mk.max_leverage}×**, margem de manutenção de "
+                        f"**{lev_rules.OTHER_MMR * 100:.1f}%** do valor da posição e liquidação por margem isolada ou cruzada. "
+                        f"Custo por lado: {mk.fee_pct:g}% (spread/corretagem) + {mk.slippage_pct:g}% de derrapagem. Não há swap "
+                        "(juros overnight) nem dividendos na simulação. Os valores em outras moedas são convertidos para dólar "
+                        "pela cotação do momento.")
         else:
             st.markdown("**Margem no spot (Binance Margin):** Cruzada até **3×** e Isolada até **10×**. A liquidação "
                         "ocorre quando o nível de margem (ativos ÷ dívida) chega a **1,1**.")

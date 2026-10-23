@@ -25,7 +25,17 @@ class BotProfile:
 
     @property
     def market_label(self) -> str:
-        return "Futuros perpétuos (USDⓈ-M)" if self.market == "futures" else "Mercado à vista (Spot)"
+        if self.market == "futures":
+            return "Futuros perpétuos (USDⓈ-M)"
+        if self.market == "spot":
+            return "Mercado à vista (Spot)"
+        from core import markets
+
+        return markets.MARKETS[self.market].label
+
+    @property
+    def is_crypto(self) -> bool:
+        return self.market in ("futures", "spot")
 
 
 SYMBOLS = (
@@ -92,3 +102,30 @@ PROFILES: dict[str, BotProfile] = {
                        "supertrend": 1.2, "vwap": 0.0, "volume": 0.6, "estrutura": 1.2, "suporte_resistencia": 1.1},
     ),
 }
+
+
+# --------------------------------------------------------------------- outros mercados (Yahoo Finance)
+from core import markets as _markets  # noqa: E402
+
+_OTHER = {
+    # chave: (nome curto, atr stop, atr alvo, horizonte, pesos, atualização em segundos)
+    "forex": ("Forex", 1.5, 3.0, "minutos a dias; mercado 24 h de segunda a sexta",
+              {"tendencia": 1.2, "momentum": 1.0, "macd": 1.0, "bollinger": 0.8, "supertrend": 1.0, "volume": 0.0, "estrutura": 1.0,
+               "suporte_resistencia": 1.2}, 15),
+    "commodities": ("Commodities", 2.0, 4.0, "horas a semanas; contratos futuros",
+                    {"tendencia": 1.3, "momentum": 1.0, "macd": 1.0, "bollinger": 0.8, "supertrend": 1.1, "volume": 0.6, "estrutura": 1.0,
+                     "suporte_resistencia": 1.2}, 30),
+    "indices": ("Índices", 2.0, 4.0, "horas a semanas; segue o horário de cada bolsa",
+                {"tendencia": 1.3, "momentum": 1.0, "macd": 1.0, "bollinger": 0.8, "supertrend": 1.1, "volume": 0.6, "estrutura": 1.0,
+                 "suporte_resistencia": 1.2}, 30),
+    "stocks": ("Ações Brasil", 2.0, 4.0, "horas a semanas; pregão das 10h às 17h55 (Brasília)",
+               {"tendencia": 1.3, "momentum": 1.0, "macd": 1.0, "bollinger": 0.8, "supertrend": 1.1, "volume": 0.8, "estrutura": 1.0,
+                "suporte_resistencia": 1.2}, 30),
+}
+for _key, (_name, _sl, _tp, _hz, _w, _ref) in _OTHER.items():
+    _m = _markets.MARKETS[_key]
+    PROFILES[_key] = BotProfile(
+        key=_key, name=_m.label, icon=_m.icon, market=_key, description=_m.description, intervals=_m.intervals,
+        default_interval=_m.default_interval, default_leverage=_m.default_leverage, max_leverage=_m.max_leverage,
+        leverage_on_by_default=_m.max_leverage > 1, candles=500, refresh_sec=_ref, atr_sl_mult=_sl, atr_tp_mult=_tp, horizon=_hz,
+        skill_weights=_w)

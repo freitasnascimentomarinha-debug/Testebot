@@ -57,21 +57,31 @@ st.markdown("""<style>
 .block-container {padding-top: 2.2rem;}
 </style>""", unsafe_allow_html=True)
 
+_acct_pages = ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else []) + \
+    ([st.Page("views/admin.py", title="Administração", icon="🛡️", url_path="admin")]
+     if accounts.enabled() and accounts.is_admin(st.session_state.get("_user")) else [])
+# Ordem do menu: conta e administração primeiro, depois o painel geral, a cripto e os demais mercados.
 pages = {
+    **({"Conta": _acct_pages} if _acct_pages else {}),
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
                     st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
                     st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
-                    st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")]
-    + ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else [])
-    + ([st.Page("views/admin.py", title="Administração", icon="🛡️", url_path="admin")]
-       if accounts.enabled() and accounts.is_admin(st.session_state.get("_user")) else []),
+                    st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")],
     "Mercado Cripto": [
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
         st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),
         st.Page("views/long_trade.py", title="Long Trade · Spot", icon="🏔️", url_path="long-trade"),
     ],
+    "Outros mercados": [
+        st.Page("views/forex.py", title="Forex", icon="💱", url_path="forex"),
+        st.Page("views/commodities.py", title="Commodities", icon="🛢️", url_path="commodities"),
+        st.Page("views/indices.py", title="Índices", icon="📈", url_path="indices"),
+        st.Page("views/acoes.py", title="Ações Brasil (B3)", icon="🇧🇷", url_path="acoes-brasil"),
+    ],
 }
+
+
 def _binance_required() -> bool:
     """Chave da Binance obrigatória no primeiro acesso (REQUIRE_BINANCE_KEYS = "true" nos Secrets; admins ficam de fora)."""
     user = current_user()

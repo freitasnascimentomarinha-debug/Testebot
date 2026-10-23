@@ -1013,6 +1013,109 @@ def test_ai_daily_quota_applies_to_platform_key_only(monkeypatch):
     assert quota.allow() and quota.used() == 0                                                # cada usuário tem a própria conta de uso
     storage.set_user(None)
 
+
+def _yahoo_json(n=60, start=1.10, step=300, last_offset=0, symbol="EURUSD=X", volume=0):
+    import time
+
+    now = int(time.time()) - last_offset
+    ts = [now - (n - 1 - i) * step - (now % step) for i in range(n)]
+    ts[-1] = now  # o candle em formação vem com o horário do último negócio
+    close = [start + 0.0001 * i for i in range(n)]
+    q = {"open": [c - 0.00005 for c in close], "high": [c + 0.0002 for c in close], "low": [c - 0.0002 for c in close], "close": close,
+         "volume": [volume] * n}
+    meta = {"symbol": symbol, "currency": "USD", "regularMarketPrice": close[-1], "chartPreviousClose": start, "regularMarketDayHigh": close[-1] + 0.001,
+            "regularMarketDayLow": start - 0.001, "regularMarketVolume": 0, "regularMarketTime": now}
+    return {"chart": {"result": [{"meta": meta, "timestamp": ts, "indicators": {"quote": [q]}}], "error": None}}
+
+
+def test_yahoo_provider_parsing_and_markets(monkeypatch):
+    from core import data, markets, yahoo
+
+    calls = []
+
+    def fake(path, params):
+        calls.append((path, params))
+        return _yahoo_json(80)
+
+    monkeypatch.setattr(yahoo, "_fetch", fake)
+    yahoo._cache.clear()
+    df = data.get_klines("EURUSD", "5m", 50, "forex")
+    assert len(df) == 50 and df.time.is_monotonic_increasing and df.time.is_unique
+    assert df["time"].iloc[-1].minute % 5 == 0 and df["time"].iloc[-1].second == 0       # candle em formação alinhado ao período
+    assert df.attrs["no_volume"] and (df["volume"] == 1.0).all()                         # forex não tem volume
+    assert "EURUSD%3DX" in calls[0][0] and calls[0][1]["interval"] == "5m"
+    tk = data.get_ticker("EURUSD", "forex")
+    assert tk.source == "Yahoo Finance" and tk.market_time and markets.is_open(tk.market_time)
+    assert not markets.is_open(tk.market_time - 3 * 3600)                                # sem negócio há horas: mercado fechado
+    with pytest.raises(data.MarketDataError, match="catálogo"):
+        data.get_klines("XXXX", "1h", 10, "forex")
+    assert "PETR4" in data.list_symbols("stocks") and len(data.list_symbols("commodities")) >= 20
+    # catálogo coerente
+    for key, m in markets.MARKETS.items():
+        assert m.default_symbol in markets.symbols(key) and m.default_interval in m.intervals
+        assert len({i.code for i in m.instruments}) == len(m.instruments)
+        assert all(i.yahoo and i.tv and i.quote for i in m.instruments)
+    assert markets.round_qty("stocks", 9.7) == 9 and markets.round_qty("forex", 1234.5) == 1200 and markets.round_qty("indices", 0.0129) == 0.012
+
+
+def test_other_markets_risk_wallet_and_fx(monkeypatch):
+    from core import markets, risk
+
+    rates = {"BRL": 0.20, "JPY": 0.0065, "EUR": 1.12, "USD": 1.0}
+    monkeypatch.setattr(markets, "fx_usd", lambda q: rates[q.upper()])
+    # ação da B3 (BRL): risco de 2 USD com stop de R$ 1 → qty = 2 / (1 × 0,20) = 10 ações; margem = valor da posição (sem alavancagem)
+    c = risk.calculate("BUY", 50.0, 49.0, 53.0, leverage=1, fee_pct=0.05, risk_usdt=2.0, available=100.0, symbol="PETR4", market="stocks")
+    assert c.fx == 0.20 and c.qty == 9 and c.qty == int(c.qty)                       # ações inteiras; 9 porque as taxas entram no risco
+    assert c.notional == pytest.approx(9 * 50 * 0.20) and c.margin == pytest.approx(c.notional) and c.risk_usdt <= 2.0 + 1e-9
+    assert c.liquidation is None                                                      # compra sem alavancagem não liquida
+    # forex com alavancagem: EURJPY, preço em JPY convertido pela cotação do iene; quantidade em múltiplos de 100 unidades
+    c = risk.calculate("SELL", 160.0, 160.5, 158.5, leverage=20, fee_pct=0.01, risk_usdt=2.0, available=100.0, symbol="EURJPY", market="forex")
+    assert c.fx == 0.0065 and c.qty % 100 == 0 and 0 < c.risk_usdt <= 2.0 + 1e-9 and c.margin == pytest.approx(c.notional / 20)
+    assert c.liquidation and c.liquidation > 160.0                                    # venda: liquida acima da entrada
+    # carteira: P&L convertido para dólar e taxa sobre o valor em dólar
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+    out = paper.place_order(paper.SHARED_ACCOUNT, symbol="PETR4", market="stocks", side="BUY", qty=9, price=50.0, stop_loss=49.0, leverage=1,
+                            fee_pct=0.05, fx=0.20)
+    pos = out["position"]
+    assert pos["fx"] == 0.20 and pos["margin"] == pytest.approx(9 * 50 * 0.20) and pos["fees_paid"] == pytest.approx(9 * 50 * 0.20 * 0.0005)
+    assert paper.pnl_of(pos, 52.0) == pytest.approx(9 * 2 * 0.20)                     # +R$ 18 = +US$ 3,60
+    ev = paper.sync(paper.SHARED_ACCOUNT, "PETR4", pd.DataFrame({"time": [pd.Timestamp.now(tz="UTC").floor("min")], "open": [50.0], "high": [50.5],
+                                                                 "low": [48.5], "close": [49.0], "volume": [1.0]}), 49.0)
+    assert ev and ev[0]["type"] == "Stop loss"
+    trade = paper.get_account(paper.SHARED_ACCOUNT)["history"][-1]
+    assert trade["gross_pnl"] == pytest.approx(-9 * 1.0 * 0.20) and trade["pnl"] < trade["gross_pnl"]  # perda de R$ 9 = US$ 1,80 mais taxas
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+
+
+def test_other_markets_profiles_nav_and_closed_market(monkeypatch):
+    import ast
+    from pathlib import Path
+
+    from core import data, engine, markets
+    from core.profiles import PROFILES
+
+    for key in ("forex", "commodities", "indices", "stocks"):
+        pr = PROFILES[key]
+        cfg = default_settings(pr)
+        assert not pr.is_crypto and cfg["symbol"] == markets.MARKETS[key].default_symbol and cfg["interval"] in pr.intervals
+        assert cfg["allow_short"] == markets.MARKETS[key].allow_short and cfg["fee_pct"] == markets.MARKETS[key].fee_pct
+    assert default_settings(PROFILES["stocks"])["leverage_on"] is False and PROFILES["stocks"].max_leverage == 1
+    # menu: conta e administração primeiro, depois visão geral, cripto e demais mercados
+    src = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    keys = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "pages" for t in node.targets) and isinstance(node.value, ast.Dict):
+            keys = [k.value if isinstance(k, ast.Constant) else "**" for k in node.value.keys]
+    assert keys == ["**", "Visão geral", "Mercado Cripto", "Outros mercados"]          # "**" = grupo Conta (só com contas ligadas)
+    for page in ("forex", "commodities", "indices", "acoes"):
+        assert (Path(src and __file__).resolve().parent.parent / "views" / f"{page}.py").exists()
+    # mercado fechado: a análise nunca abre ordem a mercado
+    monkeypatch.setattr(data, "get_ticker", lambda s, m: data.Ticker(s, 1.1, 0.0, 1.2, 1.0, 0.0, "Yahoo Finance", 1.0))  # último negócio em 1970
+    cfg = {**default_settings(PROFILES["forex"]), "symbol": "EURUSD", "interval": "1h"}
+    assert engine.market_closed(PROFILES["forex"], cfg) and not engine.market_closed(PROFILES["day"], default_settings(PROFILES["day"]))
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

@@ -87,8 +87,12 @@ def _loss_cap(acct: dict, pos: dict) -> float:
 
 
 def _pnl(pos: dict, price: float) -> float:
+    """Resultado em dólar (``fx`` converte a moeda de cotação do ativo; 1 na cripto)."""
     sign = 1 if pos["side"] == "BUY" else -1
-    return sign * (price - pos["entry"]) * pos["qty"]
+    return sign * (price - pos["entry"]) * pos["qty"] * pos.get("fx", 1.0)
+
+
+pnl_of = _pnl
 
 
 def get_account(acc: str) -> dict:
@@ -122,7 +126,8 @@ def cash_movement(acc: str, amount: float, note: str = "") -> None:
 
 # ---------------------------------------------------------------- ordens
 def _open_position(acct: dict, order: dict, fill_price: float, fee_pct: float) -> dict:
-    notional = fill_price * order["qty"]
+    fx = float(order.get("fx") or 1.0)
+    notional = fill_price * order["qty"] * fx
     fee = notional * fee_pct / 100
     margin = notional / order["leverage"]
     if margin + fee > acct["balance"] + 1e-9:
@@ -131,11 +136,11 @@ def _open_position(acct: dict, order: dict, fill_price: float, fee_pct: float) -
     liq = lev_rules.liquidation_price(
         side=order["side"], entry=fill_price, qty=order["qty"], leverage=order["leverage"], market=order["market"],
         symbol=order["symbol"], margin_mode=order.get("margin_mode", "Isolada"),
-        free_balance=acct["balance"] - margin - fee)
+        free_balance=acct["balance"] - margin - fee, fx=fx)
     acct["balance"] -= margin + fee
     pos = {
         "id": uuid.uuid4().hex[:8], "bot": order.get("bot", ""), "symbol": order["symbol"], "market": order["market"],
-        "side": order["side"], "qty": order["qty"], "entry": fill_price, "leverage": order["leverage"],
+        "side": order["side"], "qty": order["qty"], "entry": fill_price, "leverage": order["leverage"], "fx": fx,
         "margin_mode": order.get("margin_mode", "Isolada"), "margin": margin,
         "stop_loss": order.get("stop_loss"), "take_profit": order.get("take_profit"), "liquidation": liq,
         "fee_pct": fee_pct, "fees_paid": fee, "funding_paid": 0.0, "opened": _now(), "last_check": _now(),
@@ -157,7 +162,7 @@ def place_order(acc: str, *, symbol: str, market: str, side: str, qty: float, or
                 take_profit: float | None = None, leverage: float = 1.0, fee_pct: float = 0.1,
                 slippage_pct: float = 0.0, source: str = "manual", note: str = "",
                 max_loss_planned: float | None = None, bot: str = "", margin_mode: str = "Isolada",
-                personality: dict | None = None, trail_dist: float | None = None, be_r: float = 0.0) -> dict:
+                personality: dict | None = None, trail_dist: float | None = None, be_r: float = 0.0, fx: float = 1.0) -> dict:
     """Envia uma ordem simulada. ``price`` é o último preço real de mercado."""
     if qty <= 0:
         raise ValueError("Quantidade deve ser maior que zero.")
@@ -165,7 +170,7 @@ def place_order(acc: str, *, symbol: str, market: str, side: str, qty: float, or
              "type": order_type, "limit_price": limit_price, "stop_loss": stop_loss, "take_profit": take_profit,
              "leverage": max(1.0, float(leverage)), "margin_mode": margin_mode, "fee_pct": fee_pct,
              "created": _now(), "source": source, "note": note, "max_loss_planned": max_loss_planned,
-             "personality": personality, "trail_dist": trail_dist, "be_r": be_r}
+             "personality": personality, "trail_dist": trail_dist, "be_r": be_r, "fx": fx}
 
     def _apply(data):
         acct = _account(data, acc)
@@ -181,7 +186,7 @@ def place_order(acc: str, *, symbol: str, market: str, side: str, qty: float, or
 
 
 def _close(acct: dict, pos: dict, price: float, reason: str) -> dict:
-    fee = price * pos["qty"] * pos["fee_pct"] / 100
+    fee = price * pos["qty"] * pos.get("fx", 1.0) * pos["fee_pct"] / 100
     gross = max(_pnl(pos, price), -_loss_cap(acct, pos))
     if reason == "Liquidação":  # perde a margem isolada (ou o que restar da cruzada)
         fee = 0.0
@@ -348,7 +353,7 @@ def stats(acct: dict, prices: dict[str, float], bot: str | None = None, origin: 
 
     unrealized = sum(max(_pnl(p, price_of(p)), -p["margin"]) for p in positions)
     unrealized_net = sum(max(_pnl(p, price_of(p)), -p["margin"]) - p["fees_paid"] - p.get("funding_paid", 0.0)
-                         - price_of(p) * p["qty"] * p["fee_pct"] / 100 for p in positions)
+                         - price_of(p) * p["qty"] * p.get("fx", 1.0) * p["fee_pct"] / 100 for p in positions)
     equity = equity_of(acct, prices)
     base = invested(acct)
     curve = [c["equity"] for c in acct["equity_curve"]] + [equity]

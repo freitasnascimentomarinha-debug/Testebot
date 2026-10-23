@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import advisor, ai, htf, indicators as ind, personalities, quota, risk
+from core import advisor, ai, htf, indicators as ind, markets, personalities, quota, risk
+from core import paper
 from core.broker import get_broker
 from core.data import get_funding_rate
 from core.storage import current_user, get_secret
@@ -43,13 +44,25 @@ def _clean(v):
     return round(v, 6) if isinstance(v, float) else v
 
 
+def market_closed(profile: BotProfile, cfg: dict) -> bool:
+    """Forex, commodities, índices e ações: sem negócios recentes = mercado fechado (a cripto opera 24 h)."""
+    if profile.is_crypto:
+        return False
+    try:
+        from core.data import get_ticker
+
+        return not markets.is_open(get_ticker(cfg["symbol"], profile.market).market_time)
+    except Exception:  # noqa: BLE001 - sem cotação, não abre ordem
+        return True
+
+
 def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
                  api_key: str | None) -> AnalysisResult:
     symbol, interval = cfg["symbol"], cfg["interval"]
     broker = get_broker(profile.key)
     acct = broker.account()
     st_ = broker.limit_stats(cfg, {symbol: price})
-    personality = personalities.get(cfg.get("personality")) or personalities.get(personalities.DEFAULT_BY_BOT[profile.key])
+    personality = personalities.get(cfg.get("personality")) or personalities.get(personalities.DEFAULT_BY_BOT.get(profile.key))
     if cfg.get("context_mode") == "favoraveis" and personality:
         best = (personality.get("research") or {}).get("best_contexts")
         if best:
@@ -73,7 +86,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     }
     positions = [{k: p.get(k) for k in ("side", "qty", "entry", "stop_loss", "take_profit", "leverage", "liquidation",
                                          "opened", "source")}
-                 | {"pnl_nao_realizado": round((price - p["entry"]) * p["qty"] * (1 if p["side"] == "BUY" else -1), 2)}
+                 | {"pnl_nao_realizado": round(paper.pnl_of(p, price), 2)}
                  for p in acct["positions"] if p["symbol"] == symbol]
     account_view = {k: round(v, 2) for k, v in st_.items() if isinstance(v, (int, float)) and not math.isinf(v)}
     funding = get_funding_rate(symbol) if profile.market == "futures" else None
@@ -132,6 +145,10 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
             decision.stop_loss, decision.take_profit = plan_d["stop_loss"], plan_d["take_profit"]
             decision.reasoning = "[Modo filtro] A IA confirmou o sinal das regras. " + decision.reasoning
 
+    if decision.decision in ("BUY", "SELL") and market_closed(profile, cfg):
+        decision.reasoning = "[Mercado fechado] Sem negócios agora: nenhuma ordem a mercado é aberta. " + decision.reasoning
+        decision.decision = "HOLD"
+
     check = None
     if decision.decision in ("BUY", "SELL"):
         entry = decision.entry if decision.order_type == "LIMIT" and decision.entry else price
@@ -169,6 +186,7 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
             fee_pct=float(cfg["fee_pct"]), slippage_pct=float(cfg["slippage_pct"]),
             source=d.source, note=d.reasoning[:300], max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"],
             personality=result.personality, trail_dist=result.plan.get("trail_dist"), be_r=result.plan.get("be_r") or 0.0,
+            fx=calc.fx,
         )
     else:
         raise ValueError("Não há ordem aprovada para executar.")
@@ -242,7 +260,7 @@ def check_armed_plan(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: fl
     plan = rec["plano"]
     side = plan["direcao"]
     pers = personalities.get(plan.get("personalidade")) or personalities.get(cfg.get("personality")) \
-        or personalities.get(personalities.DEFAULT_BY_BOT[bot])
+        or personalities.get(personalities.DEFAULT_BY_BOT.get(bot))
     st_ = stops_for(df, cfg, side, pers)
     why = (f"Plano condicional confirmado: {rec['descricao']} Gatilho: candle {info['candle'][:16]} fechou em {info['close']:.6g}"
            + (f" com volume {info['volume_x']:g}× a média." if info.get("volume_x") else "."))
