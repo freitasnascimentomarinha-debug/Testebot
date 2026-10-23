@@ -143,7 +143,8 @@ def support_resistance(df: pd.DataFrame, max_levels: int = 4, lookback: int = 30
     points = sorted([p for _, p in tops + bottoms])
     if not points:
         return {"supports": [], "resistances": []}
-    tol = float(atr(data, 14).iloc[-1]) * 0.6 or data["close"].iloc[-1] * 0.003
+    a = float(data["atr"].iloc[-1]) if "atr" in data else float(atr(data, 14).iloc[-1])
+    tol = a * 0.6 or data["close"].iloc[-1] * 0.003
     clusters: list[list[float]] = [[points[0]]]
     for p in points[1:]:
         if p - np.mean(clusters[-1]) <= tol:

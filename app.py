@@ -22,6 +22,7 @@ st.markdown("""<style>
 pages = {
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
                     st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
+                    st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades")],
     "Bots": [
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),

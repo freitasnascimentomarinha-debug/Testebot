@@ -249,6 +249,39 @@ def skill_adx(df: pd.DataFrame, cfg: dict) -> SkillResult:
                        f"ADX {r.adx:.0f}; +DI {r.di_plus:.0f} {'>' if r.di_plus > r.di_minus else '<'} −DI {r.di_minus:.0f}.")
 
 
+def skill_fibonacci(df: pd.DataFrame, cfg: dict) -> SkillResult:
+    """Retração de Fibonacci da última perna (100 candles): compra na zona 38,2%–61,8%
+    de uma perna de alta e vende na mesma zona de uma perna de baixa."""
+    w = df.tail(100)
+    highs, lows = w["high"].to_numpy(), w["low"].to_numpy()
+    hi_i, lo_i = int(highs.argmax()), int(lows.argmin())
+    hi, lo = highs[hi_i], lows[lo_i]
+    rng = hi - lo
+    r = df.iloc[-1]
+    if rng <= 0:
+        return SkillResult("fibonacci", "Fibonacci", 0.0, "Sem perna definida.")
+    bullish_candle = r.close > r.open
+    if lo_i < hi_i:  # perna de alta: mede a retração a partir do topo
+        retr = (hi - r.close) / rng
+        sign, leg = 1, "alta"
+        confirm = bullish_candle
+    else:  # perna de baixa: mede o repique a partir do fundo
+        retr = (r.close - lo) / rng
+        sign, leg = -1, "baixa"
+        confirm = not bullish_candle
+    if 0.382 <= retr <= 0.618:
+        v = 0.6 + (0.3 if confirm else 0.0) + (0.1 if retr >= 0.5 else 0.0)
+        zone = "na zona 38,2%–61,8%"
+    elif 0.236 <= retr < 0.382:
+        v, zone = 0.3, "na zona rasa 23,6%–38,2%"
+    elif retr > 0.786:
+        v, zone = -0.4, "além de 78,6% (perna invalidada)"
+    else:
+        v, zone = 0.0, f"em {retr * 100:.0f}% da perna"
+    return SkillResult("fibonacci", "Fibonacci", _clip(sign * v),
+                       f"Perna de {leg} {lo:.6g}–{hi:.6g}; preço {zone}{'; candle confirma' if confirm and v > 0.5 else ''}.")
+
+
 # Registro de habilidades: chave → (nome, função)
 SKILLS = {
     "tendencia": ("Tendência (EMAs)", skill_trend),
@@ -265,6 +298,7 @@ SKILLS = {
     "ichimoku": ("Ichimoku", skill_ichimoku),
     "estocastico": ("Estocástico", skill_stochastic),
     "adx": ("ADX / DMI", skill_adx),
+    "fibonacci": ("Fibonacci (retração)", skill_fibonacci),
 }
 
 

@@ -183,7 +183,7 @@ Responda SOMENTE um JSON com:
  "sl_atr": 0.5-5, "tp_atr": 1-15, "timeframes": "ex.: 15m a 4h"}
 Chaves de habilidades disponíveis: tendencia (médias móveis), momentum (RSI), macd, bollinger, supertrend,
 vwap, volume, estrutura (topos/fundos), suporte_resistencia, rompimento (Donchian), reversao (reversão à média),
-ichimoku, estocastico, adx. Use só as citadas ou claramente implícitas na descrição. threshold menor = mais
+ichimoku, estocastico, adx, fibonacci (retração). Use só as citadas ou claramente implícitas na descrição. threshold menor = mais
 agressivo (mais entradas), maior = mais seletivo."""
 
 _KEYWORDS = {
@@ -201,6 +201,7 @@ _KEYWORDS = {
     "ichimoku": ("ichimoku", "nuvem", "kumo"),
     "estocastico": ("estocástico", "estocastico", "stoch"),
     "adx": ("adx", "dmi", "força da tendência"),
+    "fibonacci": ("fibonacci", "fibo", "retração", "retracao", "61,8", "61.8", "golden"),
 }
 
 

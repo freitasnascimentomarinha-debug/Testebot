@@ -178,13 +178,12 @@ with tab_lib:
                             f"{p.get('threshold')} · **Stop/alvo:** {p.get('sl_atr')}× / {p.get('tp_atr')}× ATR · "
                             f"**Tempos gráficos:** {p.get('timeframes') or '—'}")
                 st.markdown("**Filtros:** " + (", ".join(filt) or "nenhum"))
-                if rs := p.get("research"):
+                if (rs := p.get("research")) and rs.get("monthly_pct") is not None:
                     st.markdown(
-                        f"**Resultado da pesquisa (futuros 1h, 1% de risco por operação, 40 dias):** "
-                        f"{rs['busca_pct']:+.1f}% nas moedas da busca (BTC, ETH, SOL, BNB, XRP) · "
-                        f"{rs['inéditas_pct']:+.1f}% em moedas que a busca não viu (DOGE, ADA, LINK, AVAX, LTC) · "
-                        f"{rs['anteriores_r']:+.2f}R por operação nos 40 dias anteriores · pior queda "
-                        f"{rs['pior_queda_pct']:.0f}% · acerto ~{rs['acerto_pct']}%. Passado não garante futuro.")
+                        f"**Simulação ({rs['period_label']}, 1% de risco por operação, até {rs['tested_at']}):** "
+                        f"{rs['ret_pct']:+.1f}% no período (≈ {rs['monthly_pct']:+.1f}% ao mês) · moedas da busca "
+                        f"{rs['ret_seen']:+.1f}% · moedas inéditas {rs['ret_new']:+.1f}% · acerto {rs['win_pct']:.0f}% · "
+                        f"pior queda {rs['dd_pct']:.0f}%. Passado não garante futuro.")
             with c2:
                 target = st.selectbox("Bot", list(PROFILES), format_func=BOT_LABEL.get, key=f"lib_bot_{p['id']}",
                                       label_visibility="collapsed")

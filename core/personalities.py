@@ -15,10 +15,12 @@ bancas de tamanhos diferentes) com os backtests salvos.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from core.storage import load_json, locked_update
 
@@ -199,6 +201,44 @@ BUILTINS += [
                      "acerto_pct": 60, "operacoes_40d": 206},
     },
 ]
+# Especialidade (etiqueta curta), dica rápida e bot indicado das personalidades clássicas e da pesquisa
+_CARD = {
+    "tendencia": ("Tendência · EMAs + SuperTrend", "Só entra a favor de tendência forte; acerta pouco, ganha muito quando acerta.", "swing"),
+    "reversao": ("Reversão · Bollinger + RSI", "Compra exageros de queda e vende exageros de alta em mercado lateral.", "day"),
+    "rompimento": ("Rompimento · Donchian + volume", "Entra quando o preço rompe a máxima/mínima de 20 candles com volume.", "day"),
+    "scalper_vwap": ("Scalping · VWAP", "Operações curtas de recuo até a VWAP, sem dormir posicionado.", "day"),
+    "momentum": ("Momentum · MACD + RSI", "Acompanha movimentos que estão acelerando; sai quando perdem força.", "day"),
+    "price_action": ("Price action · suporte/resistência", "Lê o gráfico: reação em suportes/resistências e topos/fundos.", "day"),
+    "ichimoku": ("Ichimoku", "Nuvem e Tenkan/Kijun: opera só fora da nuvem, em tempos maiores.", "swing"),
+    "conservador": ("Multi-confirmação", "Só entra quando quase todos os indicadores concordam.", "swing"),
+    "posicional": ("Longo prazo · só compra", "Acumula compras em tendência primária de alta, com stops largos.", "long"),
+    "pesq_pullback_st": ("Pullback · SuperTrend + Estocástico · 4:1", "Recuos em tendência forte; acerta ~30%, cada ganho paga 4 perdas.", "day"),
+    "pesq_tendencia_equilibrada": ("Tendência · MACD + SuperTrend · 1,5:1", "A mais regular da pesquisa: acerta metade, quedas pequenas.", "day"),
+    "pesq_ichimoku_forca": ("Ichimoku + ADX + volume · 4:1", "Só entra com consenso forte entre Ichimoku, força e volume.", "day"),
+    "pesq_rompimento_consolidacao": ("Rompimento de consolidação · 1,5:1", "Opera a saída de mercados parados; as menores quedas da banca.", "day"),
+    "pesq_momentum_moderado": ("Início de tendência · 1:1", "Entra quando a tendência começa (ADX 25–30); acerta ~60%.", "day"),
+}
+for _p in BUILTINS:
+    if _p["id"] in _CARD:
+        _p.setdefault("specialty", _CARD[_p["id"]][0])
+        _p.setdefault("tip", _CARD[_p["id"]][1])
+        _p.setdefault("bot", _CARD[_p["id"]][2])
+
+# Bots especialistas gerados pela pesquisa (core/specialists.json) e resultados simulados
+# padronizados de todas as personalidades prontas (core/research_results.json).
+_HERE = Path(__file__).resolve().parent
+try:
+    BUILTINS += json.loads((_HERE / "specialists.json").read_text(encoding="utf-8"))
+except FileNotFoundError:  # pragma: no cover
+    pass
+try:
+    _RESULTS = json.loads((_HERE / "research_results.json").read_text(encoding="utf-8"))
+except FileNotFoundError:  # pragma: no cover
+    _RESULTS = {}
+for _p in BUILTINS:
+    if _p["id"] in _RESULTS:
+        _p["research"] = _RESULTS[_p["id"]]
+
 for _p in BUILTINS:
     _p["builtin"] = True
 
