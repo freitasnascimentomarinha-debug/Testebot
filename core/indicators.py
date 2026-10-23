@@ -189,4 +189,7 @@ def compute(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     out["vol_sma"] = sma(out["volume"], 20)
     # Ichimoku é calculado sempre: a habilidade Ichimoku o usa mesmo com o indicador oculto no gráfico
     out["ichi_tenkan"], out["ichi_kijun"], out["ichi_span_a"], out["ichi_span_b"] = ichimoku(out)
+    from core.regime import classify  # contexto do gráfico (usa as colunas acima)
+
+    out["regime"] = classify(out)
     return out

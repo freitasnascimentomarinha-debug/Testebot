@@ -49,6 +49,10 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     acct = broker.account()
     st_ = broker.limit_stats(cfg, {symbol: price})
     personality = personalities.get(cfg.get("personality")) or personalities.get(personalities.DEFAULT_BY_BOT[profile.key])
+    if cfg.get("context_mode") == "favoraveis" and personality:
+        best = (personality.get("research") or {}).get("best_contexts")
+        if best:
+            cfg = {**cfg, "context_filter": best}
     plan = analyze(df, cfg, profile, personality)
     plan_d = plan.to_dict()
 

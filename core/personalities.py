@@ -392,3 +392,22 @@ def summarize_period(per_symbol: list[dict]) -> dict:
             "worst": min(per_symbol, key=lambda r: r["return_pct"])["symbol"] if per_symbol else "",
             "per_symbol": {r["symbol"]: round(float(r["return_pct"]), 2) for r in per_symbol},
             "period": per_symbol[0]["period"] if per_symbol else ""}
+
+
+# ------------------------------------------------------- contexto do gráfico
+def best_for_context(context: str, market: str | None = None, interval: str | None = None,
+                     top: int = 3, min_trades: int = 6) -> list[tuple[dict, dict]]:
+    """Bots com melhor R médio quando operaram só neste contexto (simulação da pesquisa)."""
+    rows = []
+    for p in list_all():
+        rs = p.get("research") or {}
+        c = (rs.get("contexts") or {}).get(context)
+        if not c or c["n"] < min_trades or c["avg_r"] <= 0:
+            continue
+        if market and rs.get("market") != market:
+            continue
+        if interval and rs.get("interval") != interval:
+            continue
+        rows.append((p, c))
+    rows.sort(key=lambda x: -x[1]["avg_r"])
+    return rows[:top]

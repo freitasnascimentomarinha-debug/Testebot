@@ -72,6 +72,7 @@ def default_settings(profile: BotProfile) -> dict:
         "pivots_on": False,
         # Personalidade (estratégia) do bot — ver página Personalidades
         "personality": DEFAULT_BY_BOT[profile.key],
+        "context_mode": "sempre",   # "sempre" ou "favoraveis" (só nos contextos favoráveis da personalidade)
         # IA
         "ai_model": DEFAULT_MODEL,
         "ai_temperature": 0.2,

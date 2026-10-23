@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import engine, personalities, risk
+from core import engine, personalities, regime, risk
 from core.broker import get_broker
 from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
 from core import leverage as lev_rules
@@ -221,6 +221,10 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]), f"{s['open_positions']} posição(ões)",
                     delta_color="off", help="Lucro/prejuízo das posições abertas já descontando taxas de entrada e saída.")
         m[5].metric("Taxa de acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
+
+        ctx = str(df["regime"].iloc[-2])
+        st.session_state[f"{bot}__context"] = ctx
+        st.caption(f"🧭 **Contexto do gráfico agora ({interval}):** {regime.label(ctx)} — {regime.REGIMES[ctx][1]}")
 
         if cfg_now.get("autopilot"):
             autopilot_step(profile, cfg_now, df, price)
@@ -501,6 +505,30 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
             if not key:
                 st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "
                            "OpenRouter, o DeepSeek interpreta o cenário antes de cada entrada.")
+        rs = (persona or {}).get("research") or {}
+        best = rs.get("best_contexts") or []
+        fav_key = f"{bot}__fav_toggle"
+        st.session_state[fav_key] = cfg.get("context_mode") == "favoraveis"
+        st.toggle("🎯 Operar só nos contextos favoráveis desta personalidade", key=fav_key, disabled=not best,
+                  on_change=lambda: set_setting(bot, "context_mode",
+                                                "favoraveis" if st.session_state[fav_key] else "sempre"),
+                  help="O bot só entra quando o gráfico está num dos contextos em que esta personalidade teve melhor "
+                       "resultado na simulação (escolhidos nas moedas da busca e provados nas moedas inéditas).")
+        if best:
+            filt = rs.get("context_filtered") or {}
+            st.caption(f"Contextos favoráveis: {', '.join(regime.label(c) for c in best)}. "
+                       + (f"Simulado só neles: {filt['ret_pct']:+.1f}% em {rs['period_label']} (≈ {filt['monthly_pct']:+.1f}% "
+                          f"ao mês, acerto {filt['win_pct']:.0f}%) contra {rs['ret_pct']:+.1f}% operando sempre."
+                          if filt else ""))
+        else:
+            st.caption("Esta personalidade não teve contexto com resultado positivo consistente na simulação.")
+        ctx = st.session_state.get(f"{bot}__context")
+        if ctx and ctx != "indefinido":
+            recs = personalities.best_for_context(ctx, market=profile.market)
+            if recs:
+                st.markdown(f"**Melhores bots para o contexto atual ({regime.label(ctx)}):** " + " · ".join(
+                    f"{p['name']} ({c['avg_r']:+.2f}R/op, acerto {c['win_pct']:.0f}%, {p['research']['interval']})"
+                    for p, c in recs))
         if on:
             st.caption("⚠️ O bot fica ligado enquanto esta página estiver aberta no navegador. Para operar 24 h, "
                        "use o worker.py num servidor.")

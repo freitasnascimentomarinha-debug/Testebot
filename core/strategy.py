@@ -38,6 +38,7 @@ class RulePlan:
     skills: list[SkillResult] = field(default_factory=list)
     levels: dict = field(default_factory=dict)
     note: str = ""
+    context: str = "indefinido"   # contexto do gráfico no último candle fechado (core/regime.py)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -362,6 +363,12 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
         elif filters.get("rsi_guard") and ((direction == "BUY" and last.rsi > float(cfg["rsi_ob"]))
                                            or (direction == "SELL" and last.rsi < float(cfg["rsi_os"]))):
             block("Filtro RSI: entrada em extremo bloqueada.")
+    context = str(last.get("regime", "indefinido"))
+    allowed_ctx = cfg.get("context_filter") or filters.get("contexts")
+    if direction != "HOLD" and allowed_ctx and context not in allowed_ctx:
+        from core.regime import label
+
+        block(f"Contexto atual ({label(context)}) fora dos contextos favoráveis deste bot.")
     if direction == "SELL" and not cfg.get("allow_short", True):
         block("Viés vendedor, mas operações vendidas estão desativadas: ficar de fora ou encerrar compras.")
     if direction == "SELL" and profile.market == "spot" and not cfg.get("leverage_on"):
@@ -386,7 +393,7 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
             candidate = lv - sign * a * 0.3
             if sl_dist < abs(price - candidate) < sl_dist * 1.3:
                 sl = candidate
-    return RulePlan(direction, round(score, 1), price, sl, tp, a, regime, results, levels, " ".join(notes))
+    return RulePlan(direction, round(score, 1), price, sl, tp, a, regime, results, levels, " ".join(notes), context)
 
 
 def market_snapshot(df: pd.DataFrame, n: int = 60) -> list[dict]:
