@@ -606,5 +606,82 @@
    "busca_n": 117,
    "validacao_n": 38
   }
+ },
+ {
+  "id": "esp_5m_bollinger_lateral",
+  "name": "🎢 Bollinger Lateral 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Bollinger 5m · só em lateralidade/reversão · 1:1",
+  "tip": "Opera as bandas de Bollinger no 5 minutos apenas em mercado lateral ou de reversão.",
+  "summary": "Opera as bandas de Bollinger no 5 minutos apenas em mercado lateral ou de reversão.",
+  "description": "Especialista em Bandas de Bollinger no 5 minutos que só atua quando o gráfico está lateral ou com sinal de reversão — o ambiente natural da volta à média. Alvo igual ao stop.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "misto",
+  "threshold": 55,
+  "sl_atr": 2.5,
+  "tp_atr": 2.5,
+  "skills": {
+   "bollinger": 1.5,
+   "reversao": 1.0,
+   "estocastico": 0.5
+  },
+  "filters": {
+   "ignore_regime": true,
+   "adx_min": 15,
+   "contexts": [
+    "reversao_alta"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.258,
+   "validacao_r": 0.278,
+   "busca_n": 41,
+   "validacao_n": 24
+  }
+ },
+ {
+  "id": "esp_5m_rsi_reversal",
+  "name": "🔄 Reversão RSI 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "RSI + reversão 5m · só em reversão/lateral · 1:1",
+  "tip": "Pega exageros do RSI no 5 minutos quando o gráfico mostra reversão ou lateralidade.",
+  "summary": "Pega exageros do RSI no 5 minutos quando o gráfico mostra reversão ou lateralidade.",
+  "description": "Especialista em reversões no 5 minutos: RSI em extremo com preço fora das bandas, apenas nos contextos de reversão ou lateralidade. Alvo igual ao stop.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "misto",
+  "threshold": 25,
+  "sl_atr": 2.5,
+  "tp_atr": 2.5,
+  "skills": {
+   "momentum": 1.5,
+   "reversao": 1.0,
+   "suporte_resistencia": 1.0,
+   "estocastico": 0.5
+  },
+  "filters": {
+   "volume_confirm": true,
+   "rsi_guard": true,
+   "adx_max": 25,
+   "contexts": [
+    "reversao_alta",
+    "lateral"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.196,
+   "validacao_r": 0.221,
+   "busca_n": 48,
+   "validacao_n": 21
+  }
  }
 ]
