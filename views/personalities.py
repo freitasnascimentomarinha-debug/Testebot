@@ -70,7 +70,10 @@ with tab_rank:
             bar = st.progress(0.0, text="Baixando candles e calculando os votos (uma vez por moeda)…")
             votes = {}
             for n_, sym in enumerate(P.PERIOD_SYMBOLS, start=1):
-                votes[sym] = cached_votes(sym, p_itv, p_market, 40)
+                try:
+                    votes[sym] = cached_votes(sym, p_itv, p_market, 40)
+                except Exception as exc:  # noqa: BLE001
+                    st.warning(f"{sym}: sem dados ({str(exc)[:100]}…)")
                 bar.progress(n_ / len(P.PERIOD_SYMBOLS) * 0.8, text=f"Votos de {sym} prontos")
             for k, persona_ in enumerate(todo, start=1):
                 per_symbol = [fastsim.period_result(vt, cfg_, persona_, days=40, market=p_market, risk_pct=p_risk,
@@ -368,7 +371,11 @@ with tab_bt:
         rows, per_coin = [], []
         bar = st.progress(0.0, text="Baixando candles e calculando…")
         for n_, sym in enumerate(coins, start=1):
-            vt, cfg = cached_votes(sym, itv, market, int(days))
+            try:
+                vt, cfg = cached_votes(sym, itv, market, int(days))
+            except Exception as exc:  # noqa: BLE001 - moeda sem dados nas fontes disponíveis
+                st.warning(f"{sym}: sem candles disponíveis para {itv} ({str(exc)[:120]}…). Moeda ignorada.")
+                continue
             trades = fastsim.period_trades(vt, cfg, persona, days=days, market=market)
             for t in trades:
                 rows.append({**t, "moeda": sym})
