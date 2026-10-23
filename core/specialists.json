@@ -1082,5 +1082,36 @@
    "validacao_n": 14,
    "validacao_r": 0.397
   }
+ },
+ {
+  "id": "esp_5m_surfista_reversao",
+  "name": "🏄 Surfista de Reversão 5m (experimental)",
+  "author": "Bots nativos · estudo surfar out/2026",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "specialty": "Reversão 5m · Bollinger + estocástico · stop móvel, sem alvo",
+  "tip": "Entra no esticão (Bollinger/RSI/estocástico) e deixa correr com stop móvel de 5 ATR. EXPERIMENTAL: lucrou só em um dos dois regimes.",
+  "summary": "Entra no esticão e surfa o retorno sem alvo fixo; stop móvel.",
+  "description": "Experimental. Pontua reversão à média (Bollinger, RSI/reversão, estocástico) no 5 minutos e, em vez de alvo fixo, mantém só o stop, que acompanha o preço a 5× o ATR da entrada. Nos 80 dias testados foi positivo nos 40 dias recentes (moedas inéditas +0,24R por trade, 4/5 moedas) e ficou em zero nos 40 dias anteriores (+0,00R, 2/5): vantagem não confirmada nos dois regimes.",
+  "skills": {
+   "bollinger": 1.5,
+   "reversao": 2.0,
+   "estocastico": 1.0
+  },
+  "threshold": 45,
+  "direction": "misto",
+  "filters": {
+   "htf_trend": true,
+   "mtf_trend": true,
+   "avoid_lateral": true
+  },
+  "sl_atr": 2.5,
+  "tp_atr": 5.0,
+  "trail_atr": 5.0,
+  "be_r": 0,
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)"
  }
 ]

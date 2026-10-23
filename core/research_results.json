@@ -7311,5 +7311,37 @@
    "pullback_baixa"
   ],
   "context_filtered": null
+ },
+ "esp_5m_surfista_reversao": {
+  "period_label": "80 dias",
+  "period_days": 80,
+  "ret_pct": 6.9,
+  "monthly_pct": 2.53,
+  "ret_seen": 9.26,
+  "ret_new": 4.53,
+  "win_pct": 34.8,
+  "dd_pct": 15.3,
+  "trades_month": 14.9,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "BTCUSDT": 6.36,
+   "ETHUSDT": -4.02,
+   "SOLUSDT": -11.77,
+   "BNBUSDT": 0.78,
+   "XRPUSDT": 54.94,
+   "DOGEUSDT": 1.87,
+   "ADAUSDT": 0.36,
+   "LINKUSDT": 9.52,
+   "AVAXUSDT": -4.84,
+   "LTCUSDT": 15.76
+  },
+  "tested_at": "23/10/2026",
+  "market": "futures",
+  "interval": "5m",
+  "status": "ressalva",
+  "ret_pct_risk_half": 3.27,
+  "monthly_pct_risk_half": 1.21,
+  "prev_ret_pct": 1.02,
+  "prev_pos_coins": "5/10"
  }
 }
