@@ -43,6 +43,16 @@ def tick(bot: str, last_seen: dict) -> None:
     if engine.needs_htf(cfg):
         htf_raw, mtf_raw = engine.htf_frames(get_klines, cfg, len(raw), profile.market)
     df = engine.prepare(raw, cfg, htf_raw, mtf_raw)
+    state, planned = engine.check_armed_plan(profile, cfg, df, price)
+    if state:
+        log.info("[%s] plano condicional: %s", bot, state)
+    if planned is not None:
+        if planned.check and planned.check.allowed:
+            out = engine.execute(profile, cfg, planned, price)
+            log.info("[%s] plano condicional confirmado: ordem %s", bot, out.get("status"))
+        else:
+            log.info("[%s] plano confirmado, bloqueado: %s", bot, " | ".join(planned.check.reasons if planned.check else []))
+        return
     result = engine.run_analysis(profile, cfg, df, price, get_api_key())
     d = result.decision
     log.info("[%s] %s %s conf=%s%% fonte=%s aprovado=%s", bot, cfg["symbol"], d.decision, d.confidence, d.source,
@@ -52,6 +62,8 @@ def tick(bot: str, last_seen: dict) -> None:
         log.info("[%s] ordem: %s", bot, out.get("status"))
     elif result.check:
         log.info("[%s] bloqueada: %s", bot, " | ".join(result.check.reasons))
+    elif engine.auto_arm(profile, cfg, result, df):
+        log.info("[%s] plano condicional da IA armado", bot)
 
 
 def main() -> None:

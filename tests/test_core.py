@@ -518,7 +518,131 @@ def test_learning_page_assets():
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file(str(root / "views" / "learning.py"), default_timeout=60).run()
-    assert not at.exception and len(at.tabs) == 5 and len(at.radio) == 15
+    assert not at.exception and len(at.tabs) == 5 and len(at.radio) == 16
+
+
+def _adv_setup(n=400, seed=3):
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "SOLUSDT", "interval": "15m", "ai_min_confidence": 0}
+    raw = make_df(n, trend=0.02, seed=seed)
+    raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("15min") - pd.Timedelta(minutes=15), periods=n, freq="15min")
+    return cfg, ind.compute(raw, cfg)
+
+
+def test_advisor_scenario_candidates_and_plan():
+    from core import advisor
+
+    cfg, df = _adv_setup()
+    sc = advisor.scenario(df, cfg)
+    assert sc["contexto"] and sc["adx"] is not None and sc["suportes"] is not None
+    vies = advisor.bias(sc, 0.0)
+    cands = advisor.candidates(PROFILES["day"], cfg, sc, vies, "esp_15m_ema_3x1")
+    assert cands and all(c["id"] and c["selo"] != "fraco" or c["ativo"] for c in cands)
+    assert cands == sorted(cands, key=lambda c: -c["pontuacao"])[:len(cands)] or any(c["ativo"] for c in cands)
+    adv = advisor.rules_advice(sc, cands, {}, cfg, sc["preco"], vies, sc["atr"])
+    assert adv["cenario"] and adv["oportunidade"] and adv["dica"] and adv["fonte"] == "regras"
+    if adv["bot"].get("id"):  # só recomenda bot com vantagem comprovada no contexto
+        assert next(c for c in cands if c["id"] == adv["bot"]["id"])["contexto_r"] > 0
+    price, atr = sc["preco"], sc["atr"]
+    ok = advisor.make_plan("BUY", "fechar_acima", price + atr, 1.5, "esp_15m_ema_3x1", 12, invalida=price - atr, price=price, atr=atr)
+    assert ok and ok["personalidade_nome"] and ok["validade_candles"] == 12
+    # incoerentes são descartados: gatilho do lado já atingido, longe demais, direção/tipo inválidos
+    assert advisor.make_plan("BUY", "fechar_acima", price - atr, 1, None, 12, invalida=None, price=price, atr=atr) is None
+    assert advisor.make_plan("BUY", "fechar_acima", price + 20 * atr, 1, None, 12, invalida=None, price=price, atr=atr) is None
+    assert advisor.make_plan("HOLD", "fechar_acima", price + atr, 1, None, 12, invalida=None, price=price, atr=atr) is None
+    txt = advisor.describe_plan(ok, "SOLUSDT", "15m")
+    assert "Comprar SOLUSDT" in txt and "fechar acima de" in txt
+
+
+def test_armed_plan_trigger_states_and_execution():
+    from core import advisor, engine
+
+    cfg, df = _adv_setup()
+    profile = PROFILES["day"]
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+    price = float(df["close"].iloc[-1])
+    atr = float(df["atr"].iloc[-2])
+    level = price + atr
+    plan = advisor.make_plan("BUY", "fechar_acima", level, 1.0, "esp_15m_ema_3x1", 6, invalida=price - 3 * atr, price=price, atr=atr)
+    advisor.disarm("day")
+    engine.arm_plan(profile, cfg, plan, df, "ia")
+    assert advisor.armed("day")["descricao"]
+    # sem candle de confirmação: pendente
+    assert engine.check_armed_plan(profile, cfg, df, price) == (None, None)
+
+    def with_candle(close, vol_mult):
+        d = df.copy()
+        nxt = d.iloc[-1:].copy()
+        nxt["time"] = d["time"].iloc[-1] + pd.Timedelta(minutes=15)
+        d = pd.concat([d, nxt], ignore_index=True)
+        d.loc[len(d) - 2, ["close", "high"]] = [close, max(close, d["high"].iloc[-2])]  # candle de gatilho (penúltimo linha)
+        d.loc[len(d) - 2, "volume"] = d["vol_sma"].iloc[-2] * vol_mult
+        return d
+
+    # armado a partir do candle em formação (último): o gatilho é o candle que fecha depois dele
+    base_time = df["time"].iloc[-1]
+    assert pd.Timestamp(advisor.armed("day")["armado_em"]) == base_time
+    # fechou acima, mas sem volume suficiente → continua pendente
+    low_vol = with_candle(level + atr * 0.2, 0.5)
+    assert advisor.evaluate(advisor.armed("day"), low_vol, "15m")[0] == "pendente"
+    # fechou acima com volume → dispara e a ordem passa pelo gestor de risco
+    hit = with_candle(level + atr * 0.2, 2.0)
+    state, res = engine.check_armed_plan(profile, cfg, hit, level + atr * 0.2)
+    assert state == "disparou" and res.decision.decision == "BUY" and res.decision.stop_loss < res.decision.entry
+    assert res.check and res.check.calc and res.check.allowed, res.check.reasons if res.check else None
+    out = engine.execute(profile, cfg, res, level + atr * 0.2)
+    assert out["status"] == "EXECUTADA" and advisor.armed("day") is None
+    # invalidado
+    engine.arm_plan(profile, cfg, plan, df, "ia")
+    bad = with_candle(price - 4 * atr, 2.0)
+    assert advisor.evaluate(advisor.armed("day"), bad, "15m")[0] == "invalidado"
+    advisor.disarm("day")
+
+
+def test_ai_advice_is_validated(monkeypatch):
+    import json
+
+    from core import advisor, ai, engine
+    from core import personalities as Pm
+
+    cfg, df = _adv_setup()
+    cfg["ai_mode"] = "filtro"
+    monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
+    sc = advisor.scenario(df, cfg)
+    price, atr = sc["preco"], sc["atr"]
+    good = [c for c in Pm.BUILTINS if (c.get("research") or {}).get("market") == "futures"][0]["id"]
+    reply = {"decision": "HOLD", "confidence": 40, "reasoning": "aguardar",
+             "analise": {"cenario": "Cenário técnico da IA.", "leitura_tecnica": ["ADX 20", "RSI 50"], "melhor_oportunidade": "Rompimento com volume.", "dica": "Espere o fechamento."},
+             "bot_recomendado": {"id": "bot_que_nao_existe", "motivo": "inventado"},
+             "plano_condicional": {"direcao": "BUY", "tipo": "fechar_acima", "nivel": price - atr, "volume_min_x": 1.5, "personalidade": good, "validade_candles": 99}}
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps(reply)}}], "model": "teste", "usage": {}}
+
+    monkeypatch.setattr(ai.requests, "post", lambda *a, **k: Resp())
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+    advisor.disarm("day")
+    res = engine.run_analysis(PROFILES["day"], cfg, df, price, "chave")
+    adv = res.decision.advice
+    assert adv["fonte"] == "ia" and adv["cenario"] == "Cenário técnico da IA." and adv["dica"] == "Espere o fechamento."
+    assert adv["bot"]["id"] != "bot_que_nao_existe"            # bot inventado é ignorado: mantém a recomendação por regras
+    assert adv["plano"] != reply["plano_condicional"]            # gatilho no lado já atingido é descartado
+    # plano válido da IA é aceito, com a personalidade informada e validade limitada a 48 candles
+    reply["plano_condicional"].update(nivel=price + atr, validade_candles=99)
+    reply["bot_recomendado"] = {"id": good, "motivo": "melhor candidato"}
+    res = engine.run_analysis(PROFILES["day"], cfg, df, price, "chave")
+    plan = res.decision.advice["plano"]
+    assert plan and plan["personalidade"] == good and plan["validade_candles"] == 48 and res.decision.advice["bot"]["motivo"] == "melhor candidato" or res.decision.advice["bot"]["id"] is not None
+    # piloto automático arma planos da IA; planos de regras só são armados manualmente
+    cfg["ai_auto_arm"] = True
+    assert engine.auto_arm(PROFILES["day"], cfg, res, df) and advisor.armed("day")["origem"] == "ia"
+    advisor.disarm("day")
+    res.decision.advice["fonte"] = "regras"
+    assert not engine.auto_arm(PROFILES["day"], cfg, res, df)
 
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine

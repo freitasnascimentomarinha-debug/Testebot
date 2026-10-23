@@ -34,21 +34,24 @@ class AIDecision:
     source: str = "ia"            # "ia" ou "regras" (quando a IA não está disponível)
     raw: str = ""
     usage: dict = field(default_factory=dict)
+    advice: dict = field(default_factory=dict)   # análise didática, bot recomendado e plano condicional (core/advisor.py)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-SYSTEM_PROMPT = """Você é o motor de decisão de um bot de trading quantitativo de criptomoedas.
-Recebe dados de mercado REAIS já calculados por habilidades de programação e deve
-interpretar o contexto para decidir a próxima ordem. Regras obrigatórias:
+SYSTEM_PROMPT = """Você é um trader profissional e analista técnico quantitativo de criptomoedas, com mais de 15 anos de
+mercado (price action, estrutura de mercado, volume, tendência multitemporal, gestão de risco), e também PROFESSOR: explica em
+português claro o PORQUÊ de cada conclusão, cita os números recebidos (ADX, RSI, volume relativo, ATR, níveis, tendência do tempo
+maior) e, quando útil, ensina o conceito em uma frase. Tom técnico, didático e direto; sem promessas de lucro e sem exageros.
+Você recebe dados REAIS já calculados por habilidades de programação. Regras obrigatórias:
 1. Responda SOMENTE com um objeto JSON válido, sem texto fora dele.
 2. Respeite o estilo do bot (horizonte), o mercado (spot não permite venda a descoberto
    sem margem) e as regras de risco recebidas. Nunca sugira stop mais distante do que o
    permitido pela perda máxima por trade — o tamanho da posição será calculado pelo sistema.
-3. Toda entrada (BUY/SELL) exige stop_loss e take_profit numéricos coerentes com o lado
-   (compra: stop < entrada < alvo; venda: alvo < entrada < stop) e relação risco:retorno
-   maior ou igual ao mínimo informado.
+3. Toda entrada (BUY/SELL) exige stop_loss numérico coerente com o lado (compra: stop < entrada; venda: stop > entrada) e,
+   salvo na personalidade sem alvo (modo surfar), take_profit coerente (compra: entrada < alvo; venda: alvo < entrada) com
+   relação risco:retorno maior ou igual ao mínimo informado.
 4. Prefira HOLD quando os sinais forem conflitantes, o regime for lateral sem ponto claro
    ou as metas diárias estiverem próximas. Preservar capital é prioridade.
 5. Use CLOSE apenas quando houver posição aberta pelo bot (source diferente de "manual") no ativo e o
@@ -58,11 +61,30 @@ interpretar o contexto para decidir a próxima ordem. Regras obrigatórias:
    Se o cenário não se encaixar na estratégia dela, responda HOLD. As "instrucoes_do_usuario" complementam.
 7. "order_type": "LIMIT" só quando houver nível técnico claro para entrada melhor
    (informe "entry"); caso contrário use "MARKET".
+8. "analise" é obrigatória: "cenario" (4 a 7 frases: contexto, força da tendência, o que o volume diz, tempo gráfico maior,
+   estrutura de suportes e resistências, com números), "leitura_tecnica" (3 a 6 itens curtos com números),
+   "melhor_oportunidade" (qual é a melhor oportunidade NO TEMPO GRÁFICO ATUAL: onde, sob qual condição, por quê e o que
+   invalida a ideia) e "dica" (1 a 2 frases práticas e didáticas).
+9. "bot_recomendado": escolha o melhor bot para ESTE cenário SOMENTE entre os "candidatos_de_bot" (use o campo id). Priorize
+   o mesmo tempo gráfico, vantagem comprovada no contexto atual (contexto_r > 0) e selo aprovado. Cite o desempenho do bot
+   (R por operação no contexto, selo) e diga se vale manter o bot ativo. Se nenhum tiver vantagem comprovada, use
+   "id": null e explique que o melhor agora é aguardar.
+10. "plano_condicional": quando a melhor ação agora é ESPERAR confirmação, proponha UM gatilho mensurável: direcao (BUY|SELL),
+   tipo ("fechar_acima" ou "fechar_abaixo": um candle fecha além do nivel), nivel (preço; use os níveis recebidos),
+   volume_min_x (1.0 a 3.0 ou null), personalidade (id de um dos candidatos), validade_candles (3 a 24), invalida_em (preço
+   que cancela o plano, ou null) e explicacao (por que esse gatilho confirma a tese). O SISTEMA confere o gatilho a cada candle
+   fechado e, se o piloto automático estiver ligado e o gestor de risco aprovar, abre a ordem sozinho; você nunca abre ordem
+   fora desse gatilho. Se já recomenda entrar agora ("decision" BUY/SELL) ou não há gatilho claro, use null.
+11. Nunca invente números: use apenas os dados recebidos.
 Formato:
 {"decision":"BUY|SELL|HOLD|CLOSE","order_type":"MARKET|LIMIT","entry":number|null,
  "stop_loss":number|null,"take_profit":number|null,"confidence":0-100,
- "reasoning":"análise objetiva em português (3-6 frases)","risks":"principais riscos",
- "invalidation":"o que invalida a ideia","management":"como conduzir a posição (parciais, trailing, prazo)"}"""
+ "reasoning":"resumo objetivo da decisão imediata (2-4 frases)","risks":"principais riscos",
+ "invalidation":"o que invalida a ideia","management":"como conduzir a posição (parciais, trailing, prazo)",
+ "analise":{"cenario":"...","leitura_tecnica":["..."],"melhor_oportunidade":"...","dica":"..."},
+ "bot_recomendado":{"id":"id do candidato ou null","motivo":"...","manter_bot_ativo":true|false},
+ "plano_condicional":null | {"direcao":"BUY|SELL","tipo":"fechar_acima|fechar_abaixo","nivel":number,"volume_min_x":number|null,
+   "personalidade":"id","validade_candles":number,"invalida_em":number|null,"explicacao":"..."}}"""
 
 
 def get_api_key(explicit: str | None = None) -> str | None:
@@ -73,7 +95,8 @@ def get_api_key(explicit: str | None = None) -> str | None:
 
 def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: list[dict],
                   indicators_now: dict, account: dict, positions: list[dict], risk_rules: dict,
-                  funding_rate: float | None = None, personality: dict | None = None) -> dict:
+                  funding_rate: float | None = None, personality: dict | None = None, scenario: dict | None = None,
+                  candidates: list | None = None, armed_plan: dict | None = None) -> dict:
     persona = None
     if personality:
         from core.personalities import DIRECTIONS, FILTERS
@@ -104,6 +127,9 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
         "taxa_de_financiamento_pct": funding_rate,
         "candles_recentes": snapshot,
         "instrucoes_do_usuario": cfg.get("ai_instructions") or "",
+        "cenario_calculado": scenario,
+        "candidatos_de_bot": candidates or [],
+        "plano_condicional_ja_armado": armed_plan,
     }
 
 
@@ -126,7 +152,51 @@ def _num(v):
         return None
 
 
-def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2) -> AIDecision:
+def _strs(v, limit: int = 8) -> list[str]:
+    return [str(x).strip() for x in v if str(x).strip()][:limit] if isinstance(v, list) else []
+
+
+def build_advice(data: dict, rules: dict, extras: dict) -> dict:
+    """Junta a análise da IA com a base calculada por regras, validando tudo o que a IA pode afetar:
+    o bot precisa ser um dos candidatos e o gatilho do plano precisa ser conferível pelo sistema."""
+    from core import advisor, personalities
+
+    advice = dict(rules)
+    an = data.get("analise") if isinstance(data.get("analise"), dict) else {}
+    for k_src, k_dst in (("cenario", "cenario"), ("melhor_oportunidade", "oportunidade"), ("dica", "dica")):
+        if str(an.get(k_src, "")).strip():
+            advice[k_dst] = str(an[k_src]).strip()
+    if _strs(an.get("leitura_tecnica")):
+        advice["leitura_tecnica"] = _strs(an["leitura_tecnica"])
+    cands = {c["id"]: c for c in extras.get("candidates", [])}
+    br = data.get("bot_recomendado") if isinstance(data.get("bot_recomendado"), dict) else None
+    if br is not None:
+        bid = br.get("id")
+        if bid in cands:
+            c = cands[bid]
+            advice["bot"] = {"id": bid, "nome": c["nome"], "motivo": str(br.get("motivo") or c["porque"]).strip(), "mesmo_tempo": c["mesmo_tempo"],
+                             "ativo": c["ativo"], "alternativas": [{"id": x["id"], "nome": x["nome"]} for x in extras["candidates"] if x["id"] != bid][:3]}
+        elif bid in (None, "", "null"):
+            advice["bot"] = {"id": None, "nome": None, "motivo": str(br.get("motivo") or "").strip() or (rules.get("bot") or {}).get("motivo", ""),
+                             "mesmo_tempo": False, "ativo": False, "sem_vantagem": True,
+                             "alternativas": [{"id": x["id"], "nome": x["nome"]} for x in extras["candidates"][:3]]}
+    if "plano_condicional" in data:
+        pc = data["plano_condicional"]
+        plan = None
+        if isinstance(pc, dict):
+            pid = pc.get("personalidade")
+            if pid not in cands and not personalities.get(pid):
+                pid = (advice.get("bot") or {}).get("id")
+            plan = advisor.make_plan(pc.get("direcao"), pc.get("tipo"), pc.get("nivel"), pc.get("volume_min_x"), pid, pc.get("validade_candles") or 12,
+                                     invalida=pc.get("invalida_em"), price=extras["price"], atr=extras["atr"], why=str(pc.get("explicacao") or ""))
+            if plan is None:
+                plan = rules.get("plano")  # gatilho inválido: mantém o plano padrão por regras
+        advice["plano"] = plan
+    advice["fonte"] = "ia"
+    return advice
+
+
+def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2, extras: dict | None = None) -> AIDecision:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -137,6 +207,7 @@ def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2)
         "model": model,
         "temperature": temperature,
         "response_format": {"type": "json_object"},
+        "max_tokens": 2600,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": "Contexto do mercado e da conta (JSON):\n" + json.dumps(context, ensure_ascii=False, default=str)},
@@ -155,8 +226,9 @@ def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2)
     decision = str(data.get("decision", "HOLD")).upper()
     if decision not in {"BUY", "SELL", "HOLD", "CLOSE"}:
         decision = "HOLD"
+    advice = build_advice(data, extras["rules"], extras) if extras else {}
     return AIDecision(
-        decision=decision,
+        decision=decision, advice=advice,
         order_type="LIMIT" if str(data.get("order_type", "MARKET")).upper() == "LIMIT" else "MARKET",
         entry=_num(data.get("entry")), stop_loss=_num(data.get("stop_loss")), take_profit=_num(data.get("take_profit")),
         confidence=int(_num(data.get("confidence")) or 0), reasoning=str(data.get("reasoning", "")),

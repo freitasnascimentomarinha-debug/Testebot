@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import ai, htf, indicators as ind, personalities, risk
+from core import advisor, ai, htf, indicators as ind, personalities, risk
 from core.broker import get_broker
 from core.data import get_funding_rate
 from core.profiles import BotProfile
@@ -77,20 +77,36 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     account_view = {k: round(v, 2) for k, v in st_.items() if isinstance(v, (int, float)) and not math.isinf(v)}
     funding = get_funding_rate(symbol) if profile.market == "futures" else None
 
+    # Consultor técnico: cenário medido, melhores bots para o momento e plano condicional por regras
+    sc = cands = rules_adv = extras = None
+    try:
+        sc = advisor.scenario(df, cfg)
+        vies = advisor.bias(sc, plan_d["score"])
+        cands = advisor.candidates(profile, cfg, sc, vies, personality["id"] if personality else None)
+        rules_adv = advisor.rules_advice(sc, cands, plan_d, cfg, price, vies, sc["atr"])
+        extras = {"scenario": sc, "candidates": cands, "rules": rules_adv, "price": price, "atr": sc["atr"]}
+    except Exception:  # noqa: BLE001 - o consultor nunca derruba a análise principal
+        pass
+    rec = advisor.armed(profile.key)
+    armed_view = ({k: rec[k] for k in ("plano", "ativo", "tempo", "descricao")} if rec and rec.get("ativo") == symbol else None)
     context = ai.build_context(profile=profile, cfg=cfg, symbol=symbol, interval=interval, plan=plan_d,
                                snapshot=market_snapshot(df.iloc[:-1], int(cfg["ai_candles_context"])),
                                indicators_now=indicators_now, account=account_view, positions=positions,
-                               risk_rules=risk_rules, funding_rate=funding, personality=personality)
+                               risk_rules=risk_rules, funding_rate=funding, personality=personality, scenario=sc,
+                               candidates=cands, armed_plan=armed_view)
     error = ""
     if api_key:
         try:
-            decision = ai.ask_ai(context, api_key=api_key, model=cfg["ai_model"], temperature=float(cfg["ai_temperature"]))
+            decision = ai.ask_ai(context, api_key=api_key, model=cfg["ai_model"], temperature=float(cfg["ai_temperature"]),
+                                 extras=extras)
         except Exception as exc:  # noqa: BLE001
             error = str(exc)
             decision = ai.rules_fallback(plan_d, f"falha na IA ({exc})")
     else:
         decision = ai.rules_fallback(plan_d, "chave da OpenRouter não configurada")
 
+    if not decision.advice and rules_adv:
+        decision.advice = rules_adv
     # Modo filtro (padrão): a IA só confirma ou veta o sinal das regras testadas no backtest e usa o
     # stop/alvo validados; não abre operação sem sinal das regras nem inverte a direção.
     if decision.source == "ia" and cfg.get("ai_mode", "filtro") == "filtro" and decision.decision in ("BUY", "SELL"):
@@ -190,3 +206,58 @@ def htf_frames(getter, cfg: dict, n: int, market: str):
     """Candles dos tempos maiores exigidos pela personalidade escolhida: (htf_raw, mtf_raw)."""
     p = personalities.get(cfg.get("personality"))
     return htf.frames(getter, cfg["symbol"], cfg["interval"], n, market, (p or {}).get("filters"))
+
+
+# ----------------------------------------------------------------------- plano condicional armado
+def arm_plan(profile: BotProfile, cfg: dict, plan: dict, df: pd.DataFrame, source: str = "manual") -> dict:
+    """Arma o plano: o gatilho passa a ser conferido a cada candle fechado, a partir do candle em formação."""
+    return advisor.arm(profile.key, cfg["symbol"], cfg["interval"], plan, df["time"].iloc[-1], source)
+
+
+def check_armed_plan(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float):
+    """Confere o plano armado do bot. Devolve ``(estado, resultado)``:
+    ``("disparou", AnalysisResult)`` quando o gatilho confirmou (o plano é desarmado), ``("cancelado:<motivo>", None)``
+    quando caiu (invalidado, expirado ou perdido) e ``(None, None)`` quando continua pendente ou não se aplica."""
+    from core.strategy import stops_for
+
+    bot = profile.key
+    rec = advisor.armed(bot)
+    if not rec or rec.get("ativo") != cfg["symbol"] or rec.get("tempo") != cfg["interval"]:
+        return None, None
+    state, info = advisor.evaluate(rec, df, cfg["interval"])
+    if state == "pendente":
+        return None, None
+    advisor.disarm(bot, state)
+    if state != "disparou":
+        return f"cancelado:{state}", None
+    plan = rec["plano"]
+    side = plan["direcao"]
+    pers = personalities.get(plan.get("personalidade")) or personalities.get(cfg.get("personality")) \
+        or personalities.get(personalities.DEFAULT_BY_BOT[bot])
+    st_ = stops_for(df, cfg, side, pers)
+    why = (f"Plano condicional confirmado: {rec['descricao']} Gatilho: candle {info['candle'][:16]} fechou em {info['close']:.6g}"
+           + (f" com volume {info['volume_x']:g}× a média." if info.get("volume_x") else "."))
+    decision = ai.AIDecision(decision=side, order_type="MARKET", entry=st_["price"], stop_loss=st_["stop_loss"],
+                             take_profit=st_["take_profit"], confidence=75, reasoning=why, risks="Plano condicional: confira o gestor de risco.",
+                             model="plano", source="ia" if rec.get("origem") == "ia" else "regras")
+    broker = get_broker(bot)
+    stats = broker.limit_stats(cfg, {cfg["symbol"]: price})
+    trailing = bool(st_["trail_dist"])
+    check = risk.check_trade(cfg, stats, side, price, decision.stop_loss, decision.take_profit, profile.market, trailing=trailing)
+    plan_d = {"direction": side, "score": 0.0, "regime": "plano condicional", "entry": price, "stop_loss": decision.stop_loss,
+              "take_profit": decision.take_profit, "trail_dist": st_["trail_dist"], "be_r": st_["be_r"]}
+    result = AnalysisResult(plan=plan_d, decision=decision, check=check, price=price, symbol=cfg["symbol"], interval=cfg["interval"],
+                            time=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                            personality={"id": pers["id"], "name": pers["name"]} if pers else None)
+    log_decision(bot, result)
+    return "disparou", result
+
+
+def auto_arm(profile: BotProfile, cfg: dict, result: AnalysisResult, df: pd.DataFrame) -> bool:
+    """Piloto automático: arma o plano condicional proposto pela IA (só planos da IA; nunca os de regras)."""
+    adv = result.decision.advice or {}
+    plan = adv.get("plano")
+    if not cfg.get("ai_auto_arm", True) or not plan or adv.get("fonte") != "ia" or advisor.armed(profile.key):
+        return False
+    arm_plan(profile, cfg, plan, df, "ia")
+    return True

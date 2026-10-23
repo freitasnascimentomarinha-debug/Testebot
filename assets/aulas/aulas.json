@@ -388,7 +388,7 @@
   "id": "aula5",
   "titulo": "Negociando com o bot",
   "resumo": "Do primeiro teste ao piloto automático: como o bot abre e fecha ordens, o papel da IA, o alvo fixo contra o stop móvel e um roteiro seguro de uso.",
-  "duracao_s": 231,
+  "duracao_s": 287,
   "video": "assets/aulas/aula5.mp4",
   "legenda": "assets/aulas/aula5.vtt",
   "capitulos": [
@@ -401,7 +401,7 @@
     ]
    },
    {
-    "t": 12,
+    "t": 11,
     "titulo": "O painel de controle do bot",
     "fala": [
      "No Controle do bot você escolhe a personalidade, a estratégia que o bot vai seguir.",
@@ -446,7 +446,7 @@
     ]
    },
    {
-    "t": 135,
+    "t": 134,
     "titulo": "O papel da IA",
     "fala": [
      "E a inteligência artificial? No modo filtro, que é o padrão, ela só confirma ou veta o sinal das regras.",
@@ -457,7 +457,18 @@
     ]
    },
    {
-    "t": 165,
+    "t": 164,
+    "titulo": "A leitura do especialista",
+    "fala": [
+     "Quando você clica em Analisar agora, o sistema mostra também a leitura do especialista. Ela aparece até sem IA, calculada só por regras.",
+     "Primeiro, o cenário: o contexto do gráfico, a força da tendência, o que o volume diz e onde estão os suportes e as resistências, sempre com números. Depois, a melhor oportunidade no tempo gráfico em que você está, e uma dica prática.",
+     "Em seguida, o melhor bot para aquele momento. O sistema compara os bots no contexto atual e só recomenda um que tenha vantagem comprovada nele. Se nenhum tiver, a recomendação honesta é esperar.",
+     "Por fim, o plano condicional. Por exemplo: vender se um candle fechar abaixo de tal preço, com volume acima da média, usando tal personalidade.",
+     "Armar o plano não abre ordem agora. O sistema confere o gatilho a cada candle fechado, e só abre a ordem se ele se confirmar e o gestor de risco aprovar. Com o piloto ligado, os planos da IA são armados sozinhos."
+    ]
+   },
+   {
+    "t": 220,
     "titulo": "Roteiro seguro, passo a passo",
     "fala": [
      "Um roteiro seguro, passo a passo.",
@@ -470,7 +481,7 @@
     ]
    },
    {
-    "t": 194,
+    "t": 250,
     "titulo": "Cuidados finais",
     "fala": [
      "Para terminar, alguns cuidados.",
@@ -481,7 +492,7 @@
     ]
    },
    {
-    "t": 218,
+    "t": 274,
     "titulo": "Bons estudos e bons testes!",
     "fala": [
      "Chegamos ao fim. Você já conhece o caminho: dados reais, regras, risco, carteira e, só depois, o piloto automático.",

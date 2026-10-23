@@ -305,6 +305,40 @@ SKILLS = {
 }
 
 
+def build_stops(direction: str, price: float, a: float, levels: dict, personality: dict | None, cfg: dict):
+    """Stop e alvo (em ATR) da personalidade para uma entrada a ``price``; (None, None) se HOLD."""
+    if direction == "HOLD":
+        return None, None
+    sl_mult = float((personality or {}).get("sl_atr") or cfg["atr_sl_mult"])
+    tp_mult = float((personality or {}).get("tp_atr") or cfg["atr_tp_mult"])
+    sign = 1 if direction == "BUY" else -1
+    # Distância mínima do stop: evita trades em que as taxas dominam o risco
+    sl_dist = max(a * sl_mult, price * float(cfg["fee_pct"]) / 100 * 8)
+    tp_dist = sl_dist * tp_mult / sl_mult
+    sl = price - sign * sl_dist
+    tp = price + sign * tp_dist
+    # Ajusta o stop para além do suporte/resistência mais próximo, se fizer sentido
+    key = "supports" if direction == "BUY" else "resistances"
+    if levels.get(key):
+        lv = levels[key][0]["price"]
+        candidate = lv - sign * a * 0.3
+        if sl_dist < abs(price - candidate) < sl_dist * 1.3:
+            sl = candidate
+    return sl, tp
+
+
+def stops_for(df: pd.DataFrame, cfg: dict, direction: str, personality: dict | None, live: bool = True) -> dict:
+    """Stop/alvo/stop móvel que a personalidade usaria agora numa entrada ``direction`` (BUY/SELL)."""
+    data = df.iloc[:-1] if live and len(df) > 50 else df
+    levels = ind.support_resistance(data)
+    price = float(df["close"].iloc[-1]) if live else float(data.iloc[-1].close)
+    a = float(data.iloc[-1].atr)
+    sl, tp = build_stops(direction, price, a, levels, personality, cfg)
+    trail = float((personality or {}).get("trail_atr") or 0)
+    return {"price": price, "stop_loss": sl, "take_profit": None if trail else tp, "atr": a,
+            "trail_dist": a * trail if trail else None, "be_r": float((personality or {}).get("be_r") or 0) if trail else 0.0}
+
+
 def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict | None = None,
             live: bool = True) -> RulePlan:
     """Executa as habilidades e monta o plano baseado em regras.
@@ -392,23 +426,7 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
 
     price = float(df["close"].iloc[-1]) if live else float(last.close)
     a = float(last.atr)
-    sl_mult = float((personality or {}).get("sl_atr") or cfg["atr_sl_mult"])
-    tp_mult = float((personality or {}).get("tp_atr") or cfg["atr_tp_mult"])
-    sl = tp = None
-    if direction != "HOLD":
-        sign = 1 if direction == "BUY" else -1
-        # Distância mínima do stop: evita trades em que as taxas dominam o risco
-        sl_dist = max(a * sl_mult, price * float(cfg["fee_pct"]) / 100 * 8)
-        tp_dist = sl_dist * tp_mult / sl_mult
-        sl = price - sign * sl_dist
-        tp = price + sign * tp_dist
-        # Ajusta o stop para além do suporte/resistência mais próximo, se fizer sentido
-        key = "supports" if direction == "BUY" else "resistances"
-        if levels[key]:
-            lv = levels[key][0]["price"]
-            candidate = lv - sign * a * 0.3
-            if sl_dist < abs(price - candidate) < sl_dist * 1.3:
-                sl = candidate
+    sl, tp = build_stops(direction, price, a, levels, personality, cfg)
     trail_mult = float((personality or {}).get("trail_atr") or 0)
     plan = RulePlan(direction, round(score, 1), price, sl, tp, a, regime, results, levels, " ".join(notes), context)
     if trail_mult and direction != "HOLD":  # modo surfar: sem alvo, stop móvel

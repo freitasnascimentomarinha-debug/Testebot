@@ -78,6 +78,7 @@ def default_settings(profile: BotProfile) -> dict:
         "ai_mode": "filtro",         # "filtro": IA confirma/veta o sinal das regras · "livre": IA decide sozinha
         "ai_temperature": 0.2,
         "ai_auto_execute": False,
+        "ai_auto_arm": True,         # piloto automático arma os planos condicionais propostos pela IA
         "ai_min_confidence": 60,
         "ai_candles_context": 60,
         "ai_instructions": "",
