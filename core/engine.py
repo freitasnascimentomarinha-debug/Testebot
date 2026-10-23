@@ -46,7 +46,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     symbol, interval = cfg["symbol"], cfg["interval"]
     broker = get_broker(profile.key)
     acct = broker.account()
-    st_ = broker.stats({symbol: price})
+    st_ = broker.limit_stats(cfg, {symbol: price})
     plan = analyze(df, cfg, profile)
     plan_d = plan.to_dict()
 
@@ -60,7 +60,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         "alavancagem": risk.effective_leverage(cfg), "modo_margem": cfg["margin_mode"],
         "meta_operacoes_dia": cfg["max_trades_day"], "operacoes_hoje": st_["trades_today"],
         "meta_lucro_dia_usdt": cfg["daily_profit_target"], "limite_perda_dia_usdt": cfg["daily_max_loss"],
-        "resultado_hoje_usdt": round(st_["pnl_today"], 2), "max_posicoes_abertas": cfg["max_open_positions"],
+        "resultado_hoje_usdt": round(st_["pnl_today"], 2),
+        "operacoes_contadas": st_["scope_trades"].strip(" ·"), "resultado_contado": st_["scope_pnl"].strip(" ·"), "max_posicoes_abertas": cfg["max_open_positions"],
         "taxa_pct": cfg["fee_pct"],
     }
     positions = [{k: p.get(k) for k in ("side", "qty", "entry", "stop_loss", "take_profit", "leverage", "liquidation",
@@ -89,8 +90,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         entry = decision.entry if decision.order_type == "LIMIT" and decision.entry else price
         check = risk.check_trade(cfg, st_, decision.decision, entry, decision.stop_loss, decision.take_profit, profile.market)
         if decision.confidence < int(cfg["ai_min_confidence"]):
-            check.allowed = False
-            check.reasons.append(f"Confiança {decision.confidence}% abaixo do mínimo configurado ({cfg['ai_min_confidence']}%).")
+            check.add("confianca", f"Confiança {decision.confidence}% abaixo do mínimo configurado ({cfg['ai_min_confidence']}%).")
 
     result = AnalysisResult(plan=plan_d, decision=decision, check=check, price=price, symbol=symbol,
                             interval=interval, time=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=error)

@@ -144,45 +144,86 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
     )
 
 
+# O que conta nos limites (configurável por bot em "Metas de operação")
+TRADES_SCOPES = {
+    "bot": "Só as operações do bot",
+    "pagina": "Bot + minhas ordens nesta página",
+}
+PNL_SCOPES = {
+    "bot": "Só as operações do bot",
+    "pagina": "Bot + minhas ordens nesta página",
+    "carteira": "Carteira inteira — todos os bots + minhas ordens",
+}
+MANUAL_MODES = {
+    "livre": "Livres — os limites só geram aviso",
+    "pnl": "Respeitam a meta de lucro e o limite de perda do dia",
+    "todos": "Respeitam todos os limites (como o bot)",
+}
+# Categorias de bloqueio que valem para as ordens manuais em cada modo
+MANUAL_BLOCKS = {"livre": {"regra"}, "pnl": {"regra", "pnl"}, "todos": {"regra", "pnl", "operacoes", "rr"}}
+
+
 @dataclass
 class RiskCheck:
     allowed: bool
     reasons: list[str]
     calc: TradeCalc | None = None
+    kinds: list[str] = field(default_factory=list)  # categoria de cada motivo
+
+    def add(self, kind: str, reason: str) -> None:
+        self.reasons.append(reason)
+        self.kinds.append(kind)
+        self.allowed = False
+
+    def blocking(self, kinds: set[str]) -> list[str]:
+        return [r for r, k in zip(self.reasons, self.kinds) if k in kinds]
+
+    def warnings(self, kinds: set[str]) -> list[str]:
+        return [r for r, k in zip(self.reasons, self.kinds) if k not in kinds]
 
 
 def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: float | None,
                 take_profit: float | None, market: str) -> RiskCheck:
-    """Aplica todas as regras do usuário antes de enviar uma ordem."""
-    reasons: list[str] = []
+    """Aplica todas as regras do usuário antes de enviar uma ordem.
+
+    Categorias dos motivos: ``regra`` (stop ausente, short não permitido,
+    alavancagem/liquidação), ``operacoes`` (meta de operações e posições
+    simultâneas), ``pnl`` (meta de lucro e limite de perda do dia) e ``rr``."""
+    chk = RiskCheck(allowed=True, reasons=[])
     lev = effective_leverage(cfg)
+    s = account_stats
 
     if side == "SELL" and market == "spot" and not cfg.get("leverage_on"):
-        reasons.append("Venda a descoberto no spot exige a opção de alavancagem/margem ligada.")
+        chk.add("regra", "Venda a descoberto no spot exige a opção de alavancagem/margem ligada.")
     if side == "SELL" and not cfg.get("allow_short", True):
-        reasons.append("Operações vendidas (short) estão desativadas nas configurações.")
+        chk.add("regra", "Operações vendidas (short) estão desativadas nas configurações.")
     if not stop:
-        reasons.append("Toda ordem precisa de stop loss para respeitar a perda máxima por trade.")
-    if account_stats["trades_today"] >= int(cfg["max_trades_day"]):
-        reasons.append(f"Meta de operações do dia atingida ({account_stats['trades_today']}/{cfg['max_trades_day']}).")
-    if account_stats["pnl_today"] >= float(cfg["daily_profit_target"]) > 0:
-        reasons.append(f"Meta de lucro diária atingida ({account_stats['pnl_today']:,.2f} USDT). Bot pausado até amanhã.")
-    if -account_stats["pnl_today"] >= float(cfg["daily_max_loss"]) > 0:
-        reasons.append(f"Limite de perda diária atingido ({account_stats['pnl_today']:,.2f} USDT). Bot pausado até amanhã.")
-    if account_stats["open_positions"] >= int(cfg["max_open_positions"]):
-        reasons.append(f"Número máximo de posições abertas atingido ({cfg['max_open_positions']}).")
+        chk.add("regra", "Toda ordem precisa de stop loss para respeitar a perda máxima por trade.")
+    scope = s.get("scope_trades", "")
+    if s["trades_today"] >= int(cfg["max_trades_day"]):
+        chk.add("operacoes", f"Meta de operações do dia atingida ({s['trades_today']}/{cfg['max_trades_day']}{scope}).")
+    if s["open_positions"] >= int(cfg["max_open_positions"]):
+        chk.add("operacoes", f"Número máximo de posições abertas atingido ({cfg['max_open_positions']}{scope}).")
+    scope = s.get("scope_pnl", "")
+    if s["pnl_today"] >= float(cfg["daily_profit_target"]) > 0:
+        chk.add("pnl", f"Meta de lucro diária atingida ({s['pnl_today']:,.2f} USDT{scope}). Pausado até amanhã (UTC).")
+    if -s["pnl_today"] >= float(cfg["daily_max_loss"]) > 0:
+        chk.add("pnl", f"Limite de perda diária atingido ({s['pnl_today']:,.2f} USDT{scope}). Pausado até amanhã (UTC).")
 
-    budget = risk_budget(cfg, account_stats["equity"])
+    budget = risk_budget(cfg, s["equity"])
     calc = calculate(side, entry, stop, take_profit, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                     risk_usdt=budget, available=account_stats["available"], symbol=cfg["symbol"], market=market,
+                     risk_usdt=budget, available=s["available"], symbol=cfg["symbol"], market=market,
                      margin_mode=cfg["margin_mode"]) if stop else None
+    chk.calc = calc
     if calc:
         if calc.rr is not None and calc.rr < float(cfg["min_rr"]):
-            reasons.append(f"Relação risco:retorno {calc.rr:.2f} abaixo do mínimo configurado ({cfg['min_rr']}).")
+            chk.add("rr", f"Relação risco:retorno {calc.rr:.2f} abaixo do mínimo configurado ({cfg['min_rr']}).")
         if take_profit is None:
-            reasons.append("Defina um alvo (take profit) para validar a relação risco:retorno.")
-        reasons.extend(w for w in calc.warnings if "reduzida" not in w)
+            chk.add("rr", "Defina um alvo (take profit) para validar a relação risco:retorno.")
+        for w in calc.warnings:
+            if "reduzida" not in w:
+                chk.add("regra", w)
     max_lev = lev_rules.max_leverage(cfg["symbol"], market, cfg["margin_mode"])
     if lev > max_lev:
-        reasons.append(f"Alavancagem {lev:g}× acima do máximo permitido pela Binance para {cfg['symbol']} ({max_lev}×).")
-    return RiskCheck(allowed=not reasons, reasons=reasons, calc=calc)
+        chk.add("regra", f"Alavancagem {lev:g}× acima do máximo permitido pela Binance para {cfg['symbol']} ({max_lev}×).")
+    return chk

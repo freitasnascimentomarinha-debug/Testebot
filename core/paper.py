@@ -310,11 +310,16 @@ def invested(acct: dict) -> float:
     return acct["initial"] + sum(c["amount"] for c in acct.get("cashflows", []))
 
 
-def stats(acct: dict, prices: dict[str, float], bot: str | None = None) -> dict:
+def stats(acct: dict, prices: dict[str, float], bot: str | None = None, origin: str = "all") -> dict:
     """Indicadores de desempenho. Com ``bot``, as contagens (operações do dia,
-    posições abertas, acerto) consideram só as operações desse bot — a banca
-    (patrimônio e saldo livre) é sempre a da carteira inteira."""
-    mine = (lambda x: not bot or x.get("bot", bot) == bot)
+    posições abertas, acerto) consideram só as operações feitas na página desse
+    bot; ``origin`` filtra por quem decidiu ("bot" = IA/regras, "manual" = você,
+    "all" = ambos). A banca (patrimônio e saldo livre) é sempre a da carteira."""
+    def mine(x):
+        if bot and x.get("bot", bot) != bot:
+            return False
+        manual = x.get("source") == "manual"
+        return origin == "all" or (origin == "manual") == manual
     today = datetime.now(timezone.utc).date().isoformat()
     hist = [t for t in acct["history"] if mine(t)]
     positions = [p for p in acct["positions"] if mine(p)]

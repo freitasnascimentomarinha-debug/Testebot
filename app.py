@@ -11,8 +11,7 @@ st.set_page_config(page_title="TradeBot · Plataforma de Bots", page_icon="📊"
 
 from core.auth import is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
 from core import APP_VERSION  # noqa: E402
-from core.storage import backend  # noqa: E402
-from core.ui import api_key  # noqa: E402
+from core.storage import backend, get_secret  # noqa: E402
 
 st.markdown("""<style>
 [data-testid="stMetricValue"] {font-size: 1.35rem;}
@@ -36,10 +35,14 @@ require_login()
 with st.sidebar:
     st.divider()
     st.markdown("### 🔑 IA — OpenRouter")
-    if api_key() and not st.session_state.get("openrouter_key"):
-        st.success("Chave carregada de secrets/variável de ambiente.")
-    st.text_input("API Key (somente nesta sessão)", type="password", key="openrouter_key",
-                  help="Também pode ser definida em .streamlit/secrets.toml (OPENROUTER_API_KEY) ou na variável de ambiente.")
+    if get_secret("OPENROUTER_API_KEY"):
+        st.success("Chave configurada nos Secrets ✅")
+    else:
+        st.text_input("API Key (somente nesta sessão)", type="password", key="openrouter_key",
+                      help="Para não precisar digitar, defina OPENROUTER_API_KEY nos Secrets do Streamlit "
+                           "(ou em .streamlit/secrets.toml) — este campo some automaticamente.")
+        if not st.session_state.get("openrouter_key"):
+            st.caption("Sem chave: os bots usam só as habilidades de programação.")
     st.caption("Modelo padrão: `deepseek/deepseek-v4.1-flash`")
     st.divider()
     st.markdown("### 💾 Armazenamento")

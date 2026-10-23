@@ -31,6 +31,10 @@ def default_settings(profile: BotProfile) -> dict:
         "daily_profit_target": 60.0,    # ao atingir, o bot para no dia
         "daily_max_loss": 60.0,         # ao atingir, o bot para no dia
         "max_open_positions": 2 if futures else 3,
+        # Escopo dos limites (você × bot)
+        "limits_trades_scope": "bot",       # meta de operações e posições simultâneas
+        "limits_pnl_scope": "carteira",     # meta de lucro e limite de perda do dia
+        "manual_limits": "livre",           # suas ordens manuais: livre | pnl | todos
         # Alavancagem
         "leverage_on": profile.leverage_on_by_default,
         "leverage": profile.default_leverage,

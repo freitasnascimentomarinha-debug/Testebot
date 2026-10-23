@@ -265,3 +265,35 @@ def test_ai_close_keeps_manual_positions():
     engine.execute(PROFILES["day"], default_settings(PROFILES["day"]), res, 101)
     left = b.account()["positions"]
     assert len(left) == 1 and left[0]["source"] == "manual"
+
+
+def test_limit_scopes_you_vs_bot():
+    from core.broker import get_broker
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    day, swing = get_broker("day"), get_broker("swing")
+    # 2 ordens suas e 1 do bot no Day Trade; 1 do bot no Swing com prejuízo realizado
+    for src in ("manual", "manual", "ia"):
+        day.place_order(symbol="X", market="futures", side="BUY", qty=1, price=100, leverage=5, fee_pct=0.0, source=src)
+    pos = swing.place_order(symbol="Y", market="spot", side="BUY", qty=1, price=100, fee_pct=0.0, source="ia")["position"]
+    swing.close_position(pos["id"], 50)  # −50 na carteira
+
+    cfg = default_settings(PROFILES["day"])
+    cfg.update(limits_trades_scope="bot", limits_pnl_scope="bot")
+    s = day.limit_stats(cfg, {"X": 100})
+    assert (s["trades_today"], s["open_positions"], s["pnl_today"]) == (1, 1, 0)
+    cfg.update(limits_trades_scope="pagina", limits_pnl_scope="carteira")
+    s = day.limit_stats(cfg, {"X": 100})
+    assert (s["trades_today"], s["open_positions"]) == (3, 3) and s["pnl_today"] == pytest.approx(-50)
+
+    # Ordens manuais: contam as operações da página; o escopo "bot" de resultado vira "página"
+    cfg.update(limits_trades_scope="bot", limits_pnl_scope="bot", max_trades_day=3, daily_max_loss=40)
+    manual = day.limit_stats(cfg, {"X": 100}, manual=True)
+    chk = risk.check_trade(cfg, manual, "BUY", 100, 97, 110, "futures")
+    assert "operacoes" in chk.kinds and "pnl" not in chk.kinds
+    assert chk.blocking(risk.MANUAL_BLOCKS["livre"]) == []
+    assert chk.blocking(risk.MANUAL_BLOCKS["todos"])
+    cfg["limits_pnl_scope"] = "carteira"
+    chk = risk.check_trade(cfg, day.limit_stats(cfg, {"X": 100}, manual=True), "BUY", 100, 97, 110, "futures")
+    assert chk.blocking(risk.MANUAL_BLOCKS["pnl"])  # perda de −50 na carteira ≥ limite de 40

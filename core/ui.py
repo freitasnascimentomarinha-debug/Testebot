@@ -59,7 +59,7 @@ def cached_brackets(symbol: str):
 
 
 def api_key() -> str | None:
-    return st.session_state.get("openrouter_key") or get_secret("OPENROUTER_API_KEY")
+    return get_secret("OPENROUTER_API_KEY") or st.session_state.get("openrouter_key")
 
 
 def fmt(v: float | None, d: int = 2) -> str:
@@ -214,7 +214,9 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         m[1].metric("Banca", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)",
                     help="Patrimônio da carteira simulada (saldo livre + margens + P&L em aberto), em USDT.")
         m[2].metric("Resultado hoje", fmt(s["pnl_today"]), f"meta {fmt(cfg_now['daily_profit_target'], 0)}")
-        m[3].metric("Operações hoje", f"{s['trades_today']}/{cfg_now['max_trades_day']}")
+        lim = broker.limit_stats(cfg_now, {symbol: price})
+        m[3].metric("Operações do bot hoje", f"{lim['trades_today']}/{cfg_now['max_trades_day']}",
+                    help="Contadas conforme Configurações → Metas de operação" + lim["scope_trades"] + ".")
         m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]), f"{s['open_positions']} posição(ões)",
                     delta_color="off", help="Lucro/prejuízo das posições abertas já descontando taxas de entrada e saída.")
         m[5].metric("Taxa de acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
@@ -389,13 +391,17 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
 
     if st.button(f"Enviar ordem simulada — {'COMPRAR' if side == 'BUY' else 'VENDER'}", type="primary",
                  width="stretch", key=f"{bot}__t_send", disabled=calc.qty <= 0):
-        check = risk.check_trade(cfg, s, side, entry, sl, tp, profile.market)
-        hard = [r for r in check.reasons if "risco:retorno" not in r and "Meta" not in r and "atingid" not in r]
+        check = risk.check_trade(cfg, broker.limit_stats(cfg, {cfg["symbol"]: price}, manual=True),
+                                 side, entry, sl, tp, profile.market)
+        blocks = risk.MANUAL_BLOCKS[cfg.get("manual_limits", "livre")]
+        hard = check.blocking(blocks)
         if hard:
             for r in hard:
                 st.error(r)
+            st.caption("Regra das suas ordens manuais: " + risk.MANUAL_MODES[cfg.get("manual_limits", "livre")]
+                       + " (Configurações → Metas de operação).")
         else:
-            for r in check.reasons:
+            for r in check.warnings(blocks):
                 st.warning(f"Aviso (ordem manual permitida): {r}")
             try:
                 out = broker.place_order(symbol=cfg["symbol"], market=profile.market, side=side, qty=calc.qty,
@@ -408,6 +414,8 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
                 st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
+    manual_mode = cfg.get("manual_limits", "livre")
+    st.caption(f"Suas ordens: {risk.MANUAL_MODES[manual_mode].split(' —')[0].lower()}.")
 
 
 def leverage_controls(profile: BotProfile, cfg: dict) -> None:
@@ -451,6 +459,10 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
     if not key:
         st.info("Sem chave da OpenRouter: o bot usa somente as habilidades de programação. Informe a chave na barra "
                 "lateral ou em `.streamlit/secrets.toml` para ativar o DeepSeek.")
+    lim = get_broker(bot).limit_stats(cfg, {cfg["symbol"]: st.session_state.get(f"{bot}__last_price", 0) or 0})
+    st.caption(f"Limites do bot hoje: {lim['trades_today']}/{cfg['max_trades_day']} operações · "
+               f"{lim['open_positions']}/{cfg['max_open_positions']} posições ({risk.TRADES_SCOPES[cfg['limits_trades_scope']].lower()})"
+               f" · resultado {fmt(lim['pnl_today'])} USDT ({risk.PNL_SCOPES[cfg['limits_pnl_scope']].lower()}).")
 
     if run:
         df = st.session_state.get(f"{bot}__df")
@@ -675,8 +687,27 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
         c[0].number_input("Meta de operações por dia", 1, 100, key=k("max_trades_day"))
         c[1].number_input("Meta de lucro diária (USDT)", 0.0, 1e6, step=10.0, key=k("daily_profit_target"),
                           help="Ao atingir, o bot deixa de abrir operações até o dia seguinte (UTC). 0 = sem meta.")
-        c[2].number_input("Limite de perda diária (USDT)", 0.0, 1e6, step=10.0, key=k("daily_max_loss"))
+        c[2].number_input("Limite de perda diária (USDT)", 0.0, 1e6, step=10.0, key=k("daily_max_loss"),
+                          help="Ao atingir, o bot deixa de abrir operações até o dia seguinte (UTC). 0 = sem limite.")
         c[3].number_input("Máx. posições simultâneas", 1, 20, key=k("max_open_positions"))
+        st.markdown("**Você × bot — o que conta em cada limite**")
+        c = st.columns(3)
+        c[0].selectbox("Meta de operações e posições simultâneas contam", list(risk.TRADES_SCOPES),
+                       format_func=risk.TRADES_SCOPES.get, key=k("limits_trades_scope"),
+                       help="'Só as operações do bot': as suas ordens manuais não consomem a meta do bot.")
+        c[1].selectbox("Meta de lucro e limite de perda do dia contam", list(risk.PNL_SCOPES),
+                       format_func=risk.PNL_SCOPES.get, key=k("limits_pnl_scope"),
+                       help="'Carteira inteira' protege a banca: se o dia estiver ruim no total (seu + bots), "
+                            "o bot para de abrir operações.")
+        c[2].selectbox("Suas ordens manuais", list(risk.MANUAL_MODES), format_func=risk.MANUAL_MODES.get,
+                       key=k("manual_limits"),
+                       help="Regras básicas (stop obrigatório, alavancagem e liquidação) valem sempre. Quando as "
+                            "suas ordens respeitam limites, contam as operações do bot e as suas desta página.")
+        lim = get_broker(bot).limit_stats(cfg, {cfg["symbol"]: st.session_state.get(f"{bot}__last_price", 0) or 0})
+        st.caption(f"Hoje, para o bot: {lim['trades_today']}/{cfg['max_trades_day']} operações e "
+                   f"{lim['open_positions']}/{cfg['max_open_positions']} posições{lim['scope_trades']} · resultado "
+                   f"{fmt(lim['pnl_today'])} USDT{lim['scope_pnl']} (meta +{fmt(cfg['daily_profit_target'])} / "
+                   f"limite −{fmt(cfg['daily_max_loss'])}).")
 
     with t_lev:
         futures = profile.market == "futures"

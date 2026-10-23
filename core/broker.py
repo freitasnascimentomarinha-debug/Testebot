@@ -24,6 +24,27 @@ class PaperBroker:
     def stats(self, prices: dict) -> dict:
         return paper.stats(self.account(), prices, bot=self.bot)
 
+    def limit_stats(self, cfg: dict, prices: dict, manual: bool = False) -> dict:
+        """Números usados pelo gestor de risco, conforme o escopo configurado.
+
+        Banca e saldo livre são sempre da carteira. As contagens de operações e
+        o resultado do dia seguem ``limits_trades_scope`` e ``limits_pnl_scope``;
+        para ordens manuais, as suas operações sempre entram na conta."""
+        from core.risk import PNL_SCOPES, TRADES_SCOPES
+
+        acct = self.account()
+        t_scope, p_scope = cfg.get("limits_trades_scope", "bot"), cfg.get("limits_pnl_scope", "carteira")
+        if manual:
+            t_scope = "pagina"
+            p_scope = "pagina" if p_scope == "bot" else p_scope
+        wallet = paper.stats(acct, prices)
+        trades = paper.stats(acct, prices, bot=self.bot, origin="bot" if t_scope == "bot" else "all")
+        pnl = wallet if p_scope == "carteira" else paper.stats(acct, prices, bot=self.bot,
+                                                               origin="bot" if p_scope == "bot" else "all")
+        return {**wallet, "trades_today": trades["trades_today"], "open_positions": trades["open_positions"],
+                "pnl_today": pnl["pnl_today"], "scope_trades": f" · {TRADES_SCOPES[t_scope].lower()}",
+                "scope_pnl": f" · {PNL_SCOPES[p_scope].lower()}"}
+
     def place_order(self, **kwargs) -> dict:
         return paper.place_order(self.acc, bot=self.bot, **kwargs)
 

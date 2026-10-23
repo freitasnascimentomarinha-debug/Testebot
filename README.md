@@ -34,6 +34,9 @@ pronta para receber a API de negociação da Binance numa segunda fase.
 * **Alavancagem no padrão da Binance**: futuros com as faixas oficiais por par (ex.: BTC até 150×, com a
   posição máxima diminuindo conforme a alavancagem), margem isolada/cruzada, fórmula oficial de liquidação e
   funding a cada 8 h; no spot, Binance Margin (cruzada 3×, isolada 10×).
+* **Você × bot configurável**: escolha se as suas ordens manuais contam na meta de operações/posições do bot,
+  se a meta de lucro e o limite de perda valem só para o bot, para a página ou para a carteira inteira, e se as
+  suas ordens são livres (só aviso) ou respeitam os limites. A IA nunca encerra posições manuais.
 * **Todos os pares em USDT** da Binance (≈900 perpétuos e ≈700 spot) com busca.
 * **Posições por bot**: posições, ordens limitadas, histórico (exporta CSV), curva de patrimônio e
   log de decisões.
@@ -86,7 +89,7 @@ Testes: `python -m pytest -q tests`
 3. **Advanced settings → Secrets**, cole (veja `.streamlit/secrets.toml.example`):
    ```toml
    APP_PASSWORD = "sua-senha-forte"
-   OPENROUTER_API_KEY = "sk-or-v1-..."
+   OPENROUTER_API_KEY = "sk-or-v1-..."   # com a chave aqui, o campo da barra lateral some
    # opção GitHub:
    GITHUB_DATA_REPO = "usuario/repositorio"
    GITHUB_TOKEN = "github_pat_..."
