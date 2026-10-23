@@ -39,7 +39,13 @@ def tick(bot: str, last_seen: dict) -> None:
     if last_seen.get(bot) == marker:
         return
     last_seen[bot] = marker
-    df = engine.prepare(raw, cfg)
+    htf_raw = None
+    if engine.needs_htf(cfg):
+        from core import htf
+
+        htf_raw = get_klines(cfg["symbol"], htf.HTF_OF[cfg["interval"]], htf.htf_candles(cfg["interval"], len(raw)),
+                             profile.market)
+    df = engine.prepare(raw, cfg, htf_raw)
     result = engine.run_analysis(profile, cfg, df, price, get_api_key())
     d = result.decision
     log.info("[%s] %s %s conf=%s%% fonte=%s aprovado=%s", bot, cfg["symbol"], d.decision, d.confidence, d.source,

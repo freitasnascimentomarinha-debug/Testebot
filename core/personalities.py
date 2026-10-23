@@ -36,6 +36,7 @@ FILTERS = {
     "volume_confirm": "Exigir volume acima da média",
     "rsi_guard": "Não comprar sobrecomprado / vender sobrevendido",
     "ignore_regime": "Não reduzir o sinal em mercado lateral",
+    "htf_trend": "Só a favor da tendência do tempo maior (ex.: 4h para entradas de 15m)",
 }
 
 BUILTINS: list[dict] = [

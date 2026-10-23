@@ -168,5 +168,16 @@ def log_decision(bot: str, result: AnalysisResult, executed: bool = False) -> No
     locked_update(LOG_FILE, {}, _apply)
 
 
-def prepare(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    return ind.compute(df, cfg)
+def prepare(df: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None) -> pd.DataFrame:
+    out = ind.compute(df, cfg)
+    if htf_raw is not None and len(htf_raw):
+        from core.htf import attach
+
+        out = attach(out, htf_raw, cfg["interval"])
+    return out
+
+
+def needs_htf(cfg: dict) -> bool:
+    """A personalidade escolhida usa o filtro de tendência do tempo maior?"""
+    p = personalities.get(cfg.get("personality"))
+    return bool(p and (p.get("filters") or {}).get("htf_trend"))

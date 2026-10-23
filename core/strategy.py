@@ -363,6 +363,14 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
         elif filters.get("rsi_guard") and ((direction == "BUY" and last.rsi > float(cfg["rsi_ob"]))
                                            or (direction == "SELL" and last.rsi < float(cfg["rsi_os"]))):
             block("Filtro RSI: entrada em extremo bloqueada.")
+        elif float(filters.get("vol_mult", 0) or 0) and not (last.volume > last.vol_sma * float(filters["vol_mult"])):
+            block(f"Filtro de volume: abaixo de {float(filters['vol_mult']):g}× a média.")
+        elif filters.get("htf_trend") and ((direction == "BUY" and last.get("htf_dir", 0) != 1)
+                                           or (direction == "SELL" and last.get("htf_dir", 0) != -1)):
+            from core.htf import HTF_OF
+
+            block(f"Filtro de tempo maior: o gráfico de {HTF_OF.get(cfg.get('interval'), 'tempo maior')} "
+                  "não confirma a direção.")
     context = str(last.get("regime", "indefinido"))
     allowed_ctx = cfg.get("context_filter") or filters.get("contexts")
     if direction != "HOLD" and allowed_ctx and context not in allowed_ctx:

@@ -21,8 +21,12 @@ from core.strategy import analyze
 
 
 def run(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict, *, fee_pct: float | None = None,
-        max_hold: int = 100, warmup: int = 210) -> dict:
+        max_hold: int = 100, warmup: int = 210, htf_raw: pd.DataFrame | None = None) -> dict:
     df = ind.compute(df_raw, cfg).reset_index(drop=True)
+    if htf_raw is not None and len(htf_raw):
+        from core.htf import attach
+
+        df = attach(df, htf_raw, cfg["interval"])
     fee = (cfg["fee_pct"] if fee_pct is None else fee_pct) / 100
     cfg_bt = {**cfg, "allow_short": True, "leverage_on": True}  # direção é controlada pela personalidade
     trades: list[dict] = []

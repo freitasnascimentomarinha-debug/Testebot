@@ -208,7 +208,8 @@ def compute_votes(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 
     out = pd.DataFrame({"time": df["time"].to_numpy(), "open": o, "high": h, "low": l, "close": c, "volume": vol,
                         "vol_sma": vs, "atr": atr, "adx": adx, "rsi": rsi, "ema_trend": et,
-                        "regime": df["regime"].to_numpy()})
+                        "regime": df["regime"].to_numpy(),
+                        "htf_dir": df["htf_dir"].to_numpy(dtype=float) if "htf_dir" in df else np.zeros(n)})
     for key in SKILL_KEYS:
         arr = np.clip(v[key], -1, 1)
         arr[:WARMUP] = np.nan
@@ -246,6 +247,12 @@ def signals(vt: pd.DataFrame, p: dict, cfg: dict) -> np.ndarray:
         d = np.where(~(vt["volume"].to_numpy() > vt["vol_sma"].to_numpy()), 0, d)
     if f.get("rsi_guard"):
         d = np.where(((d == 1) & (rsi > float(cfg["rsi_ob"]))) | ((d == -1) & (rsi < float(cfg["rsi_os"]))), 0, d)
+    vm = float(f.get("vol_mult") or 0)
+    if vm:
+        d = np.where(~(vt["volume"].to_numpy() > vt["vol_sma"].to_numpy() * vm), 0, d)
+    if f.get("htf_trend"):
+        hd = vt["htf_dir"].to_numpy()
+        d = np.where(((d == 1) & (hd != 1)) | ((d == -1) & (hd != -1)), 0, d)
     ctx = cfg.get("context_filter") or f.get("contexts")
     if ctx:
         d = np.where(np.isin(vt["regime"].to_numpy(), list(ctx)), d, 0)
@@ -299,8 +306,13 @@ def simulate(vt: pd.DataFrame, p: dict, cfg: dict, *, start_time=None, max_hold:
     return trades
 
 
-def prepare(df_raw: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    return compute_votes(ind.compute(df_raw, cfg).reset_index(drop=True), cfg)
+def prepare(df_raw: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None) -> pd.DataFrame:
+    df = ind.compute(df_raw, cfg).reset_index(drop=True)
+    if htf_raw is not None and len(htf_raw):
+        from core.htf import attach
+
+        df = attach(df, htf_raw, cfg["interval"])
+    return compute_votes(df, cfg)
 
 
 PER_DAY = {"1m": 1440, "3m": 480, "5m": 288, "15m": 96, "30m": 48, "1h": 24, "2h": 12, "4h": 6, "6h": 4, "12h": 2,
