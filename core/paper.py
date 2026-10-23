@@ -223,6 +223,9 @@ def stats(acct: dict, prices: dict[str, float]) -> dict:
         max_dd = max(max_dd, (peak - v) / peak * 100 if peak else 0)
     return {
         "equity": equity, "available": acct["balance"], "unrealized": unrealized,
+        "unrealized_net": sum(max(_pnl(p, prices.get(p["symbol"], p["entry"])), -p["margin"]) - p["fees_paid"]
+                              - prices.get(p["symbol"], p["entry"]) * p["qty"] * p["fee_pct"] / 100
+                              for p in acct["positions"]),
         "total_pnl": equity - acct["initial"], "total_pnl_pct": (equity / acct["initial"] - 1) * 100,
         "pnl_today": sum(t["pnl"] for t in closed_today), "trades_today": len(opened_today),
         "open_positions": len(acct["positions"]), "trades": len(hist),

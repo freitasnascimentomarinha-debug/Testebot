@@ -13,9 +13,18 @@ from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
 from core.data import MarketDataError, get_klines, get_ticker
 from core.paper import stats
 from core.profiles import PROFILES, SYMBOLS, BotProfile
-from core.realtime import realtime_chart_html
+from core import indicators as ind
+from core.realtime import chart_height, realtime_chart_html
 from core.settings import DEFAULT_MODEL, default_settings, load_settings, save_settings
 from core.storage import get_secret, load_json
+
+# Seletor rápido de indicadores → chaves de configuração (as mesmas da aba Indicadores)
+INDICATOR_FLAGS = {
+    "Médias móveis (EMA)": "ema_on", "Bandas de Bollinger": "bb_on", "VWAP": "vwap_on", "SuperTrend": "supertrend_on",
+    "Volume": "volume_on", "RSI": "rsi_on", "MACD": "macd_on", "Estocástico": "stoch_on", "ADX / DMI": "adx_on",
+    "OBV": "obv_on", "Suportes e resistências": "sr_on", "Pivôs": "pivots_on", "Fibonacci": "fib_on",
+    "Ichimoku (só na análise técnica)": "ichimoku_on",
+}
 
 AI_MODELS = (DEFAULT_MODEL, "deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v3.2")
 
@@ -98,15 +107,18 @@ def render_bot_page(bot: str) -> None:
     live_metrics(profile, cfg)
     col_chart, col_ticket = st.columns([3.2, 1.25], gap="medium")
     with col_chart:
+        indicator_picker(bot, cfg)
         tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
                                              "🖊️ TradingView — ferramentas de desenho"])
         with tab_rt:
+            positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
+            height = chart_height(cfg)
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
-                                                ema_periods=[int(cfg["ema_fast"]), int(cfg["ema_slow"]), int(cfg["ema_trend"])]
-                                                if cfg["ema_on"] else [],
-                                                lines=realtime_lines(bot, cfg), height=620), height=625)
+                                                cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
+                                                height=height), height=height + 5)
             st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
-                       "negociação move o candle. As linhas mostram posições, ordens, plano da IA e seus níveis.")
+                       "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
+                       "descontadas as taxas de entrada e saída).")
         with tab_chart:
             analysis_chart(profile, cfg)
         with tab_tv:
@@ -120,6 +132,21 @@ def render_bot_page(bot: str) -> None:
     ai_section(profile, cfg)
     portfolio_section(profile, cfg)
     settings_section(profile, cfg)
+
+
+def indicator_picker(bot: str, cfg: dict) -> None:
+    """Liga/desliga indicadores dos gráficos (mesmas chaves da aba Indicadores)."""
+    key = f"{bot}__ind_pick"
+    st.session_state[key] = [label for label, flag in INDICATOR_FLAGS.items() if cfg.get(flag)]
+
+    def _apply():
+        chosen = set(st.session_state[key])
+        for label, flag in INDICATOR_FLAGS.items():
+            st.session_state[_k(bot, flag)] = label in chosen
+
+    st.multiselect("Indicadores no gráfico", list(INDICATOR_FLAGS), key=key, on_change=_apply,
+                   placeholder="Escolha os indicadores", help="Adicione ou remova indicadores. Parâmetros (períodos, "
+                   "desvios etc.) ficam em Configurações do bot → Indicadores.")
 
 
 # ------------------------------------------------------- seção ao vivo (fragments)
@@ -167,7 +194,8 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         m[1].metric("Patrimônio", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)")
         m[2].metric("Resultado hoje", fmt(s["pnl_today"]), f"meta {fmt(cfg_now['daily_profit_target'], 0)}")
         m[3].metric("Operações hoje", f"{s['trades_today']}/{cfg_now['max_trades_day']}")
-        m[4].metric("Não realizado", fmt(s["unrealized"]))
+        m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]), f"{s['open_positions']} posição(ões)",
+                    delta_color="off", help="Lucro/prejuízo das posições abertas já descontando taxas de entrada e saída.")
         m[5].metric("Taxa de acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
 
         if cfg_now.get("autopilot"):
@@ -204,18 +232,30 @@ def realtime_lines(bot: str, cfg: dict) -> list[dict]:
     """Linhas de preço do gráfico em tempo real (só mudam quando há ação do
     usuário, para o gráfico não recarregar a cada atualização)."""
     acct = get_broker(bot).account()
-    lines = []
+    lines = []  # a linha de entrada (com P&L ao vivo) é desenhada pelo próprio gráfico
     for p in acct["positions"]:
         if p["symbol"] != cfg["symbol"]:
             continue
-        lines.append({"price": p["entry"], "color": "#42a5f5", "width": 2, "style": "solid",
-                      "title": f"{'COMPRA' if p['side'] == 'BUY' else 'VENDA'} {p['qty']:g}"})
         if p.get("stop_loss"):
             lines.append({"price": p["stop_loss"], "color": "#ef5350", "title": "SL"})
         if p.get("take_profit"):
             lines.append({"price": p["take_profit"], "color": "#26a69a", "title": "TP"})
         if p.get("liquidation"):
             lines.append({"price": p["liquidation"], "color": "#ff9800", "style": "dotted", "title": "Liq."})
+    df = st.session_state.get(f"{bot}__df")
+    if df is not None and len(df) > 50:
+        closed = df.iloc[:-1]  # níveis de candles fechados: não mudam a cada atualização
+        if cfg.get("sr_on"):
+            levels = ind.support_resistance(closed)
+            lines += [{"price": lv["price"], "color": "rgba(38,166,154,.7)", "style": "dotted", "title": "S"}
+                      for lv in levels["supports"]]
+            lines += [{"price": lv["price"], "color": "rgba(239,83,80,.7)", "style": "dotted", "title": "R"}
+                      for lv in levels["resistances"]]
+        if cfg.get("pivots_on"):
+            lines += [{"price": v, "color": "rgba(158,158,158,.8)", "title": k} for k, v in ind.pivot_points(closed).items()]
+        if cfg.get("fib_on"):
+            lines += [{"price": v, "color": "rgba(255,193,7,.7)", "style": "dotted", "title": f"Fib {k}"}
+                      for k, v in ind.fibonacci(closed).items()]
     for o in acct["orders"]:
         if o["symbol"] == cfg["symbol"]:
             lines.append({"price": o["limit_price"], "color": "#bdbdbd", "title": f"LIMIT {o['side']}"})
@@ -459,26 +499,7 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
     st.subheader("💼 Conta simulada")
     t1, t2, t3, t4, t5 = st.tabs(["Posições abertas", "Ordens pendentes", "Histórico", "Curva de patrimônio", "Log de decisões"])
     with t1:
-        if not acct["positions"]:
-            st.caption("Nenhuma posição aberta.")
-        for p in acct["positions"]:
-            p_price = price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]
-            pnl = (p_price - p["entry"]) * p["qty"] * (1 if p["side"] == "BUY" else -1)
-            with st.container(border=True):
-                c = st.columns([1.6, 1, 1, 1, 1, 1.2, 1])
-                c[0].markdown(f"**{'🟢 COMPRA' if p['side'] == 'BUY' else '🔴 VENDA'} {p['symbol']}**  \n"
-                              f"{p['qty']:g} @ {fmt_price(p['entry'])} · {p['leverage']:g}× · {p['source']}")
-                c[1].metric("Atual", fmt_price(p_price))
-                c[2].metric("P&L", fmt(pnl), f"{pnl / p['margin'] * 100:+.1f}% margem" if p["margin"] else None)
-                new_sl = c[3].number_input("Stop", value=float(p["stop_loss"] or 0), format="%.6f", key=f"{bot}_sl_{p['id']}")
-                new_tp = c[4].number_input("Alvo", value=float(p["take_profit"] or 0), format="%.6f", key=f"{bot}_tp_{p['id']}")
-                if c[5].button("Atualizar SL/TP", key=f"{bot}_upd_{p['id']}"):
-                    broker.update_protection(p["id"], new_sl or None, new_tp or None)
-                    st.rerun()
-                if c[6].button("Zerar", key=f"{bot}_close_{p['id']}", type="primary"):
-                    tr = broker.close_position(p["id"], p_price, "Manual")
-                    st.toast(f"Posição encerrada: {tr['pnl']:+.2f} USDT")
-                    st.rerun()
+        open_positions(profile, cfg)
     with t2:
         if not acct["orders"]:
             st.caption("Nenhuma ordem pendente.")
@@ -525,6 +546,42 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
                          hide_index=True)
         else:
             st.caption("Nenhuma análise registrada.")
+
+
+def open_positions(profile: BotProfile, cfg: dict) -> None:
+    """Cards das posições abertas, com P&L atualizado automaticamente."""
+
+    @st.fragment(run_every=int(cfg["refresh_sec"]))
+    def _cards():
+        bot = profile.key
+        broker = get_broker(bot)
+        acct = broker.account()
+        price = st.session_state.get(f"{bot}__last_price", 0)
+        if not acct["positions"]:
+            st.caption("Nenhuma posição aberta.")
+        for p in acct["positions"]:
+            p_price = price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]
+            gross = (p_price - p["entry"]) * p["qty"] * (1 if p["side"] == "BUY" else -1)
+            net = gross - p["fees_paid"] - p_price * p["qty"] * p["fee_pct"] / 100
+            with st.container(border=True):
+                c = st.columns([1.6, 1, 1.1, 1, 1, 1.2, 1])
+                c[0].markdown(f"**{'🟢 COMPRA' if p['side'] == 'BUY' else '🔴 VENDA'} {p['symbol']}**  \n"
+                              f"{p['qty']:g} @ {fmt_price(p['entry'])} · {p['leverage']:g}× · {p['source']}")
+                c[1].metric("Atual", fmt_price(p_price))
+                c[2].metric("P&L líquido", fmt(net), f"{net / p['margin'] * 100:+.1f}% margem" if p["margin"] else None)
+                new_sl = c[3].number_input("Stop", value=float(p["stop_loss"] or 0), format="%.6f", key=f"{bot}_sl_{p['id']}")
+                new_tp = c[4].number_input("Alvo", value=float(p["take_profit"] or 0), format="%.6f", key=f"{bot}_tp_{p['id']}")
+                if c[5].button("Atualizar SL/TP", key=f"{bot}_upd_{p['id']}"):
+                    broker.update_protection(p["id"], new_sl or None, new_tp or None)
+                    st.rerun(scope="app")
+                if c[6].button("Zerar", key=f"{bot}_close_{p['id']}", type="primary"):
+                    tr = broker.close_position(p["id"], p_price, "Manual")
+                    st.toast(f"Posição encerrada: {tr['pnl']:+.2f} USDT")
+                    st.rerun(scope="app")
+        st.caption("P&L líquido = variação de preço − taxa de entrada − taxa estimada de saída. No gráfico em "
+                   f"tempo real ele muda a cada negociação; aqui, a cada {cfg['refresh_sec']} s.")
+
+    _cards()
 
 
 def _safe_price(symbol: str, market: str) -> float | None:

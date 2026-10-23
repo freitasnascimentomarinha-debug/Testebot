@@ -13,7 +13,10 @@ pronta para receber a API de negociação da Binance numa segunda fase.
 
 * **Gráfico em tempo real**: o navegador recebe os candles por WebSocket direto da corretora (Binance →
   espelho público da Binance → OKX), então cada negociação move o candle, com contagem regressiva para o
-  fechamento e linhas de posição, stop, alvo, liquidação, plano da IA e níveis do usuário.
+  fechamento, **lucro/prejuízo das posições mudando a cada negociação** (líquido de taxas), indicadores
+  recalculados ao vivo (EMAs, Bollinger, VWAP, SuperTrend, volume e painéis de RSI, MACD, Estocástico, ADX e
+  OBV) e linhas de stop, alvo, liquidação, plano da IA, suportes/resistências, pivôs, Fibonacci e níveis do usuário.
+* **Seletor “Indicadores no gráfico”** acima dos gráficos para adicionar/remover indicadores na hora.
 * **Gráfico de análise técnica** (Plotly) com candles reais, EMAs, Bollinger, VWAP, SuperTrend, Ichimoku, RSI, MACD,
   Estocástico, ADX/DMI, OBV, volume, suportes/resistências automáticos, pivôs e Fibonacci; ferramentas de
   desenho (linha, caminho, retângulo, círculo, borracha), zoom com a roda e marcação de entradas/saídas,
