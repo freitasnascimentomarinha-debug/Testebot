@@ -683,5 +683,192 @@
    "busca_n": 48,
    "validacao_n": 21
   }
+ },
+ {
+  "id": "esp_5m_bb_reversal_2x1",
+  "name": "🎯 Reversão Bollinger 5m 2:1",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Bollinger + reversão 5m · só em reversão/lateral · 2:1",
+  "tip": "Compra/vende a exaustão fora das bandas no 5 minutos buscando 2× o risco.",
+  "summary": "Compra/vende a exaustão fora das bandas no 5 minutos buscando 2× o risco.",
+  "description": "Especialista em exaustão no 5 minutos: preço fora das Bandas de Bollinger com sinais de reversão, operando só quando o contexto do gráfico é de reversão ou lateralidade. Alvo de 2× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "compra",
+  "threshold": 30,
+  "sl_atr": 2.0,
+  "tp_atr": 4.0,
+  "skills": {
+   "bollinger": 1.5,
+   "reversao": 1.0,
+   "estocastico": 1.0,
+   "volume": 0.5
+  },
+  "filters": {
+   "adx_max": 25,
+   "contexts": [
+    "reversao_alta",
+    "reversao_baixa",
+    "lateral"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.644,
+   "validacao_r": 0.559,
+   "busca_n": 44,
+   "validacao_n": 25
+  }
+ },
+ {
+  "id": "esp_5m_stoch_reversal",
+  "name": "🔁 Reversão Estocástico 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Estocástico + reversão 5m · só em reversão/lateral · 1:1",
+  "tip": "Cruzamentos do Estocástico em extremos do 5 minutos, só em reversão ou lateralidade.",
+  "summary": "Cruzamentos do Estocástico em extremos do 5 minutos, só em reversão ou lateralidade.",
+  "description": "Especialista em reversões curtas no 5 minutos: o Estocástico cruza em zona extrema e o bot só opera nos contextos de reversão ou lateralidade. Alvo igual ao stop.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "compra",
+  "threshold": 30,
+  "sl_atr": 3.0,
+  "tp_atr": 3.0,
+  "skills": {
+   "estocastico": 1.0,
+   "reversao": 1.0,
+   "suporte_resistencia": 0.5
+  },
+  "filters": {
+   "adx_max": 25,
+   "contexts": [
+    "lateral",
+    "reversao_baixa",
+    "reversao_alta"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.218,
+   "validacao_r": 0.197,
+   "busca_n": 51,
+   "validacao_n": 25
+  }
+ },
+ {
+  "id": "esp_5m_sr_reversal",
+  "name": "🧱 Reação em Suporte 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Suporte/resistência + reversão 5m · 1,5:1",
+  "tip": "Opera reações em suportes e resistências do 5 minutos quando há sinal de reversão.",
+  "summary": "Opera reações em suportes e resistências do 5 minutos quando há sinal de reversão.",
+  "description": "Especialista em reações a suportes e resistências no 5 minutos, combinadas a sinais de reversão, operando só em contextos de reversão ou lateralidade. Alvo de 1,5× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "misto",
+  "threshold": 20,
+  "sl_atr": 2.5,
+  "tp_atr": 3.75,
+  "skills": {
+   "suporte_resistencia": 1.5,
+   "reversao": 1.5
+  },
+  "filters": {
+   "adx_max": 25,
+   "contexts": [
+    "reversao_alta"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.333,
+   "validacao_r": 0.405,
+   "busca_n": 55,
+   "validacao_n": 29
+  }
+ },
+ {
+  "id": "esp_5m_fibo_reversal",
+  "name": "📐 Fibonacci Reversão 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Fibonacci + reversão 5m · 1,5:1",
+  "tip": "Reversões na zona de Fibonacci do 5 minutos, filtradas pelo contexto.",
+  "summary": "Reversões na zona de Fibonacci do 5 minutos, filtradas pelo contexto.",
+  "description": "Especialista em reversões dentro da zona de Fibonacci (38,2%–61,8%) no 5 minutos, combinada a sinais de exaustão. Alvo de 1,5× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "misto",
+  "threshold": 15,
+  "sl_atr": 1.5,
+  "tp_atr": 2.25,
+  "skills": {
+   "fibonacci": 2.0,
+   "reversao": 2.0,
+   "suporte_resistencia": 1.0,
+   "estocastico": 1.0
+  },
+  "filters": {
+   "adx_max": 25,
+   "contexts": [
+    "reversao_alta"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.298,
+   "validacao_r": 0.402,
+   "busca_n": 53,
+   "validacao_n": 28
+  }
+ },
+ {
+  "id": "esp_5m_volume_climax",
+  "name": "🌋 Clímax de Volume 5m",
+  "author": "Bots nativos · pesquisa out/2026",
+  "specialty": "Volume + reversão 5m · 1,5:1",
+  "tip": "Entra contra movimentos de pânico/euforia com volume extremo no 5 minutos.",
+  "summary": "Entra contra movimentos de pânico/euforia com volume extremo no 5 minutos.",
+  "description": "Especialista em clímax de volume no 5 minutos: volume muito acima da média com sinais de exaustão (reversão), apostando na virada. Alvo de 1,5× o risco.",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "tested_interval": "5m",
+  "timeframes": "5m (testado)",
+  "direction": "misto",
+  "threshold": 15,
+  "sl_atr": 2.5,
+  "tp_atr": 3.75,
+  "skills": {
+   "volume": 1.5,
+   "reversao": 1.5,
+   "estocastico": 1.0,
+   "momentum": 1.0
+  },
+  "filters": {
+   "ignore_regime": true,
+   "adx_max": 25,
+   "contexts": [
+    "reversao_alta"
+   ]
+  },
+  "selection": {
+   "busca_r": 0.467,
+   "validacao_r": 0.532,
+   "busca_n": 43,
+   "validacao_n": 23
+  }
  }
 ]

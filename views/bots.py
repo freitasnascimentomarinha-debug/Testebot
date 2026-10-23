@@ -94,6 +94,9 @@ with tab_gal:
                       f"R:R {rr_label(p)}"]
             st.markdown(" ".join(f"`{b}`" for b in badges if b))
             st.caption(f"**{p.get('specialty', '')}**")
+            if p.get("filters", {}).get("contexts"):
+                st.caption("🔒 Opera só em: " + ", ".join(regime.label(c) for c in p["filters"]["contexts"])
+                           + " — fora disso fica de fora (nos outros contextos a simulação foi negativa).")
             st.markdown(f"💡 {p.get('tip') or p.get('summary', '')}")
             if rs:
                 m1, m2 = st.columns(2)
@@ -221,3 +224,14 @@ with tab_ctx:
         st.plotly_chart(fig, config={"displayModeBar": False})
         st.caption("Como ler: verde = o bot ganhou dinheiro operando só naquele contexto; vermelho = perdeu. "
                    "Use junto com a aba 🧭 Contexto agora para escolher o bot certo para o momento do gráfico.")
+
+    st.markdown("#### Resumo: melhores bots em cada contexto")
+    resumo = []
+    for k in ctx_keys:
+        top = P.best_for_context(k, top=3, min_trades=10)
+        resumo.append({"Contexto": regime.label(k), "Quando acontece": regime.REGIMES[k][1],
+                       "1º": f"{top[0][0]['name']} ({top[0][0]['research']['interval']}) {top[0][1]['avg_r']:+.2f}R" if top else "—",
+                       "2º": f"{top[1][0]['name']} ({top[1][0]['research']['interval']}) {top[1][1]['avg_r']:+.2f}R" if len(top) > 1 else "—",
+                       "3º": f"{top[2][0]['name']} ({top[2][0]['research']['interval']}) {top[2][1]['avg_r']:+.2f}R" if len(top) > 2 else "—"})
+    st.dataframe(pd.DataFrame(resumo), hide_index=True)
+    st.caption("R médio por operação quando o bot operou só naquele contexto (mínimo de 10 operações simuladas).")
