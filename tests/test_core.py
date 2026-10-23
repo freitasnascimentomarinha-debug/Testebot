@@ -248,3 +248,20 @@ def test_funding_charged_every_8h():
     assert pos["funding_paid"] == pytest.approx(paper._funding_events(
         pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=17), pd.Timestamp.now(tz="UTC")) * 0.01, abs=0.011)
     assert pos["funding_paid"] > 0
+
+
+def test_ai_close_keeps_manual_positions():
+    from core import engine
+    from core.ai import AIDecision
+    from core.broker import get_broker
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 1000)
+    b = get_broker("day")
+    b.place_order(symbol="X", market="futures", side="BUY", qty=1, price=100, leverage=5, fee_pct=0.0, source="manual")
+    b.place_order(symbol="X", market="futures", side="BUY", qty=1, price=100, leverage=5, fee_pct=0.0, source="ia")
+    res = engine.AnalysisResult(plan={"score": 0}, decision=AIDecision(decision="CLOSE"), check=None, price=101,
+                                symbol="X", interval="15m", time="t")
+    engine.execute(PROFILES["day"], default_settings(PROFILES["day"]), res, 101)
+    left = b.account()["positions"]
+    assert len(left) == 1 and left[0]["source"] == "manual"

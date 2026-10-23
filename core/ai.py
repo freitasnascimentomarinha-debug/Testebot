@@ -51,7 +51,9 @@ interpretar o contexto para decidir a próxima ordem. Regras obrigatórias:
    maior ou igual ao mínimo informado.
 4. Prefira HOLD quando os sinais forem conflitantes, o regime for lateral sem ponto claro
    ou as metas diárias estiverem próximas. Preservar capital é prioridade.
-5. Use CLOSE apenas quando houver posição aberta no ativo e o cenário tiver se invertido.
+5. Use CLOSE apenas quando houver posição aberta pelo bot (source diferente de "manual") no ativo e o
+   cenário tiver se invertido. Posições "manual" são do usuário: considere-as como exposição já existente,
+   mas nunca as encerre.
 6. "order_type": "LIMIT" só quando houver nível técnico claro para entrada melhor
    (informe "entry"); caso contrário use "MARKET".
 Formato:

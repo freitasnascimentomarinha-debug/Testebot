@@ -103,8 +103,10 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
     d = result.decision
     broker = get_broker(profile.key)
     if d.decision == "CLOSE":
+        # O bot só encerra as posições que ele mesmo abriu; as manuais ficam com o usuário.
         closed = [broker.close_position(p["id"], price, "IA: cenário invertido")
-                  for p in broker.account()["positions"] if p["symbol"] == result.symbol]
+                  for p in broker.account()["positions"]
+                  if p["symbol"] == result.symbol and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
         out = {"status": "ENCERRADAS", "closed": closed}
     elif d.decision in ("BUY", "SELL") and result.check and result.check.allowed and result.check.calc:
         calc = result.check.calc
