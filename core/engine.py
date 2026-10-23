@@ -91,6 +91,22 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     else:
         decision = ai.rules_fallback(plan_d, "chave da OpenRouter não configurada")
 
+    # Modo filtro (padrão): a IA só confirma ou veta o sinal das regras testadas no backtest e usa o
+    # stop/alvo validados; não abre operação sem sinal das regras nem inverte a direção.
+    if decision.source == "ia" and cfg.get("ai_mode", "filtro") == "filtro" and decision.decision in ("BUY", "SELL"):
+        if plan_d["direction"] == "HOLD":
+            decision.reasoning = ("[Modo filtro] Sem sinal das regras da personalidade: a IA não abre operação sozinha. "
+                                  "Leitura da IA: " + decision.reasoning)
+            decision.decision = "HOLD"
+        elif plan_d["direction"] != decision.decision:
+            decision.reasoning = ("[Modo filtro] A IA discordou da direção das regras: operação vetada. "
+                                  "Leitura da IA: " + decision.reasoning)
+            decision.decision = "HOLD"
+        else:
+            decision.order_type, decision.entry = "MARKET", plan_d["entry"]
+            decision.stop_loss, decision.take_profit = plan_d["stop_loss"], plan_d["take_profit"]
+            decision.reasoning = "[Modo filtro] A IA confirmou o sinal das regras. " + decision.reasoning
+
     check = None
     if decision.decision in ("BUY", "SELL"):
         entry = decision.entry if decision.order_type == "LIMIT" and decision.entry else price

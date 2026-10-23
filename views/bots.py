@@ -89,8 +89,9 @@ with tab_gal:
         bot = p.get("bot") or ("day" if "futures" in p.get("markets", []) else "swing")
         with cols[n % 3].container(border=True):
             st.markdown(f"#### {p['name']}")
-            market = "Futuros" if "futures" in p.get("markets", ["futures"])[:1] else "Spot"
-            badges = [STYLE.get(bot, bot), p.get("tested_interval") or p.get("timeframes", ""), market,
+            mk = rs.get("market") or ("futures" if "futures" in p.get("markets", ["futures"])[:1] else "spot")
+            market = "Futuros" if mk == "futures" else "Spot"
+            badges = [STYLE.get(bot, bot), rs.get("interval") or p.get("tested_interval") or p.get("timeframes", ""), market,
                       f"R:R {rr_label(p)}"]
             st.markdown(" ".join(f"`{b}`" for b in badges if b))
             st.caption(f"**{p.get('specialty', '')}**")

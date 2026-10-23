@@ -1,13 +1,15 @@
 """Personalidades: ranking de desempenho, biblioteca, criação de estratégias e backtest."""
+import numpy as np
 import pandas as pd
 import streamlit as st
 
-from core import backtest, personalities as P
+from core import fastsim, personalities as P
 from core.ai import strategy_from_text
 from core.profiles import PROFILES
-from core.settings import DEFAULT_MODEL, default_settings, load_settings, save_settings
+from core.settings import DEFAULT_MODEL, load_settings, save_settings
 from core.strategy import SKILLS
-from core.ui import api_key, cached_klines, cached_symbols, fmt
+from core.paper import account_id, get_account, stats
+from core.ui import api_key, cached_symbols, cached_votes, fmt
 
 st.title("🏆 Personalidades dos bots")
 st.caption("Cada personalidade é uma estratégia: quais indicadores o bot usa, quando entra, em que direção e com que "
@@ -38,7 +40,8 @@ def fmt_r(v):
     return "—" if v is None else f"{v:+.2f}R"
 
 
-tab_rank, tab_lib, tab_new, tab_bt = st.tabs(["🏆 Ranking", "📚 Biblioteca", "✍️ Criar estratégia", "🧪 Backtest"])
+tab_rank, tab_bt, tab_lib, tab_new = st.tabs(["🏆 Ranking", "🧮 Simulador e calculadora", "📚 Biblioteca",
+                                              "✍️ Criar estratégia"])
 
 # ------------------------------------------------------------------ ranking
 with tab_rank:
@@ -54,7 +57,7 @@ with tab_rank:
         c1, c2, c3, c4 = st.columns([1, 1, 1, 1.4])
         p_market = c1.selectbox("Mercado", ["futures", "spot"], key="per_m",
                                 format_func=lambda m: "Futuros" if m == "futures" else "Spot")
-        p_itv = c2.selectbox("Timeframe", ("15m", "1h", "4h"), index=1, key="per_i")
+        p_itv = c2.selectbox("Timeframe", ("5m", "15m", "1h", "4h", "1d"), index=2, key="per_i")
         p_risk = c3.selectbox("Risco por operação", (0.5, 1.0, 2.0), index=1, key="per_r",
                               format_func=lambda r: f"{r:g}% da banca")
         pkey = P.period_key(p_market, p_itv, 40, p_risk)
@@ -64,17 +67,17 @@ with tab_rank:
         if c4.button(f"▶️ {label} ({len(missing) or len(P.list_all())} personalidades)", type="primary",
                      width="stretch"):
             todo = missing or P.list_all()
-            prof = PROFILES["day" if p_market == "futures" else "swing"]
-            base = {**default_settings(prof), "interval": p_itv}
-            n_candles = 40 * backtest.PER_DAY[p_itv] + 250
-            frames = {sym: cached_klines(sym, p_itv, n_candles, p_market) for sym in P.PERIOD_SYMBOLS}
-            bar = st.progress(0.0, text="Simulando…")
+            bar = st.progress(0.0, text="Baixando candles e calculando os votos (uma vez por moeda)…")
+            votes = {}
+            for n_, sym in enumerate(P.PERIOD_SYMBOLS, start=1):
+                votes[sym] = cached_votes(sym, p_itv, p_market, 40)
+                bar.progress(n_ / len(P.PERIOD_SYMBOLS) * 0.8, text=f"Votos de {sym} prontos")
             for k, persona_ in enumerate(todo, start=1):
-                per_symbol = [backtest.period_return(frames[sym], {**base, "symbol": sym}, prof, persona_,
-                                                     days=40, risk_pct=p_risk) for sym in P.PERIOD_SYMBOLS]
+                per_symbol = [fastsim.period_result(vt, cfg_, persona_, days=40, market=p_market, risk_pct=p_risk,
+                                                    symbol=sym) for sym, (vt, cfg_) in votes.items()]
                 summary = P.summarize_period(per_symbol)
                 P.save_period_result(pkey, persona_["id"], summary)
-                bar.progress(k / len(todo), text=f"{persona_['name']}: {summary['return_pct']:+.2f}%")
+                bar.progress(0.8 + 0.2 * k / len(todo), text=f"{persona_['name']}: {summary['return_pct']:+.2f}%")
             st.rerun()
         st.caption(
             f"Conta: cada operação do backtest move a banca em **{p_risk:g}% × R** (stop = −{p_risk:g}%, alvo de 3R = "
@@ -114,25 +117,21 @@ with tab_rank:
         "Resultado real (USDT)": st.column_config.NumberColumn(format="%.2f")})
     with st.expander("⚡ Atualizar o ranking com backtests de todas as personalidades"):
         st.caption("Roda o backtest (só regras, sem gastar tokens) de todas as personalidades no mesmo ativo e "
-                   "timeframe e soma ao ranking. Leva cerca de 2 s por personalidade.")
+                   "timeframe e soma ao ranking. Leva poucos segundos para todas.")
         c1, c2, c3, c4 = st.columns(4)
         m_all = c1.selectbox("Mercado", ["futures", "spot"], key="all_m",
                              format_func=lambda m: "Futuros" if m == "futures" else "Spot")
         sy = cached_symbols(m_all)
         s_all = c2.selectbox("Ativo", sy, index=sy.index("BTCUSDT") if "BTCUSDT" in sy else 0, key="all_s")
-        i_all = c3.selectbox("Timeframe", ("15m", "1h", "4h", "1d"), index=1, key="all_i")
+        i_all = c3.selectbox("Timeframe", ("5m", "15m", "1h", "4h", "1d"), index=2, key="all_i")
         if c4.button("Rodar todos", type="primary", width="stretch"):
-            prof = PROFILES["day" if m_all == "futures" else "swing"]
-            cfg_all = {**default_settings(prof), "symbol": s_all, "interval": i_all}
-            df_all = cached_klines(s_all, i_all, 1000, m_all)
-            bar = st.progress(0.0)
-            items = P.list_all()
-            for n, persona_ in enumerate(items, start=1):
-                res_ = backtest.run(df_all, cfg_all, prof, persona_)
+            with st.spinner("Calculando os votos da moeda…"):
+                vt_all, cfg_all = cached_votes(s_all, i_all, m_all, 40)
+            for persona_ in P.list_all():
+                res_ = fastsim.period_result(vt_all, cfg_all, persona_, days=40, market=m_all, symbol=s_all)
                 if res_["trades"]:
-                    P.save_backtest(persona_["id"], {k: v for k, v in res_.items() if k not in ("detail", "curve")})
-                bar.progress(n / len(items), text=f"{persona_['name']}: {res_['trades']} operações, "
-                                                  f"{res_['avg_r']:+.2f}R por operação")
+                    P.save_backtest(persona_["id"], {**res_, "interval": i_all, "market": m_all,
+                                                     "personality": persona_["id"], "personality_name": persona_["name"]})
             st.rerun()
     if period["results"]:
         chart = table.dropna(subset=["Retorno 40 dias"])[["Personalidade", "Retorno 40 dias"]]
@@ -321,44 +320,127 @@ with tab_new:
 
 # ------------------------------------------------------------------ backtest
 with tab_bt:
-    st.caption("Testa a personalidade nos candles reais mais recentes usando só as regras (sem gastar tokens da IA). "
-               "Resultados em R: +1R = ganhou o que arriscou em uma operação.")
+    st.caption("Escolha um bot, as moedas, o período e a sua banca: o simulador refaz as operações que o bot teria "
+               "feito com os candles reais (só as regras, sem gastar tokens da IA, com taxas) e mostra quanto você teria "
+               "ganhado ou perdido.")
     allp = P.list_all()
-    c1, c2, c3, c4, c5 = st.columns([2, 1, 1.4, 1, 1])
-    pid = c1.selectbox("Personalidade", [p["id"] for p in allp], format_func=lambda i: P.get(i)["name"], key="bt_p")
+    approved_first = sorted(allp, key=lambda p: (p.get("research", {}).get("status") != "aprovado",
+                                                 -(p.get("research", {}).get("monthly_pct") or -99)))
+
+    def bot_label(pid):
+        p = P.get(pid)
+        rs = p.get("research") or {}
+        tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}.get(rs.get("status"), "·")
+        return f"{tag} {p['name']}" + (f" · {rs['interval']}" if rs.get("interval") else "")
+
+    c1, c2, c3 = st.columns([2.2, 1, 1])
+    pid = c1.selectbox("Bot", [p["id"] for p in approved_first], format_func=bot_label, key="sim_bot")
     persona = P.get(pid)
-    market = c2.selectbox("Mercado", ["futures", "spot"], key="bt_m",
-                          format_func=lambda m: "Futuros" if m == "futures" else "Spot")
+    rs = persona.get("research") or {}
+    # mercado e timeframe começam nos que o bot foi testado (podem ser trocados)
+    if st.session_state.get("sim_last_bot") != pid:
+        st.session_state["sim_market"] = rs.get("market") or ("futures" if "futures" in persona.get("markets", []) else "spot")
+        st.session_state["sim_itv"] = rs.get("interval") or persona.get("tested_interval") or "1h"
+        st.session_state["sim_last_bot"] = pid
+    market = c2.selectbox("Mercado", ["futures", "spot"], key="sim_market",
+                          format_func=lambda m: "Futuros" if m == "futures" else "Spot (só compra)")
+    itv = c3.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], key="sim_itv")
+    st.caption(f"💡 {persona.get('tip') or persona.get('summary', '')}"
+               + (f" · testado em {rs['interval']} ({'futuros' if rs['market'] == 'futures' else 'spot'})" if rs else ""))
+
+    c1, c2, c3, c4 = st.columns([2.2, 1, 1, 1])
     symbols = cached_symbols(market)
-    symbol = c3.selectbox("Ativo", symbols, index=symbols.index("BTCUSDT") if "BTCUSDT" in symbols else 0, key="bt_s")
-    interval = c4.selectbox("Timeframe", ("5m", "15m", "30m", "1h", "4h", "1d"), index=3, key="bt_i")
-    candles = c5.selectbox("Candles", (500, 1000, 1500), index=1, key="bt_n")
-    count = st.checkbox("Contar este resultado no ranking", value=True)
-    if st.button("▶️ Rodar backtest", type="primary"):
-        profile = PROFILES["day" if market == "futures" else "swing"]
-        cfg = {**default_settings(profile), "symbol": symbol, "interval": interval}
-        with st.spinner("Baixando candles e simulando…"):
-            df = cached_klines(symbol, interval, int(candles), market)
-            res = backtest.run(df, cfg, profile, persona)
-        st.session_state["bt_result"] = res
-        if count and res["trades"]:
-            P.save_backtest(pid, {k: v for k, v in res.items() if k not in ("detail", "curve")})
-    res = st.session_state.get("bt_result")
+    coins = c1.multiselect("Moedas", symbols, default=[s_ for s_ in ("BTCUSDT",) if s_ in symbols], key="sim_coins",
+                           help="Cada moeda é simulada e as operações entram na mesma banca, na ordem em que fecharam.")
+    max_days = {"5m": 60, "15m": 120, "1h": 365, "4h": 900, "1d": 1500}[itv]
+    period_opts = [d for d in (7, 15, 30, 40, 60, 90, 180, 365, 730) if d <= max_days]
+    days = c2.selectbox("Período (dias)", period_opts, index=period_opts.index(40) if 40 in period_opts else 0,
+                        key="sim_days")
+    acct = get_account(account_id("day"))
+    equity = stats(acct, {})["equity"]
+    bank0 = c3.number_input("Banca inicial (USDT)", 10.0, 1e8, value=float(round(equity, 2)), step=100.0, key="sim_bank",
+                            help="Começa com o valor atual da sua carteira simulada.")
+    risk_pct = c4.number_input("Risco por operação (%)", 0.1, 10.0, value=1.0, step=0.25, key="sim_risk",
+                               help="Quanto da banca é perdido se o stop for atingido.")
+    compound_on = st.toggle("Juros compostos (o risco acompanha a banca)", value=True, key="sim_comp")
+
+    if st.button("▶️ Simular", type="primary", disabled=not coins):
+        rows, per_coin = [], []
+        bar = st.progress(0.0, text="Baixando candles e calculando…")
+        for n_, sym in enumerate(coins, start=1):
+            vt, cfg = cached_votes(sym, itv, market, int(days))
+            trades = fastsim.period_trades(vt, cfg, persona, days=days, market=market)
+            for t in trades:
+                rows.append({**t, "moeda": sym})
+            rs_ = [t["r"] for t in trades]
+            per_coin.append({"Moeda": sym.replace("USDT", ""), "Operações": len(rs_),
+                             "Acerto": (np.mean([r > 0 for r in rs_]) * 100) if rs_ else 0.0,
+                             "R médio": float(np.mean(rs_)) if rs_ else 0.0})
+            bar.progress(n_ / len(coins), text=f"{sym}: {len(trades)} operações")
+        bar.empty()
+        rows.sort(key=lambda t: t["saida"])
+        bank, peak, max_dd, curve = bank0, bank0, 0.0, []
+        for t in rows:
+            base = bank if compound_on else bank0
+            pnl = base * risk_pct / 100 * t["r"]
+            bank = max(0.0, bank + pnl)
+            peak = max(peak, bank)
+            max_dd = max(max_dd, (peak - bank) / peak * 100 if peak else 0)
+            t["resultado"] = pnl
+            t["banca"] = bank
+            curve.append({"time": t["saida"], "Banca (USDT)": bank})
+        coin_pnl = {}
+        for t in rows:
+            coin_pnl[t["moeda"]] = coin_pnl.get(t["moeda"], 0.0) + t["resultado"]
+        for pc in per_coin:
+            pc["Resultado (USDT)"] = coin_pnl.get(pc["Moeda"] + "USDT", 0.0)
+        st.session_state["sim_result"] = {"rows": rows, "per_coin": per_coin, "bank0": bank0, "bank": bank,
+                                          "max_dd": max_dd, "curve": curve, "days": days, "bot": persona["name"],
+                                          "itv": itv, "market": market, "risk": risk_pct, "comp": compound_on}
+
+    res = st.session_state.get("sim_result")
     if res:
-        st.markdown(f"**{res['personality_name']}** · {res['symbol']} {res['interval']} · {res['period']}")
-        m = st.columns(6)
-        m[0].metric("Operações", res["trades"])
-        m[1].metric("Acerto", f"{res['win_rate']:.0f}%")
-        m[2].metric("R médio", fmt_r(res["avg_r"]))
-        m[3].metric("Total", fmt_r(res["total_r"]))
-        m[4].metric("Fator de lucro", "—" if res["profit_factor"] is None else fmt(res["profit_factor"]))
-        m[5].metric("Pior sequência", f"−{res['max_dd_r']:.1f}R")
-        st.caption(f"Arriscando 1% da banca por operação, o resultado seria ≈ {res['total_r']:+.1f}% no período.")
+        rows = res["rows"]
+        pnl = res["bank"] - res["bank0"]
+        ret = pnl / res["bank0"] * 100
+        monthly = ((1 + ret / 100) ** (30 / res["days"]) - 1) * 100 if res["bank"] > 0 else -100.0
+        wins = [t for t in rows if t["resultado"] > 0]
+        losses = [t for t in rows if t["resultado"] <= 0]
+        st.markdown(f"**{res['bot']}** · {res['itv']} {'futuros' if res['market'] == 'futures' else 'spot'} · "
+                    f"últimos {res['days']} dias · risco {res['risk']:g}% por operação"
+                    f"{' com juros compostos' if res['comp'] else ' (valor fixo)'}")
+        m = st.columns(5)
+        m[0].metric("Banca final", f"{fmt(res['bank'])} USDT", f"{fmt(pnl)} USDT ({ret:+.2f}%)")
+        m[1].metric("≈ por mês", f"{monthly:+.2f}%", help="(1 + retorno do período)^(30 ÷ dias) − 1")
+        m[2].metric("Operações", len(rows), f"{len(wins)} ganhos · {len(losses)} perdas", delta_color="off")
+        m[3].metric("Acerto", f"{len(wins) / len(rows) * 100:.0f}%" if rows else "—")
+        m[4].metric("Pior queda da banca", f"−{res['max_dd']:.1f}%")
+        m = st.columns(4)
+        m[0].metric("Maior ganho", f"{fmt(max((t['resultado'] for t in rows), default=0))} USDT")
+        m[1].metric("Maior perda", f"{fmt(min((t['resultado'] for t in rows), default=0))} USDT")
+        gross_w, gross_l = sum(t["resultado"] for t in wins), -sum(t["resultado"] for t in losses)
+        m[2].metric("Fator de lucro", fmt(gross_w / gross_l) if gross_l else ("∞" if gross_w else "—"))
+        m[3].metric("Resultado por operação", f"{fmt(pnl / len(rows))} USDT" if rows else "—")
         if res["curve"]:
-            curve = pd.DataFrame(res["curve"]).set_index("time")
-            st.line_chart(curve["r_acumulado"].rename("R acumulado"), height=240)
-            det = pd.DataFrame(res["detail"])
-            st.dataframe(det.iloc[::-1], hide_index=True, column_config={
-                "r": st.column_config.NumberColumn("R", format="%+.2f")})
+            curve = pd.DataFrame([{"time": res["rows"][0]["entrada"], "Banca (USDT)": res["bank0"]}] + res["curve"])
+            st.line_chart(curve.set_index("time"), height=260)
+            st.dataframe(pd.DataFrame(res["per_coin"]), hide_index=True, column_config={
+                "Acerto": st.column_config.NumberColumn(format="%.0f%%"),
+                "R médio": st.column_config.NumberColumn(format="%+.2f"),
+                "Resultado (USDT)": st.column_config.NumberColumn(format="%+.2f")})
+            det = pd.DataFrame(rows)[["entrada", "saida", "moeda", "lado", "preco_entrada", "preco_saida", "motivo",
+                                      "r", "resultado", "banca"]].iloc[::-1]
+            for col in ("entrada", "saida"):
+                det[col] = pd.to_datetime(det[col]).dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m %H:%M")
+            with st.expander(f"Ver as {len(det)} operações"):
+                st.dataframe(det, hide_index=True, column_config={
+                    "entrada": "Entrada", "saida": "Saída", "moeda": "Moeda", "lado": "Lado",
+                    "preco_entrada": "Preço entrada", "preco_saida": "Preço saída", "motivo": "Saída por",
+                    "r": st.column_config.NumberColumn("R", format="%+.2f"),
+                    "resultado": st.column_config.NumberColumn("Resultado (USDT)", format="%+.2f"),
+                    "banca": st.column_config.NumberColumn("Banca (USDT)", format="%.2f")})
         else:
-            st.info("Nenhuma entrada no período: a personalidade foi seletiva demais para este ativo/timeframe.")
+            st.info("Nenhuma operação no período: o bot não encontrou entradas nas regras dele para estas moedas.")
+        st.caption("Premissas: preços reais, taxas incluídas, entrada na abertura do candle seguinte ao sinal, stop "
+                   "antes do alvo quando os dois cabem no mesmo candle; a IA não é simulada (só as regras). As operações "
+                   "de moedas diferentes entram na banca na ordem em que fecharam. Resultado passado não garante futuro.")

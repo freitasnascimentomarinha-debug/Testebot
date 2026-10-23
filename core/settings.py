@@ -75,6 +75,7 @@ def default_settings(profile: BotProfile) -> dict:
         "context_mode": "sempre",   # "sempre" ou "favoraveis" (só nos contextos favoráveis da personalidade)
         # IA
         "ai_model": DEFAULT_MODEL,
+        "ai_mode": "filtro",         # "filtro": IA confirma/veta o sinal das regras · "livre": IA decide sozinha
         "ai_temperature": 0.2,
         "ai_auto_execute": False,
         "ai_min_confidence": 60,

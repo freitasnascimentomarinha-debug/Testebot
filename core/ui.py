@@ -59,6 +59,17 @@ def cached_brackets(symbol: str):
     return lev_rules.brackets(symbol)
 
 
+@st.cache_data(ttl=1800, show_spinner=False, max_entries=60)
+def cached_votes(symbol: str, interval: str, market: str, days: int):
+    """Votos de todas as habilidades (simulação rápida) para os últimos ``days`` dias + aquecimento.
+    Calculado uma vez por moeda/timeframe e reaproveitado por todos os bots."""
+    from core import fastsim
+
+    cfg = {**default_settings(PROFILES[fastsim.bot_for(market, interval)]), "symbol": symbol, "interval": interval}
+    n = int(days * fastsim.PER_DAY[interval]) + 260
+    return fastsim.prepare(get_klines(symbol, interval, n, market), cfg), cfg
+
+
 def api_key() -> str | None:
     return get_secret("OPENROUTER_API_KEY") or st.session_state.get("openrouter_key")
 
@@ -501,7 +512,8 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                     if rs.get("interval") and rs["interval"] != cfg["interval"]:
                         st.caption(f"ℹ️ Testada no {rs['interval']}; o bot está no {cfg['interval']}.")
             st.page_link("views/bots.py", label="Ver todos os bots especialistas", icon="🤖")
-            st.markdown(f"**Cérebro:** {'IA DeepSeek + regras' if key else 'somente regras (sem IA)'}")
+            mode_txt = "IA como filtro das regras" if cfg.get("ai_mode", "filtro") == "filtro" else "IA livre + regras"
+            st.markdown(f"**Cérebro:** {mode_txt if key else 'somente regras (sem IA)'}")
             if not key:
                 st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "
                            "OpenRouter, o DeepSeek interpreta o cenário antes de cada entrada.")
@@ -862,6 +874,12 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
         if cfg["ai_model"] not in AI_MODELS:
             st.session_state[k("ai_model")] = DEFAULT_MODEL
         c[0].selectbox("Modelo (OpenRouter)", AI_MODELS, key=k("ai_model"), accept_new_options=True)
+        st.radio("Papel da IA", ["filtro", "livre"], key=k("ai_mode"), horizontal=True,
+                 format_func=lambda m: {"filtro": "🛡️ Filtro — confirma ou veta o sinal das regras (recomendado)",
+                                        "livre": "🧠 Livre — a IA decide entrada, stop e alvo"}[m],
+                 help="Filtro: o bot só entra quando as regras da personalidade (testadas no backtest) dão sinal e a "
+                      "IA concorda; usa o stop/alvo validados. Livre: a IA pode abrir operações que as regras não "
+                      "deram e escolher os próprios níveis — mais flexível, mas sem validação em backtest.")
         c[1].slider("Temperatura", 0.0, 1.0, step=0.05, key=k("ai_temperature"))
         c[2].slider("Confiança mínima para executar (%)", 0, 100, key=k("ai_min_confidence"))
         st.slider("Candles enviados como contexto", 20, 200, step=10, key=k("ai_candles_context"))

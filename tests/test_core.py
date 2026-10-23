@@ -304,8 +304,8 @@ def test_personalities_rules_and_direction():
 
     cfg = default_settings(PROFILES["day"])
     df = ind.compute(make_df(400, trend=-0.6, seed=3), cfg)  # mercado em queda
-    bear = analyze(df, cfg, PROFILES["day"], Pm.get("momentum"))
-    only_long = {**Pm.get("momentum"), "direction": "compra"}
+    bear = analyze(df, cfg, PROFILES["day"], Pm.get("pesq_momentum_moderado"))
+    only_long = {**Pm.get("pesq_momentum_moderado"), "direction": "compra"}
     plan = analyze(df, cfg, PROFILES["day"], only_long)
     assert plan.direction != "SELL"
     if bear.direction == "SELL":
@@ -391,3 +391,58 @@ def test_native_bots_have_card_data():
         assert rs["monthly_pct"] == pytest.approx(expected, abs=0.02)
     for bot, pid in Pm.DEFAULT_BY_BOT.items():
         assert Pm.get(pid)["research"]["status"] == "aprovado"
+
+
+
+def test_fastsim_matches_backtest_exactly():
+    """A simulação vetorizada precisa dar exatamente o mesmo resultado do backtest candle a candle."""
+    from core import backtest, fastsim
+    from core import personalities as Pm
+    from core.strategy import SKILLS, skill_levels
+
+    for seed, bot in ((7, "day"), (11, "swing")):
+        cfg = {**default_settings(PROFILES[bot]), "symbol": "X", "interval": "1h"}
+        raw = make_df(700, trend=0.05, seed=seed)
+        df = ind.compute(raw, cfg).reset_index(drop=True)
+        vt = fastsim.compute_votes(df, cfg)
+        for i in range(220, 700, 37):
+            sl = df.iloc[: i + 1]
+            lv = ind.support_resistance(sl)
+            for k, (_, fn) in SKILLS.items():
+                ref = (skill_levels(sl, cfg, lv) if k == "suporte_resistencia" else fn(sl, cfg)).vote
+                assert np.isclose(ref, vt["v_" + k].iloc[i], atol=1e-9, equal_nan=True), (k, i)
+        for pid in ("esp_15m_ema_3x1", "pesq_ichimoku_forca", "esp_5m_bb_reversal_2x1", "tendencia"):
+            p = Pm.get(pid)
+            fast = fastsim.simulate(vt, p, cfg)
+            real = backtest.run(raw, cfg, PROFILES[bot], p)
+            assert len(fast) == real["trades"], pid
+            assert sum(t["r"] for t in fast) == pytest.approx(real["total_r"]), pid
+
+
+def test_ai_filter_mode(monkeypatch):
+    from core import ai, engine
+    from core import personalities as Pm
+
+    monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "personality": "esp_15m_ema_3x1", "ai_min_confidence": 0}
+    df = ind.compute(make_df(400, trend=0.4, seed=21), cfg)
+    plan = analyze(df, cfg, PROFILES["day"], Pm.get("esp_15m_ema_3x1"))
+
+    def fake(decision):
+        return lambda ctx, **kw: ai.AIDecision(decision=decision, entry=1.0, stop_loss=0.5, take_profit=9.0,
+                                                confidence=90, reasoning="teste", source="ia")
+
+    other = "SELL" if plan.direction == "BUY" else "BUY"
+    monkeypatch.setattr(ai, "ask_ai", fake(other))
+    r = engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), "chave")
+    assert r.decision.decision == "HOLD"  # IA contra as regras (ou sem sinal delas): vetado
+    if plan.direction in ("BUY", "SELL"):
+        monkeypatch.setattr(ai, "ask_ai", fake(plan.direction))
+        r = engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), "chave")
+        assert r.decision.decision == plan.direction
+        assert r.decision.stop_loss == pytest.approx(plan.stop_loss)  # usa o stop validado das regras
+    monkeypatch.setattr(ai, "ask_ai", fake(other))
+    r = engine.run_analysis(PROFILES["day"], {**cfg, "ai_mode": "livre"}, df, float(df.close.iloc[-1]), "chave")
+    assert r.decision.decision == other  # modo livre: a IA decide
