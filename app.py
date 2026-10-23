@@ -43,13 +43,13 @@ if "core" in sys.modules and _disk_version and _loaded_version != _disk_version:
     st.cache_data.clear()
     st.cache_resource.clear()
 
-from core import accounts  # noqa: E402
+from core import accounts, credentials  # noqa: E402
 from core.auth import current_user, is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
 import core  # noqa: E402
 from core import APP_VERSION  # noqa: E402
 
 core.LOADED_COMMIT = _disk_version
-from core.storage import backend  # noqa: E402
+from core.storage import backend, get_secret  # noqa: E402
 
 st.markdown("""<style>
 [data-testid="stMetricValue"] {font-size: 1.35rem;}
@@ -72,8 +72,17 @@ pages = {
         st.Page("views/long_trade.py", title="Long Trade · Spot", icon="🏔️", url_path="long-trade"),
     ],
 }
+def _binance_required() -> bool:
+    """Chave da Binance obrigatória no primeiro acesso (REQUIRE_BINANCE_KEYS = "true" nos Secrets; admins ficam de fora)."""
+    user = current_user()
+    return bool(accounts.enabled() and user and (get_secret("REQUIRE_BINANCE_KEYS") or "").strip().lower() in ("1", "true", "sim", "yes")
+                and credentials.configured() and not accounts.is_admin(user) and not credentials.status(user))
+
+
 # A navegação é criada antes do login (oculta) para preservar a página pedida na URL.
-nav = st.navigation(pages, position="sidebar" if is_authenticated() else "hidden", expanded=True)
+_authed = is_authenticated()
+_gated = _authed and _binance_required()
+nav = st.navigation(pages, position="sidebar" if _authed and not _gated else "hidden", expanded=True)
 require_login()
 
 with st.sidebar:
@@ -89,5 +98,13 @@ with st.sidebar:
     if password_configured():
         if st.button("Sair", icon="🚪", width="stretch"):
             logout()
+
+if _gated:
+    from core.binance_ui import render_binance
+
+    st.title("🔗 Conecte a sua Binance")
+    st.caption("Para usar a plataforma, cadastre a chave de API da sua conta Binance. Ela fica criptografada na sua conta.")
+    render_binance(current_user(), "gate")
+    st.stop()
 
 nav.run()

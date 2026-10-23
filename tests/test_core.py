@@ -892,6 +892,127 @@ def test_accounts_work_on_postgres_and_table_is_private():
         storage.set_user(None)
         storage._backend = old
 
+
+def test_binance_keys_encrypted_per_user(monkeypatch):
+    import hashlib
+    import hmac as _hmac
+
+    from core import accounts, credentials, storage
+
+    KEY, SEC = "AbCdEfGh1234567890AbCdEfGh1234567890", "ZyXwVuTs0987654321ZyXwVuTs0987654321"
+    monkeypatch.delenv("SECRETS_KEY", raising=False)
+    storage.set_user("ana")
+    assert not credentials.configured()
+    with pytest.raises(RuntimeError, match="SECRETS_KEY"):
+        credentials.save("ana", KEY, SEC, False, None)               # sem a chave-mestra, não guarda nada
+    monkeypatch.setenv("SECRETS_KEY", "chave-mestra-longa-e-aleatoria-para-teste")
+    with pytest.raises(ValueError, match="só letras e números"):
+        credentials.save("ana", "curta com espaço", SEC, False, None)
+    with pytest.raises(ValueError, match="SAQUE"):
+        credentials.save("ana", KEY, SEC, False, {"ok": False, "message": "Esta chave tem permissão de SAQUE ligada."})
+    st = credentials.save("ana", KEY, SEC, False, {"ok": True, "perms": {"enableWithdrawals": False}})
+    assert st["last4"] == KEY[-4:] and st["validated"] is True and KEY not in json.dumps(st) and SEC not in json.dumps(st)
+    raw = json.dumps(storage.backend().load("u/ana/credentials.json", None))
+    assert KEY not in raw and SEC not in raw and "api_secret" in raw                      # no banco só o texto cifrado
+    assert credentials.get("ana") == (KEY, SEC, False)
+    # cada conta tem a própria chave de criptografia e os próprios dados
+    storage.set_user("bia")
+    assert credentials.status("bia") is None and credentials.get("bia") is None
+    credentials.save("bia", KEY, SEC, True, None)
+    enc_ana = storage.backend().load("u/ana/credentials.json", None)["binance"]["api_key"]
+    enc_bia = storage.backend().load("u/bia/credentials.json", None)["binance"]["api_key"]
+    assert enc_ana != enc_bia
+    from cryptography.fernet import InvalidToken
+
+    with pytest.raises(InvalidToken):
+        credentials._dec("bia", enc_ana)                                                  # a chave de uma conta não abre a de outra
+    # nunca vai para backup; é apagada junto com a conta
+    assert "credentials.json" not in storage.export_all() and storage.import_all({"credentials.json": {"binance": {}}}) == 0
+    monkeypatch.setenv("AUTH_MODE", "contas")
+    monkeypatch.setenv("ADMIN_USER", "chefe")
+    monkeypatch.setenv("ADMIN_PASSWORD", "senha-do-chefe-1")
+    storage.set_user(None)
+    users = storage.load_json(storage.USERS_KEY, {}) or {}
+    users["bia"] = {"hash": accounts.hash_password("senha-forte-1"), "status": "ativo", "role": "user", "created": "2026-01-01"}
+    storage.save_json(storage.USERS_KEY, users)
+    accounts.delete("chefe", "bia", wipe_data=True)
+    assert "u/bia/credentials.json" not in storage.backend().names()
+    storage.set_user("ana")
+    credentials.delete("ana")
+    assert credentials.status("ana") is None
+    storage.set_user(None)
+
+
+def test_binance_validation_calls(monkeypatch):
+    import hashlib
+    import hmac as _hmac
+    from urllib.parse import parse_qs, urlsplit
+
+    from core import credentials
+
+    sent = {}
+
+    class R:
+        def __init__(self, code, body):
+            self.status_code, self._b = code, body
+
+        def json(self):
+            return self._b
+
+    def fake(code, body):
+        def _get(url, headers=None, timeout=None):
+            sent.update(url=url, headers=headers)
+            return R(code, body)
+        return _get
+
+    good = {"enableReading": True, "enableSpotAndMarginTrading": True, "enableFutures": True, "enableWithdrawals": False,
+            "enableInternalTransfer": False, "ipRestrict": False}
+    monkeypatch.setattr(credentials.requests, "get", fake(200, good))
+    res = credentials.validate("K" * 30, "S" * 30, False)
+    assert res["ok"] is True and "IPs" in res["message"] and sent["headers"] == {"X-MBX-APIKEY": "K" * 30}
+    parts = urlsplit(sent["url"])
+    assert parts.path == "/sapi/v1/account/apiRestrictions"
+    q = parse_qs(parts.query)                                                              # assinatura HMAC-SHA256 correta
+    qs = f"timestamp={q['timestamp'][0]}&recvWindow={q['recvWindow'][0]}"
+    assert q["signature"][0] == _hmac.new(b"S" * 30, qs.encode(), hashlib.sha256).hexdigest()
+    monkeypatch.setattr(credentials.requests, "get", fake(200, {**good, "enableWithdrawals": True}))
+    res = credentials.validate("K" * 30, "S" * 30, False)
+    assert res["ok"] is False and "SAQUE" in res["message"]                                 # chave com saque é recusada
+    monkeypatch.setattr(credentials.requests, "get", fake(451, {}))
+    assert credentials.validate("K" * 30, "S" * 30, False)["ok"] is None                    # região bloqueada: não dá para validar
+    monkeypatch.setattr(credentials.requests, "get", fake(401, {"code": -2015, "msg": "x"}))
+    assert credentials.validate("K" * 30, "S" * 30, False)["ok"] is False
+    monkeypatch.setattr(credentials.requests, "get", fake(200, {"totalWalletBalance": "1"}))
+    res = credentials.validate("K" * 30, "S" * 30, True)
+    assert res["ok"] is True and "testnet.binancefuture.com/fapi/v2/account" in sent["url"]
+
+
+def test_ai_daily_quota_applies_to_platform_key_only(monkeypatch):
+    from core import ai, engine, quota, storage
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "chave-da-plataforma")
+    monkeypatch.setenv("AI_DAILY_LIMIT", "2")
+    monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
+    calls = []
+    monkeypatch.setattr(ai, "ask_ai", lambda *a, **k: calls.append(1) or ai.rules_fallback({"score": 0, "direction": "HOLD", "entry": 1, "stop_loss": None,
+                                                                                         "take_profit": None, "regime": "x"}, "teste"))
+    cfg, df = _adv_setup()
+    price = float(df["close"].iloc[-1])
+    paper.set_wallet_mode("única")
+    storage.set_user("quota_ana")
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+    for _ in range(2):
+        engine.run_analysis(PROFILES["day"], cfg, df, price, "chave-da-plataforma")
+    assert len(calls) == 2 and quota.used() == 2
+    res = engine.run_analysis(PROFILES["day"], cfg, df, price, "chave-da-plataforma")        # 3ª: estourou o limite
+    assert len(calls) == 2 and "limite diário de 2" in res.decision.risks and res.decision.source == "regras"
+    engine.run_analysis(PROFILES["day"], cfg, df, price, "chave-propria-do-usuario")          # chave própria: sem limite
+    assert len(calls) == 3
+    storage.set_user("quota_bia")
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+    assert quota.allow() and quota.used() == 0                                                # cada usuário tem a própria conta de uso
+    storage.set_user(None)
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

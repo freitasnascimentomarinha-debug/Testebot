@@ -93,3 +93,10 @@ from core.storage import get_secret  # noqa: E402
 if not accounts.enabled() and not get_secret("APP_PASSWORD"):
     st.caption("🔓 Acesso aberto: qualquer pessoa com o link entra. Para exigir usuário e senha com aprovação do administrador, "
                "veja docs/contas_e_supabase.md.")
+
+from core import credentials  # noqa: E402
+from core.auth import current_user  # noqa: E402
+
+if accounts.enabled() and current_user() and credentials.configured() and not credentials.status(current_user()):
+    st.info("🔗 Você ainda não conectou a sua conta da Binance. Cadastre a chave de API em **Minha conta** (opcional por enquanto: as ordens "
+            "são simuladas).")

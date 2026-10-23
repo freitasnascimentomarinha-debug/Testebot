@@ -43,6 +43,25 @@ Depois use **Reboot app**. Se mudar `AUTH_SECRET`, todos os links de "manter con
 * Quando todos tiverem conta, `ALLOW_SIGNUP = "false"` fecha os pedidos novos.
 * Em **Minha conta** cada pessoa vê o resumo das escolhas salvas, troca a senha e faz backup/restauração dos próprios dados.
 
+## Chave da Binance de cada usuário e IA do dono
+* **A IA é sua**: `OPENROUTER_API_KEY` nos Secrets vale para todos, e quem usa a plataforma não vê nem informa chave de IA. Como você paga as
+  chamadas, existe um limite diário **por usuário**: `AI_DAILY_LIMIT` (padrão 300 análises por dia, `0` = sem limite). Ao estourar, o bot
+  continua só com as regras até o dia seguinte (00:00 UTC). Cada pessoa vê o uso em *Minha conta*.
+* **A chave da Binance é de cada pessoa**: ela cadastra em *Minha conta → Conexão com a Binance* (ou na tela inicial, se você definir
+  `REQUIRE_BINANCE_KEYS = "true"`; admins ficam de fora dessa exigência).
+  * Fica **criptografada** (Fernet, com uma chave diferente por usuário derivada de `SECRETS_KEY`). `SECRETS_KEY` fica só nos Secrets, nunca no
+    banco: quem tiver acesso apenas ao Supabase não consegue ler as chaves. **Guarde uma cópia da `SECRETS_KEY` e não a troque**: trocá-la
+    torna ilegíveis as chaves já salvas (as pessoas teriam que cadastrar de novo).
+  * Na tela só aparecem os 4 últimos caracteres da API Key; o Secret nunca é mostrado de volta, nem entra em backup/exportação, e some junto
+    quando a conta é excluída.
+  * Na hora de salvar o app confere a chave na Binance. Chaves com permissão de **saque** são **recusadas**; recomenda-se só Leitura + Trade
+    e restrição por IP. Chaves de testnet também são aceitas.
+  * Limite honesto: o Streamlit Community roda em servidores nos EUA e a Binance bloqueia essa região. Nesse caso a chave **não pode ser
+    conferida** e a pessoa precisa marcar "Salvar mesmo se não for possível validar". O mesmo bloqueio vale para executar ordens reais a
+    partir dali: a execução real exigirá um servidor em região permitida (o `worker.py`).
+  * **Hoje as ordens continuam simuladas**: a chave fica guardada para quando a execução real existir. Você, como dono, tecnicamente tem
+    acesso à `SECRETS_KEY` e ao banco, então consegue decifrar: avise os usuários e peça chaves sem permissão de saque.
+
 ## Se o app não pedir login
 1. Os Secrets precisam estar **no topo do arquivo**, antes de qualquer linha `[secao]` (chaves abaixo de um `[título]` viram uma tabela e não são lidas).
 2. Depois de editar os Secrets use **Reboot app**; o app também precisa estar na versão mais recente do branch.

@@ -11,9 +11,10 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import advisor, ai, htf, indicators as ind, personalities, risk
+from core import advisor, ai, htf, indicators as ind, personalities, quota, risk
 from core.broker import get_broker
 from core.data import get_funding_rate
+from core.storage import current_user, get_secret
 from core.profiles import BotProfile
 from core.storage import locked_update
 from core.strategy import analyze, market_snapshot
@@ -95,6 +96,14 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
                                risk_rules=risk_rules, funding_rate=funding, personality=personality, scenario=sc,
                                candidates=cands, armed_plan=armed_view)
     error = ""
+    # A chave da OpenRouter é do dono da plataforma: cada usuário tem um limite diário de análises (quem usa a própria chave não tem).
+    platform_key = bool(api_key) and api_key == get_secret("OPENROUTER_API_KEY") and bool(current_user())
+    if platform_key and not quota.allow():
+        api_key, quota_msg = None, f"limite diário de {quota.limit()} análises da IA atingido (volta amanhã, 00:00 UTC)"
+    else:
+        quota_msg = "chave da OpenRouter não configurada"
+        if platform_key:
+            quota.consume()
     if api_key:
         try:
             decision = ai.ask_ai(context, api_key=api_key, model=cfg["ai_model"], temperature=float(cfg["ai_temperature"]),
@@ -103,7 +112,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
             error = str(exc)
             decision = ai.rules_fallback(plan_d, f"falha na IA ({exc})")
     else:
-        decision = ai.rules_fallback(plan_d, "chave da OpenRouter não configurada")
+        decision = ai.rules_fallback(plan_d, quota_msg)
 
     if not decision.advice and rules_adv:
         decision.advice = rules_adv

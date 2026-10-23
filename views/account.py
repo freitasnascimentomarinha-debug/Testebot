@@ -4,8 +4,10 @@ import json
 import pandas as pd
 import streamlit as st
 
-from core import accounts, paper, personalities
+from core import accounts, paper, personalities, quota
 from core.auth import current_user
+from core.binance_ui import render_binance
+from core.storage import get_secret
 from core.profiles import PROFILES
 from core.settings import load_settings
 from core.storage import backend, export_all, import_all
@@ -33,6 +35,12 @@ for key, p in PROFILES.items():
                  "Alavancagem": f"{c['leverage']:g}×" if c["leverage_on"] else "sem", "Personalidade": (personalities.get(c["personality"]) or {}).get("name", c["personality"]),
                  "Piloto automático": "ligado" if c["autopilot"] else "desligado"})
 st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
+st.divider()
+render_binance(user, "acc")
+if get_secret("OPENROUTER_API_KEY"):
+    lim = quota.limit()
+    st.caption(f"🤖 A IA é oferecida pela plataforma. Análises de hoje: **{quota.used()}**" + (f" de {lim}" if lim > 0 else " (sem limite)") + ".")
 
 st.subheader("🔑 Trocar senha")
 with st.form("chg_pw", clear_on_submit=True):

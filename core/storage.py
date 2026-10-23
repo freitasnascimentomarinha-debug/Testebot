@@ -356,7 +356,9 @@ def backend():
 # ---------------------------------------------------------------- dados por usuário
 # Com contas ligadas (AUTH_MODE=contas), cada pessoa tem a própria configuração, carteira, extrato, log e planos. As demais
 # chaves (estratégias da comunidade, resultados de pesquisa, cadastro de usuários) são compartilhadas.
-USER_SCOPED = ("settings.json", "paper_accounts.json", "wallet.json", "decisions.json", "armed_plans.json")
+USER_SCOPED = ("settings.json", "paper_accounts.json", "wallet.json", "decisions.json", "armed_plans.json", "credentials.json",
+               "ai_usage.json")
+NEVER_EXPORT = ("credentials.json",)  # chaves de API nunca entram em backup/exportação
 USERS_KEY = "_users.json"  # cadastro de usuários (hash das senhas): nunca exportado
 _user_ctx: contextvars.ContextVar = contextvars.ContextVar("tradebot_user", default=None)
 _migrated: set[str] = set()
@@ -425,10 +427,11 @@ def export_all() -> dict:
         if user:
             prefix = f"u/{user}/"
             if name.startswith(prefix):
-                out[name[len(prefix):]] = b.load(name, None)
+                if name[len(prefix):] not in NEVER_EXPORT:
+                    out[name[len(prefix):]] = b.load(name, None)
             elif not name.startswith("u/") and name not in USER_SCOPED:
                 out[name] = b.load(name, None)
-        elif not name.startswith("u/"):
+        elif not name.startswith("u/") and name not in NEVER_EXPORT:
             out[name] = b.load(name, None)
     return out
 
@@ -436,7 +439,7 @@ def export_all() -> dict:
 def import_all(payload: dict) -> int:
     n = 0
     for name, data in payload.items():
-        if name.endswith(".json") and data is not None and name != USERS_KEY and not name.startswith("u/"):
+        if name.endswith(".json") and data is not None and name != USERS_KEY and name not in NEVER_EXPORT and not name.startswith("u/"):
             save_json(name, data)
             n += 1
     return n
