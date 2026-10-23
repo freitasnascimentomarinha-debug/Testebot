@@ -870,5 +870,217 @@
    "busca_n": 43,
    "validacao_n": 23
   }
+ },
+ {
+  "id": "esp_1h_priceaction_1x1",
+  "name": "🕯️ Price Action Puro 1h",
+  "author": "Bots nativos · estudo price action/volume out/2026",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "description": "Bot de price action puro no 1 hora: pontua estrutura de topos e fundos, reação em suporte/resistência e rompimentos; só opera a favor da tendência do 4h (filtro de tempo maior) e com ADX ≥ 25. Stop de 2,5 ATR além da região que invalida e alvo 1:1 (taxa de acerto alta).",
+  "summary": "Lê o gráfico sem indicadores: topos/fundos, suportes/resistências e rompimentos, a favor do 4h.",
+  "tip": "Lê o gráfico sem indicadores: topos/fundos, suportes/resistências e rompimentos, a favor do 4h.",
+  "specialty": "Price action 1h · estrutura + S/R · 1:1",
+  "skills": {
+   "estrutura": 1.0,
+   "suporte_resistencia": 2.0,
+   "rompimento": 1.5
+  },
+  "threshold": 10,
+  "direction": "misto",
+  "filters": {
+   "htf_trend": true,
+   "ignore_regime": true,
+   "adx_min": 25,
+   "contexts": [
+    "tendencia_baixa",
+    "pullback_baixa",
+    "rompimento_alta"
+   ]
+  },
+  "sl_atr": 2.5,
+  "tp_atr": 2.5,
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "selection": {
+   "anteriores_n": 60,
+   "anteriores_r": 0.208,
+   "busca_n": 42,
+   "busca_r": 0.085,
+   "validacao_n": 27,
+   "validacao_r": 0.173
+  }
+ },
+ {
+  "id": "esp_15m_tendencia_macd_2x1",
+  "name": "📐 Tendência + MACD 15m",
+  "author": "Bots nativos · estudo price action/volume out/2026",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "description": "Versão B do estudo (tendência + indicadores) no 15 minutos: soma tendência de médias, força do ADX e MACD; exige volume relativo ≥ 1,5× e evita mercado lateral. Só compra. Stop 2,5 ATR, alvo 2× o risco.",
+  "summary": "Compra força: tendência + ADX + MACD com volume ≥ 1,5× a média; evita lateralidade.",
+  "tip": "Compra força: tendência + ADX + MACD com volume ≥ 1,5× a média; evita lateralidade.",
+  "specialty": "Tendência 15m · ADX + MACD · só compra · 2:1",
+  "skills": {
+   "tendencia": 1.0,
+   "adx": 2.0,
+   "macd": 1.5
+  },
+  "threshold": 15,
+  "direction": "compra",
+  "filters": {
+   "vol_mult": 1.5,
+   "avoid_lateral": true,
+   "ignore_regime": true,
+   "contexts": [
+    "tendencia_alta",
+    "reversao_alta",
+    "tendencia_baixa",
+    "rompimento_baixa"
+   ]
+  },
+  "sl_atr": 2.5,
+  "tp_atr": 5.0,
+  "tested_interval": "15m",
+  "timeframes": "15m (testado)",
+  "selection": {
+   "anteriores_n": 96,
+   "anteriores_r": 0.188,
+   "busca_n": 70,
+   "busca_r": 0.095,
+   "validacao_n": 19,
+   "validacao_r": 0.067
+  }
+ },
+ {
+  "id": "esp_1h_tendencia_supertrend_2x1",
+  "name": "🧭 Tendência Forte 1h",
+  "author": "Bots nativos · estudo price action/volume out/2026",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "description": "Versão B no 1 hora: tendência de médias com Supertrend, ADX e MACD; filtro de EMA de tendência, ADX ≥ 25, volume ≥ 1,2× a média e contexto 'tendência de alta'. Stop 1,5 ATR, alvo 2× o risco.",
+  "summary": "Só entra em tendência de alta confirmada (ADX ≥ 25, preço acima da EMA) com volume acima do normal.",
+  "tip": "Só entra em tendência de alta confirmada (ADX ≥ 25, preço acima da EMA) com volume acima do normal.",
+  "specialty": "Tendência 1h · EMA + Supertrend + ADX · 2:1",
+  "skills": {
+   "tendencia": 2.0,
+   "adx": 1.0,
+   "macd": 1.0,
+   "supertrend": 1.0
+  },
+  "threshold": 50,
+  "direction": "misto",
+  "filters": {
+   "vol_mult": 1.2,
+   "trend_ema": true,
+   "adx_min": 25,
+   "contexts": [
+    "tendencia_alta"
+   ]
+  },
+  "sl_atr": 1.5,
+  "tp_atr": 3.0,
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "selection": {
+   "anteriores_n": 45,
+   "anteriores_r": 0.352,
+   "busca_n": 37,
+   "busca_r": 0.197,
+   "validacao_n": 4,
+   "validacao_r": 0.359
+  }
+ },
+ {
+  "id": "esp_1h_tendencia_volume_2x1",
+  "name": "📊 Rompimento com Volume 1h",
+  "author": "Bots nativos · estudo price action/volume out/2026",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "description": "Versão C do estudo (tendência + volume) no 1 hora: o voto de volume e o de rompimento pesam o dobro; exige volume relativo ≥ 1,5×, ADX ≥ 25 e evita lateralidade. Só compra. Stop 1,5 ATR, alvo 2× o risco. Foi o mais consistente nos dois regimes.",
+  "summary": "Compra rompimentos com volume ≥ 1,5× a média em mercado direcional (ADX ≥ 25), longe da lateralidade.",
+  "tip": "Compra rompimentos com volume ≥ 1,5× a média em mercado direcional (ADX ≥ 25), longe da lateralidade.",
+  "specialty": "Tendência + volume 1h · rompimento · só compra · 2:1",
+  "skills": {
+   "tendencia": 1.0,
+   "volume": 2.0,
+   "rompimento": 2.0,
+   "adx": 1.0
+  },
+  "threshold": 10,
+  "direction": "compra",
+  "filters": {
+   "vol_mult": 1.5,
+   "avoid_lateral": true,
+   "adx_min": 25,
+   "contexts": [
+    "reversao_baixa",
+    "tendencia_alta",
+    "tendencia_baixa"
+   ]
+  },
+  "sl_atr": 1.5,
+  "tp_atr": 3.0,
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "selection": {
+   "anteriores_n": 56,
+   "anteriores_r": 0.336,
+   "busca_n": 44,
+   "busca_r": 0.307,
+   "validacao_n": 6,
+   "validacao_r": 0.377
+  }
+ },
+ {
+  "id": "esp_1h_hibrida_2x1",
+  "name": "🧬 Híbrida Price Action + Volume 1h",
+  "author": "Bots nativos · estudo price action/volume out/2026",
+  "bot": "day",
+  "markets": [
+   "futures"
+  ],
+  "description": "Versão D (híbrida) no 1 hora: estrutura, rompimento, suporte/resistência e Fibonacci (price action) somados a tendência e volume; volume pelo menos na média e contextos de tendência de alta, pullback de baixa e topo esticado. Stop 1,5 ATR, alvo 2× o risco.",
+  "summary": "Junta price action (estrutura, S/R, Fibonacci) com tendência e volume acima da média.",
+  "tip": "Junta price action (estrutura, S/R, Fibonacci) com tendência e volume acima da média.",
+  "specialty": "Híbrida 1h · estrutura + rompimento + volume + tendência · 2:1",
+  "skills": {
+   "estrutura": 1.0,
+   "rompimento": 2.0,
+   "volume": 1.5,
+   "tendencia": 2.0,
+   "suporte_resistencia": 1.0,
+   "fibonacci": 1.0
+  },
+  "threshold": 40,
+  "direction": "misto",
+  "filters": {
+   "vol_mult": 1.0,
+   "contexts": [
+    "reversao_baixa",
+    "tendencia_alta",
+    "pullback_baixa"
+   ]
+  },
+  "sl_atr": 1.5,
+  "tp_atr": 3.0,
+  "tested_interval": "1h",
+  "timeframes": "1h (testado)",
+  "selection": {
+   "anteriores_n": 55,
+   "anteriores_r": 0.24,
+   "busca_n": 57,
+   "busca_r": 0.197,
+   "validacao_n": 14,
+   "validacao_r": 0.397
+  }
  }
 ]

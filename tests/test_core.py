@@ -419,6 +419,33 @@ def test_fastsim_matches_backtest_exactly():
             assert sum(t["r"] for t in fast) == pytest.approx(real["total_r"]), pid
 
 
+
+def test_study_bots_validated_and_htf_equivalence():
+    """Os 5 bots do estudo price action/volume: positivos nos dois regimes e simulação idêntica com o filtro do 4h."""
+    from core import backtest, fastsim
+    from core import personalities as Pm
+
+    ids = ["esp_1h_priceaction_1x1", "esp_15m_tendencia_macd_2x1", "esp_1h_tendencia_supertrend_2x1",
+           "esp_1h_tendencia_volume_2x1", "esp_1h_hibrida_2x1"]
+    for pid in ids:
+        rs = Pm.get(pid)["research"]
+        assert rs["ret_pct"] > 0 and rs["prev_ret_pct"] > 0 and rs["status"] == "aprovado", pid
+    assert Pm.get(ids[0])["filters"].get("htf_trend")
+
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "interval": "1h"}
+    raw = make_df(900, trend=0.03, seed=5)
+    raw["time"] = pd.date_range("2026-01-01", periods=len(raw), freq="1h", tz="UTC")
+    htf = raw.set_index("time").resample("4h").agg({"open": "first", "high": "max", "low": "min", "close": "last",
+                                                     "volume": "sum"}).reset_index()
+    vt = fastsim.prepare(raw, cfg, htf)
+    assert vt["htf_dir"].abs().sum() > 0
+    for pid in ids:
+        p = Pm.get(pid)
+        fast = fastsim.simulate(vt, p, cfg)
+        real = backtest.run(raw, cfg, PROFILES["day"], p, htf_raw=htf)
+        assert len(fast) == real["trades"], pid
+        assert sum(t["r"] for t in fast) == pytest.approx(real["total_r"]), pid
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm
