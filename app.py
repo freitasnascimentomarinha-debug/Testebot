@@ -4,13 +4,49 @@ Execute com:  streamlit run app.py
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
 
 st.set_page_config(page_title="TradeBot · Plataforma de Bots", page_icon="📊", layout="wide",
                    initial_sidebar_state="auto")
 
+
+def _code_version() -> str:
+    """Commit do código no disco (lido direto do .git, sem subprocesso)."""
+    git = Path(__file__).resolve().parent / ".git"
+    try:
+        head = (git / "HEAD").read_text().strip()
+        if not head.startswith("ref:"):
+            return head
+        ref = head.split(" ", 1)[1]
+        if (git / ref).exists():
+            return (git / ref).read_text().strip()
+        for line in (git / "packed-refs").read_text().splitlines():
+            if line.endswith(" " + ref):
+                return line.split()[0]
+    except OSError:
+        pass
+    return ""
+
+
+# O Streamlit reexecuta este arquivo a cada atualização do repositório, mas mantém em memória os módulos
+# já importados. Se o código no disco mudou (novo commit), descarta os módulos do app para que tudo seja
+# recarregado na mesma versão — evita erros de versões misturadas sem precisar reiniciar o servidor.
+_disk_version = _code_version()
+_loaded_version = getattr(sys.modules.get("core"), "LOADED_COMMIT", None)
+if _loaded_version is not None and _disk_version and _loaded_version != _disk_version:
+    for _name in [n for n in sys.modules if n == "core" or n.startswith(("core.", "views."))]:
+        del sys.modules[_name]
+    st.cache_data.clear()
+    st.cache_resource.clear()
+
 from core.auth import is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
+import core  # noqa: E402
 from core import APP_VERSION  # noqa: E402
+
+core.LOADED_COMMIT = _disk_version
 from core.storage import backend, get_secret  # noqa: E402
 
 st.markdown("""<style>
