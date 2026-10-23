@@ -24,6 +24,8 @@ from core.storage import load_json, locked_update
 
 CUSTOM_FILE = "personalities.json"
 BACKTEST_FILE = "backtests.json"
+PERIOD_FILE = "period_returns.json"
+PERIOD_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT")
 
 DIRECTIONS = {"misto": "Misto (compra e venda)", "compra": "Só compra", "venda": "Só venda"}
 FILTERS = {
@@ -125,6 +127,76 @@ BUILTINS: list[dict] = [
         "direction": "compra", "threshold": 25, "sl_atr": 3.0, "tp_atr": 9.0,
         "skills": {"tendencia": 1.6, "estrutura": 1.4, "supertrend": 1.0, "ichimoku": 0.6, "macd": 0.6},
         "filters": {"trend_ema": True}, "markets": ["spot", "futures"], "timeframes": "1d a 1w",
+    },
+]
+
+# Estratégias encontradas na pesquisa de out/2026: busca em ~12 mil combinações nos primeiros 27 dias,
+# validação nos 13 dias seguintes, nos 40 dias anteriores e em 5 moedas que não participaram da busca.
+# Todas testadas em futuros perpétuos, timeframe de 1h, com taxa de 0,05% por lado.
+_RESEARCH = "Pesquisa Claude · out/2026"
+BUILTINS += [
+    {
+        "id": "pesq_pullback_st", "name": "🌀 Pullback SuperTrend + Estocástico", "author": _RESEARCH,
+        "summary": "Compra recuos em tendência forte de alta e vende repiques em tendência forte de baixa.",
+        "description": "Só opera quando a tendência é forte (ADX ≥ 25) e a favor da EMA 200. Usa o SuperTrend para a "
+                       "direção e o Estocástico para o momento de entrada (fim do recuo). Stop curto (1 ATR) e alvo "
+                       "longo (4 ATR): acerta cerca de 30% das vezes, mas cada ganho paga ~4 perdas.",
+        "direction": "misto", "threshold": 35, "sl_atr": 1.0, "tp_atr": 4.0,
+        "skills": {"supertrend": 1.5, "estocastico": 2.0}, "filters": {"trend_ema": True, "adx_min": 25},
+        "markets": ["futures"], "timeframes": "1h (testado)", "tested_interval": "1h",
+        "research": {"busca_pct": 8.04, "inéditas_pct": 5.81, "anteriores_r": 0.16, "pior_queda_pct": 15.3,
+                     "acerto_pct": 29, "operacoes_40d": 261},
+    },
+    {
+        "id": "pesq_tendencia_equilibrada", "name": "🎯 Tendência Equilibrada", "author": _RESEARCH,
+        "summary": "MACD + SuperTrend + Estocástico em tendência forte, com stop e alvo mais próximos.",
+        "description": "Mesma família do Pullback SuperTrend, com MACD e RSI como confirmação extra. Stop de 2 ATR e "
+                       "alvo de 3 ATR: acerta cerca de metade das operações, com quedas da banca menores. Foi a mais "
+                       "regular entre as moedas (positiva nas 5 moedas inéditas).",
+        "direction": "misto", "threshold": 35, "sl_atr": 2.0, "tp_atr": 3.0,
+        "skills": {"macd": 1.0, "supertrend": 1.5, "estocastico": 2.0, "momentum": 0.5},
+        "filters": {"trend_ema": True, "adx_min": 25},
+        "markets": ["futures"], "timeframes": "1h (testado)", "tested_interval": "1h",
+        "research": {"busca_pct": 4.24, "inéditas_pct": 5.00, "anteriores_r": 0.02, "pior_queda_pct": 9.5,
+                     "acerto_pct": 50, "operacoes_40d": 232},
+    },
+    {
+        "id": "pesq_ichimoku_forca", "name": "☁️ Ichimoku com Força", "author": _RESEARCH,
+        "summary": "Ichimoku, ADX, momentum e volume alinhados — só entra com consenso forte.",
+        "description": "Exige consenso alto (limiar 50) entre Ichimoku, ADX/DMI, RSI, volume e Bollinger, a favor da "
+                       "EMA 200, com ADX ≥ 25 e sem comprar sobrecomprado/vender sobrevendido. Stop curto (0,8 ATR) "
+                       "e alvo de 4× o risco. Foi a melhor nos 40 dias anteriores ao período analisado.",
+        "direction": "misto", "threshold": 50, "sl_atr": 0.8, "tp_atr": 3.2,
+        "skills": {"volume": 1.5, "momentum": 1.5, "ichimoku": 2.0, "adx": 2.0, "bollinger": 1.0},
+        "filters": {"trend_ema": True, "rsi_guard": True, "ignore_regime": True, "adx_min": 25},
+        "markets": ["futures"], "timeframes": "1h (testado)", "tested_interval": "1h",
+        "research": {"busca_pct": 3.83, "inéditas_pct": 3.24, "anteriores_r": 0.23, "pior_queda_pct": 9.6,
+                     "acerto_pct": 26, "operacoes_40d": 278},
+    },
+    {
+        "id": "pesq_rompimento_consolidacao", "name": "📦 Rompimento de Consolidação", "author": _RESEARCH,
+        "summary": "Opera a saída de mercados parados (ADX baixo) pelo rompimento do canal de 20 candles.",
+        "description": "Só procura entradas quando ainda NÃO há tendência (ADX ≤ 25): espera o preço romper a máxima "
+                       "ou mínima dos últimos 20 candles, com Bollinger a favor e sem RSI extremo. Stop largo (3 ATR) "
+                       "e alvo de 4,5 ATR. Poucas operações e as menores quedas da banca da pesquisa (3–4%).",
+        "direction": "misto", "threshold": 50, "sl_atr": 3.0, "tp_atr": 4.5,
+        "skills": {"bollinger": 0.5, "rompimento": 2.0}, "filters": {"rsi_guard": True, "adx_max": 25},
+        "markets": ["futures"], "timeframes": "1h (testado)", "tested_interval": "1h",
+        "research": {"busca_pct": 2.38, "inéditas_pct": 3.41, "anteriores_r": -0.07, "pior_queda_pct": 4.1,
+                     "acerto_pct": 53, "operacoes_40d": 94},
+    },
+    {
+        "id": "pesq_momentum_moderado", "name": "⚖️ Momentum Moderado", "author": _RESEARCH,
+        "summary": "Entra no começo das tendências (ADX entre 25 e 30) com Estocástico, MACD e volume.",
+        "description": "Procura o início de uma tendência: ADX entre 25 e 30 (força surgindo, mas ainda não esticada). "
+                       "Limiar baixo (mais entradas), confirmação por Estocástico, MACD, volume e Bollinger. Stop e "
+                       "alvo iguais (3 ATR): a maior taxa de acerto da pesquisa (~60%).",
+        "direction": "misto", "threshold": 15, "sl_atr": 3.0, "tp_atr": 3.0,
+        "skills": {"bollinger": 0.5, "estocastico": 1.0, "macd": 0.5, "volume": 1.0},
+        "filters": {"ignore_regime": True, "adx_min": 25, "adx_max": 30},
+        "markets": ["futures"], "timeframes": "1h (testado)", "tested_interval": "1h",
+        "research": {"busca_pct": 3.37, "inéditas_pct": 3.60, "anteriores_r": -0.01, "pior_queda_pct": 6.4,
+                     "acerto_pct": 60, "operacoes_40d": 206},
     },
 ]
 for _p in BUILTINS:
@@ -243,3 +315,39 @@ def ranking(min_trades: int = 10) -> list[dict]:
     rows.sort(key=lambda r: (-(r["score"] if r["score"] is not None and not math.isnan(r["score"]) else 0.0),
                              -(r["live_trades"] + r["bt_trades"])))
     return rows
+
+
+# ------------------------------------------------ retorno no período recente
+def period_key(market: str, interval: str, days: int, risk_pct: float) -> str:
+    return f"{market}|{interval}|{days}|{risk_pct:g}"
+
+
+def period_results(key: str) -> dict:
+    """{"date": "AAAA-MM-DD", "results": {pid: resumo}} do cálculo salvo."""
+    return (load_json(PERIOD_FILE, {}) or {}).get(key, {"date": "", "results": {}})
+
+
+def save_period_result(key: str, pid: str, summary: dict) -> None:
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    def _apply(data):
+        entry = data.get(key)
+        if not entry or entry.get("date") != today:
+            entry = {"date": today, "results": {}}
+        entry["results"][pid] = summary
+        data[key] = entry
+
+    locked_update(PERIOD_FILE, {}, _apply)
+
+
+def summarize_period(per_symbol: list[dict]) -> dict:
+    """Média entre as moedas (cada moeda simulada como uma banca separada)."""
+    n = len(per_symbol) or 1
+    return {"return_pct": float(sum(r["return_pct"] for r in per_symbol) / n),
+            "max_dd_pct": float(max((r["max_dd_pct"] for r in per_symbol), default=0.0)),
+            "trades": sum(r["trades"] for r in per_symbol),
+            "positive": sum(1 for r in per_symbol if r["return_pct"] > 0), "symbols": len(per_symbol),
+            "best": max(per_symbol, key=lambda r: r["return_pct"])["symbol"] if per_symbol else "",
+            "worst": min(per_symbol, key=lambda r: r["return_pct"])["symbol"] if per_symbol else "",
+            "per_symbol": {r["symbol"]: round(float(r["return_pct"]), 2) for r in per_symbol},
+            "period": per_symbol[0]["period"] if per_symbol else ""}

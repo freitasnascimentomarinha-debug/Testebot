@@ -84,3 +84,30 @@ def run(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict,
         "max_dd_r": max_dd, "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "detail": trades, "curve": curve,
     }
+
+
+PER_DAY = {"5m": 288, "15m": 96, "30m": 48, "1h": 24, "4h": 6, "1d": 1}
+
+
+def compound(rs: list[float], risk_pct: float = 1.0) -> tuple[float, float]:
+    """Retorno composto (%) e pior queda da banca (%) arriscando ``risk_pct``
+    da banca em cada operação: cada operação multiplica a banca por
+    (1 + risco × R). Ex.: +2R com 1% de risco → +2%; stop (−1R) → −1%."""
+    equity = peak = 1.0
+    max_dd = 0.0
+    for r in rs:
+        equity *= max(0.0, 1 + risk_pct / 100 * r)
+        peak = max(peak, equity)
+        max_dd = max(max_dd, (peak - equity) / peak)
+    return (equity - 1) * 100, max_dd * 100
+
+
+def period_return(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict, *, days: int = 40,
+                  risk_pct: float = 1.0) -> dict:
+    """Backtest restrito aos últimos ``days`` dias (o restante serve de aquecimento
+    dos indicadores) e o retorno composto correspondente."""
+    window = days * PER_DAY[cfg["interval"]]
+    res = run(df_raw, cfg, profile, personality, warmup=max(210, len(df_raw) - window))
+    ret, dd = compound([t["r"] for t in res["detail"]], risk_pct)
+    return {"symbol": cfg["symbol"], "trades": res["trades"], "win_rate": res["win_rate"], "avg_r": res["avg_r"],
+            "total_r": res["total_r"], "return_pct": ret, "max_dd_pct": dd, "period": res["period"]}

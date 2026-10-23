@@ -18,11 +18,20 @@ BOT_LABEL = {k: f"{p.icon} {p.name}" for k, p in PROFILES.items()}
 
 
 def use_in_bot(pid: str, bot: str) -> None:
+    persona = P.get(pid)
     cfg = load_settings(bot)
     cfg["personality"] = pid
-    save_settings(bot, cfg)
     st.session_state[f"{bot}__personality"] = pid
-    st.toast(f"{P.get(pid)['name']} ativada no {PROFILES[bot].name}.", icon="✅")
+    tested = persona.get("tested_interval")
+    msg = f"{persona['name']} ativada no {PROFILES[bot].name}."
+    if tested and tested in PROFILES[bot].intervals:
+        cfg["interval"] = tested
+        st.session_state[f"{bot}__interval"] = tested
+        msg += f" Timeframe ajustado para {tested} (o testado)."
+    if persona.get("markets") and PROFILES[bot].market not in persona["markets"]:
+        msg += " Atenção: ela foi testada em outro mercado."
+    save_settings(bot, cfg)
+    st.toast(msg, icon="✅")
 
 
 def fmt_r(v):
@@ -38,16 +47,65 @@ with tab_rank:
         "A pontuação é o **R médio por operação** (resultado ÷ risco planejado: +1R = ganhou o que arriscou) "
         "ponderado pela quantidade de operações. Operações reais dos bots valem o dobro dos backtests. Com menos de "
         "10 operações, o resultado ainda é pouco confiável.")
+
+    # --- Retorno simulado nos últimos 40 dias -------------------------------------
+    with st.container(border=True):
+        st.markdown("**📅 Quanto cada personalidade teria rendido nos últimos 40 dias**")
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.4])
+        p_market = c1.selectbox("Mercado", ["futures", "spot"], key="per_m",
+                                format_func=lambda m: "Futuros" if m == "futures" else "Spot")
+        p_itv = c2.selectbox("Timeframe", ("15m", "1h", "4h"), index=1, key="per_i")
+        p_risk = c3.selectbox("Risco por operação", (0.5, 1.0, 2.0), index=1, key="per_r",
+                              format_func=lambda r: f"{r:g}% da banca")
+        pkey = P.period_key(p_market, p_itv, 40, p_risk)
+        period = P.period_results(pkey)
+        missing = [p for p in P.list_all() if p["id"] not in period["results"]]
+        label = "Calcular" if not period["results"] else ("Calcular as que faltam" if missing else "Recalcular")
+        if c4.button(f"▶️ {label} ({len(missing) or len(P.list_all())} personalidades)", type="primary",
+                     width="stretch"):
+            todo = missing or P.list_all()
+            prof = PROFILES["day" if p_market == "futures" else "swing"]
+            base = {**default_settings(prof), "interval": p_itv}
+            n_candles = 40 * backtest.PER_DAY[p_itv] + 250
+            frames = {sym: cached_klines(sym, p_itv, n_candles, p_market) for sym in P.PERIOD_SYMBOLS}
+            bar = st.progress(0.0, text="Simulando…")
+            for k, persona_ in enumerate(todo, start=1):
+                per_symbol = [backtest.period_return(frames[sym], {**base, "symbol": sym}, prof, persona_,
+                                                     days=40, risk_pct=p_risk) for sym in P.PERIOD_SYMBOLS]
+                summary = P.summarize_period(per_symbol)
+                P.save_period_result(pkey, persona_["id"], summary)
+                bar.progress(k / len(todo), text=f"{persona_['name']}: {summary['return_pct']:+.2f}%")
+            st.rerun()
+        st.caption(
+            f"Conta: cada operação do backtest move a banca em **{p_risk:g}% × R** (stop = −{p_risk:g}%, alvo de 3R = "
+            f"+{3 * p_risk:g}%), com juros compostos: banca final = banca × (1 + {p_risk / 100:g}·R₁) × "
+            f"(1 + {p_risk / 100:g}·R₂) × … Simulado em {', '.join(s.replace('USDT', '') for s in P.PERIOD_SYMBOLS)} "
+            "separadamente (uma banca para cada); a coluna mostra a média, já com taxas. "
+            + (f"Calculado em {period['date']}." if period["date"] else "Ainda não calculado.")
+            + " Resultado passado não garante resultado futuro.")
+
     table = pd.DataFrame([{
         "#": i + 1, "Personalidade": r["name"], "Autor": r["author"],
+        "Retorno 40 dias": (period["results"].get(r["id"]) or {}).get("return_pct"),
+        "Pior queda 40d": (period["results"].get(r["id"]) or {}).get("max_dd_pct"),
+        "Moedas positivas": (f"{period['results'][r['id']]['positive']}/{period['results'][r['id']]['symbols']}"
+                             if r["id"] in period["results"] else None),
+        "Operações 40d": (period["results"].get(r["id"]) or {}).get("trades"),
         "Pontuação": r["score"], "Operações reais": r["live_trades"],
         "Acerto real": r["live_win_rate"], "R médio real": r["live_avg_r"], "Resultado real (USDT)": r["live_pnl"],
         "Operações backtest": r["bt_trades"], "R médio backtest": r["bt_avg_r"], "Acerto backtest": r["bt_win_rate"],
         "Confiável": "✅" if r["enough_data"] else "⏳ poucos dados",
     } for i, r in enumerate(rows)])
+    for col in ("Retorno 40 dias", "Pior queda 40d", "Operações 40d"):
+        table[col] = pd.to_numeric(table[col], errors="coerce")
+    if period["results"]:  # com o cálculo dos 40 dias, ele define a ordem (sem dados ficam por último)
+        table = table.sort_values("Retorno 40 dias", ascending=False, na_position="last").reset_index(drop=True)
+        table["#"] = range(1, len(table) + 1)
     for col in ("Pontuação", "Acerto real", "R médio real", "Acerto backtest", "R médio backtest"):
         table[col] = pd.to_numeric(table[col], errors="coerce")  # sem dados → célula vazia
     st.dataframe(table, hide_index=True, placeholder="—", column_config={
+        "Retorno 40 dias": st.column_config.NumberColumn(format="%+.2f%%", help="Retorno composto médio nas 5 moedas"),
+        "Pior queda 40d": st.column_config.NumberColumn(format="−%.1f%%", help="Maior queda da banca (pior moeda)"),
         "Pontuação": st.column_config.NumberColumn(format="%+.3f"),
         "Acerto real": st.column_config.NumberColumn(format="%.0f%%"),
         "Acerto backtest": st.column_config.NumberColumn(format="%.0f%%"),
@@ -76,14 +134,18 @@ with tab_rank:
                 bar.progress(n / len(items), text=f"{persona_['name']}: {res_['trades']} operações, "
                                                   f"{res_['avg_r']:+.2f}R por operação")
             st.rerun()
-    scored = [r for r in rows if r["score"] is not None]
-    if scored:
+    if period["results"]:
+        chart = table.dropna(subset=["Retorno 40 dias"])[["Personalidade", "Retorno 40 dias"]]
+        st.bar_chart(chart, x="Personalidade", y="Retorno 40 dias", horizontal=True, sort="-Retorno 40 dias",
+                     height=40 + 28 * len(chart), color="#26a69a")
+    elif any(r["score"] is not None for r in rows):
+        scored = [r for r in rows if r["score"] is not None]
         chart = pd.DataFrame({"Personalidade": [r["name"] for r in scored], "Pontuação": [r["score"] for r in scored]})
         st.bar_chart(chart, x="Personalidade", y="Pontuação", horizontal=True, sort="-Pontuação",
                      height=40 + 28 * len(scored), color="#26a69a")
     else:
-        st.info("Ainda não há operações nem backtests. Rode backtests na aba 🧪 ou deixe os bots operarem para "
-                "o ranking se formar.")
+        st.info("Ainda não há dados. Clique em Calcular acima para ver quanto cada personalidade teria rendido "
+                "nos últimos 40 dias.")
     c1, c2, c3 = st.columns([2, 1.2, 1])
     pick = c1.selectbox("Usar uma personalidade", [r["id"] for r in rows], format_func=lambda i: P.get(i)["name"])
     bot = c2.selectbox("no bot", list(PROFILES), format_func=BOT_LABEL.get, key="rank_bot")
@@ -116,6 +178,13 @@ with tab_lib:
                             f"{p.get('threshold')} · **Stop/alvo:** {p.get('sl_atr')}× / {p.get('tp_atr')}× ATR · "
                             f"**Tempos gráficos:** {p.get('timeframes') or '—'}")
                 st.markdown("**Filtros:** " + (", ".join(filt) or "nenhum"))
+                if rs := p.get("research"):
+                    st.markdown(
+                        f"**Resultado da pesquisa (futuros 1h, 1% de risco por operação, 40 dias):** "
+                        f"{rs['busca_pct']:+.1f}% nas moedas da busca (BTC, ETH, SOL, BNB, XRP) · "
+                        f"{rs['inéditas_pct']:+.1f}% em moedas que a busca não viu (DOGE, ADA, LINK, AVAX, LTC) · "
+                        f"{rs['anteriores_r']:+.2f}R por operação nos 40 dias anteriores · pior queda "
+                        f"{rs['pior_queda_pct']:.0f}% · acerto ~{rs['acerto_pct']}%. Passado não garante futuro.")
             with c2:
                 target = st.selectbox("Bot", list(PROFILES), format_func=BOT_LABEL.get, key=f"lib_bot_{p['id']}",
                                       label_visibility="collapsed")
