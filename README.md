@@ -62,21 +62,32 @@ Testes: `python -m pytest -q tests`
 
 ## Publicar no Streamlit Community Cloud
 
-1. **Banco gratuito (para os dados não sumirem)** — crie um projeto em [neon.tech](https://neon.tech) (ou
-   Supabase), região São Paulo se houver, e copie a *connection string* `postgresql://...?sslmode=require`.
-   A tabela `tradebot_kv` é criada sozinha no primeiro acesso.
+1. **Onde guardar os dados (para não sumirem)** — escolha uma opção:
+   * **Mini banco no GitHub (mais simples):** crie um *fine-grained token* em GitHub → Settings → Developer
+     settings → Fine-grained tokens, com acesso só a este repositório e permissão **Contents: Read and
+     write**. Os dados vão para o arquivo `tradebot_data.json` no branch `tradebot-data` (criado sozinho),
+     separado do código, então gravar não reinicia o app. O app guarda em memória e grava a cada 20 s; o
+     branch mantém sempre um único commit. Em repositório público os dados ficam públicos.
+   * **Postgres gratuito (mais robusto):** projeto em [neon.tech](https://neon.tech) ou Supabase; copie a
+     *connection string* `postgresql://...?sslmode=require`. Indicado se for rodar também o `worker.py`.
 2. Em [share.streamlit.io](https://share.streamlit.io): **Create app** → repositório, branch e arquivo
    `app.py`.
 3. **Advanced settings → Secrets**, cole (veja `.streamlit/secrets.toml.example`):
    ```toml
    APP_PASSWORD = "sua-senha-forte"
    OPENROUTER_API_KEY = "sk-or-v1-..."
-   DATABASE_URL = "postgresql://usuario:senha@host/neondb?sslmode=require"
+   # opção GitHub:
+   GITHUB_DATA_REPO = "usuario/repositorio"
+   GITHUB_TOKEN = "github_pat_..."
+   # ou opção Postgres:
+   # DATABASE_URL = "postgresql://usuario:senha@host/neondb?sslmode=require"
    ```
 4. Recomendado: em **Share**, deixe o app privado (somente convidados) além da senha.
 
 Observações:
-* A barra lateral mostra se o armazenamento está em **Postgres (permanente)** ou em arquivos locais.
+* A barra lateral mostra onde os dados estão (GitHub, Postgres ou arquivos locais temporários).
+* No modo GitHub, o app e o `worker.py` não devem gravar ao mesmo tempo (o último a gravar prevalece); para
+  usar os dois juntos, prefira o Postgres.
 * O Painel tem **backup/restauração** em JSON de todos os dados.
 * Os servidores do Community ficam nos EUA, onde a Binance bloqueia a API: os dados do servidor (usados pela
   IA e pela conta simulada) vêm do espelho público da Binance (spot) e da OKX (futuros). O gráfico em tempo
@@ -101,7 +112,7 @@ core/broker.py       interface de execução (PaperBroker hoje, BinanceBroker na
 core/engine.py       pipeline completo (usado pela UI e pelo worker)
 core/realtime.py     gráfico em tempo real (lightweight-charts + WebSocket no navegador)
 core/auth.py         senha de acesso
-core/storage.py      persistência: Postgres (DATABASE_URL) ou arquivos JSON locais
+core/storage.py      persistência: GitHub (branch de dados), Postgres ou arquivos JSON locais
 core/ui.py           componentes Streamlit
 worker.py            piloto automático em segundo plano
 data/                contas, configurações e logs quando não há banco (fora do Git)

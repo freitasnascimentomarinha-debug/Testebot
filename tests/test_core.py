@@ -123,3 +123,68 @@ def test_postgres_backend_concurrent_updates():
     assert b.load("t.json", None)["n"] == 80
     assert b.load("nao_existe.json", {"x": 1}) == {"x": 1}
     assert "t.json" in b.names()
+
+
+class FakeGitHub:
+    """Simula os endpoints da Git Data API usados pelo GitHubBackend."""
+
+    def __init__(self):
+        import itertools
+
+        self.objects, self.refs, self.headers, self.calls = {}, {}, {}, []
+        self._ids = (f"{i:040x}" for i in itertools.count(1))
+
+    def request(self, method, url, timeout=None, json=None):
+        import base64
+        import json as js
+
+        path = url.split("/repos/o/r", 1)[1]
+        self.calls.append((method, path))
+        body = None
+        if method == "GET" and path.startswith("/git/ref/heads/"):
+            sha = self.refs.get(path.rsplit("/", 1)[1])
+            body = {"object": {"sha": sha}} if sha else None
+        elif method == "GET" and path.startswith(("/git/commits/", "/git/trees/", "/git/blobs/")):
+            body = self.objects[path.rsplit("/", 1)[1]]
+        elif path == "/git/trees":
+            tree = []
+            for e in json["tree"]:
+                blob = next(self._ids)
+                self.objects[blob] = {"content": base64.b64encode(e["content"].encode()).decode()}
+                tree.append({"path": e["path"], "sha": blob})
+            body = {"sha": next(self._ids)}
+            self.objects[body["sha"]] = {"tree": tree}
+        elif path == "/git/commits":
+            assert json["parents"] == []
+            body = {"sha": next(self._ids)}
+            self.objects[body["sha"]] = {"tree": {"sha": json["tree"]}}
+        elif path == "/git/refs" or path.startswith("/git/refs/heads/"):
+            self.refs[json["ref"].split("/")[-1] if "ref" in json else path.rsplit("/", 1)[1]] = json["sha"]
+            body = {}
+
+        class R:
+            status_code = 200 if body is not None else 404
+            content = b"x"
+            text = ""
+
+            def json(self):
+                return js.loads(js.dumps(body))
+
+        return R()
+
+
+def test_github_backend_roundtrip():
+    from core.storage import GitHubBackend
+
+    fake = FakeGitHub()
+    b = GitHubBackend("o/r", "tok", "dados", flush_seconds=999, session=fake)
+    assert "dados" in fake.refs  # branch criado no primeiro uso
+    b.update("contas.json", {"saldo": 0}, lambda d: d.__setitem__("saldo", 123))
+    commits_before = len([c for c in fake.calls if c[1] == "/git/commits"])
+    b.flush()
+    b.flush()  # sem alterações: não grava de novo
+    assert len([c for c in fake.calls if c[1] == "/git/commits"]) == commits_before + 1
+
+    b2 = GitHubBackend("o/r", "tok", "dados", flush_seconds=999, session=fake)  # "reinício" do app
+    assert b2.load("contas.json", None) == {"saldo": 123}
+    assert b2.load("outro.json", []) == []

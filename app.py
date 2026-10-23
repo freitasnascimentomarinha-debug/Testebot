@@ -44,9 +44,11 @@ with st.sidebar:
     store = backend()
     if store.persistent:
         st.success(f"{store.name} — dados permanentes.")
+        if getattr(store, "last_error", None):
+            st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")
     else:
         st.warning("Arquivos locais: no Streamlit Community os dados somem quando o app reinicia. "
-                   "Configure `DATABASE_URL` nos secrets.")
+                   "Configure `GITHUB_DATA_REPO` + `GITHUB_TOKEN` ou `DATABASE_URL` nos secrets.")
         if getattr(store, "error", None):
             st.error(f"Falha ao conectar no banco: {store.error[:200]}")
     st.divider()

@@ -7,19 +7,28 @@ Dois modos, escolhidos automaticamente:
   Cloud, cujo disco é apagado a cada reinício. Serve qualquer Postgres
   gratuito (Neon, Supabase etc.). Tudo fica em uma única tabela chave/valor
   ``tradebot_kv`` criada automaticamente.
-* **Arquivos JSON locais** em ``data/`` — quando não há banco configurado.
+* **Repositório GitHub** — quando ``GITHUB_DATA_REPO`` e ``GITHUB_TOKEN`` estão
+  definidos. Os dados ficam no arquivo ``tradebot_data.json`` de um branch
+  próprio (padrão ``tradebot-data``), separado do código: gravar ali não
+  reinicia o app no Streamlit Community. Mantido em memória e gravado em lote
+  a cada ``GITHUB_FLUSH_SECONDS`` (padrão 20 s); o branch guarda sempre um
+  único commit, para o repositório não crescer.
+* **Arquivos JSON locais** em ``data/`` — quando nada acima está configurado.
 
 Toda leitura-modificação-escrita passa por ``locked_update``: no banco usa
 ``SELECT … FOR UPDATE`` (transação), nos arquivos usa trava de arquivo.
 """
 from __future__ import annotations
 
+import atexit
+import base64
 import contextlib
 import json
 import logging
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -171,6 +180,117 @@ class PostgresBackend:
         return [r[0] for r in self._run(lambda c: c.execute(f"SELECT name FROM {TABLE} ORDER BY name").fetchall())]
 
 
+class GitHubBackend:
+    """Mini banco de dados em um branch do próprio repositório GitHub."""
+
+    persistent = True
+    FILE = "tradebot_data.json"
+    API = "https://api.github.com"
+
+    def __init__(self, repo: str, token: str, branch: str = "tradebot-data", flush_seconds: float = 20.0,
+                 session=None):
+        import requests
+
+        self.repo, self.branch, self.flush_seconds = repo, branch, flush_seconds
+        self.name = f"GitHub ({repo} · branch {branch})"
+        self.http = session or requests.Session()
+        self.http.headers.update({"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                                  "X-GitHub-Api-Version": "2022-11-28"})
+        self._lock = threading.RLock()
+        self._data: dict = {}
+        self._dirty = False
+        self._last_flush = time.time()
+        self._head: str | None = None
+        self.last_error: str | None = None
+        self._load_remote()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name="github-flush", daemon=True)
+        self._thread.start()
+        atexit.register(self.flush)
+
+    # ------------------------------------------------------------- API REST
+    def _api(self, method: str, path: str, **kw):
+        resp = self.http.request(method, f"{self.API}/repos/{self.repo}{path}", timeout=20, **kw)
+        if resp.status_code == 404:
+            return None
+        if resp.status_code >= 400:
+            raise RuntimeError(f"GitHub HTTP {resp.status_code}: {resp.text[:200]}")
+        return resp.json() if resp.content else {}
+
+    def _load_remote(self) -> None:
+        ref = self._api("GET", f"/git/ref/heads/{self.branch}")
+        if ref is None:  # primeiro uso: cria o branch de dados
+            self._head = None
+            self._data = {}
+            self._commit()
+            return
+        self._head = ref["object"]["sha"]
+        commit = self._api("GET", f"/git/commits/{self._head}")
+        tree = self._api("GET", f"/git/trees/{commit['tree']['sha']}")
+        entry = next((e for e in tree["tree"] if e["path"] == self.FILE), None)
+        if entry:
+            blob = self._api("GET", f"/git/blobs/{entry['sha']}")
+            self._data = json.loads(base64.b64decode(blob["content"]).decode("utf-8"))
+
+    def _commit(self) -> None:
+        payload = _dumps(self._data)
+        readme = ("# Dados do TradeBot\n\nBranch gerado automaticamente pela plataforma (contas simuladas, "
+                  "configurações e logs). Não edite manualmente.\n")
+        tree = self._api("POST", "/git/trees", json={"tree": [
+            {"path": self.FILE, "mode": "100644", "type": "blob", "content": payload},
+            {"path": "README.md", "mode": "100644", "type": "blob", "content": readme},
+        ]})
+        # Commit sem pai: o branch tem sempre um único commit (o repositório não cresce).
+        commit = self._api("POST", "/git/commits", json={
+            "message": f"TradeBot: dados {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())} UTC",
+            "tree": tree["sha"], "parents": []})
+        if self._head is None:
+            self._api("POST", "/git/refs", json={"ref": f"refs/heads/{self.branch}", "sha": commit["sha"]})
+        else:
+            self._api("PATCH", f"/git/refs/heads/{self.branch}", json={"sha": commit["sha"], "force": True})
+        self._head = commit["sha"]
+
+    # ------------------------------------------------------------ gravação
+    def flush(self) -> None:
+        with self._lock:
+            if not self._dirty:
+                return
+            try:
+                self._commit()
+                self._dirty = False
+                self.last_error = None
+            except Exception as exc:  # noqa: BLE001 - tenta de novo no próximo ciclo
+                self.last_error = str(exc)
+                log.error("Falha ao gravar no GitHub: %s", exc)
+            self._last_flush = time.time()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(1.0):
+            if self._dirty and time.time() - self._last_flush >= self.flush_seconds:
+                self.flush()
+
+    # ------------------------------------------------------ interface comum
+    def load(self, name: str, default: Any) -> Any:
+        with self._lock:
+            return json.loads(_dumps(self._data[name])) if name in self._data else default
+
+    def save(self, name: str, data: Any) -> None:
+        with self._lock:
+            self._data[name] = json.loads(_dumps(data))
+            self._dirty = True
+
+    def update(self, name: str, default: Any, fn: Callable[[Any], Any]) -> Any:
+        with self._lock:
+            data = self.load(name, default)
+            result = fn(data)
+            self.save(name, data)
+            return result
+
+    def names(self) -> list[str]:
+        with self._lock:
+            return sorted(self._data)
+
+
 _backend = None
 _backend_lock = threading.Lock()
 
@@ -180,16 +300,20 @@ def backend():
     with _backend_lock:
         if _backend is None:
             url = get_secret("DATABASE_URL")
-            if url:
-                try:
+            gh_repo, gh_token = get_secret("GITHUB_DATA_REPO"), get_secret("GITHUB_TOKEN")
+            try:
+                if url:
                     _backend = PostgresBackend(url)
                     _backend.names()  # testa a conexão
-                except Exception as exc:  # noqa: BLE001
-                    log.error("Banco indisponível (%s); usando arquivos locais.", exc)
+                elif gh_repo and gh_token:
+                    _backend = GitHubBackend(gh_repo, gh_token, get_secret("GITHUB_DATA_BRANCH") or "tradebot-data",
+                                             float(get_secret("GITHUB_FLUSH_SECONDS") or 20))
+                else:
                     _backend = FileBackend(DATA_DIR)
-                    _backend.error = str(exc)
-            else:
+            except Exception as exc:  # noqa: BLE001
+                log.error("Armazenamento remoto indisponível (%s); usando arquivos locais.", exc)
                 _backend = FileBackend(DATA_DIR)
+                _backend.error = str(exc)
         return _backend
 
 
