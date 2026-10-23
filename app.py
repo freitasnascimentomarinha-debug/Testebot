@@ -7,7 +7,7 @@ from __future__ import annotations
 import streamlit as st
 
 st.set_page_config(page_title="TradeBot · Plataforma de Bots", page_icon="📊", layout="wide",
-                   initial_sidebar_state="expanded")
+                   initial_sidebar_state="auto")
 
 from core.auth import is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
 from core import APP_VERSION  # noqa: E402
@@ -21,7 +21,8 @@ st.markdown("""<style>
 
 pages = {
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
-                    st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira")],
+                    st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
+                    st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades")],
     "Bots": [
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
         st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),

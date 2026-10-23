@@ -140,6 +140,8 @@ def _open_position(acct: dict, order: dict, fill_price: float, fee_pct: float) -
         "fee_pct": fee_pct, "fees_paid": fee, "funding_paid": 0.0, "opened": _now(), "last_check": _now(),
         "last_funding": _now(), "source": order.get("source", "manual"), "note": order.get("note", ""),
         "max_loss_planned": order.get("max_loss_planned"),
+        "personality": (order.get("personality") or {}).get("id"),
+        "personality_name": (order.get("personality") or {}).get("name"),
     }
     acct["positions"].append(pos)
     _log(acct, "Taxa de abertura", -fee, bot=pos["bot"], symbol=pos["symbol"],
@@ -151,14 +153,16 @@ def place_order(acc: str, *, symbol: str, market: str, side: str, qty: float, or
                 price: float, limit_price: float | None = None, stop_loss: float | None = None,
                 take_profit: float | None = None, leverage: float = 1.0, fee_pct: float = 0.1,
                 slippage_pct: float = 0.0, source: str = "manual", note: str = "",
-                max_loss_planned: float | None = None, bot: str = "", margin_mode: str = "Isolada") -> dict:
+                max_loss_planned: float | None = None, bot: str = "", margin_mode: str = "Isolada",
+                personality: dict | None = None) -> dict:
     """Envia uma ordem simulada. ``price`` é o último preço real de mercado."""
     if qty <= 0:
         raise ValueError("Quantidade deve ser maior que zero.")
     order = {"id": uuid.uuid4().hex[:8], "bot": bot, "symbol": symbol, "market": market, "side": side, "qty": qty,
              "type": order_type, "limit_price": limit_price, "stop_loss": stop_loss, "take_profit": take_profit,
              "leverage": max(1.0, float(leverage)), "margin_mode": margin_mode, "fee_pct": fee_pct,
-             "created": _now(), "source": source, "note": note, "max_loss_planned": max_loss_planned}
+             "created": _now(), "source": source, "note": note, "max_loss_planned": max_loss_planned,
+             "personality": personality}
 
     def _apply(data):
         acct = _account(data, acc)

@@ -31,7 +31,7 @@ def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, l
                         positions: list[dict], height: int) -> str:
     """``lines``: [{"price", "color", "title", "style": "solid|dashed|dotted"}];
     ``positions``: posições abertas no ativo (para o P&L ao vivo)."""
-    ind_keys = ("ema_on", "ema_fast", "ema_slow", "ema_trend", "bb_on", "bb_period", "bb_std", "vwap_on",
+    ind_keys = ("ema_on", "ema_fast", "ema_slow", "ema_trend_on", "ema_trend", "bb_on", "bb_period", "bb_std", "vwap_on",
                 "supertrend_on", "st_period", "st_mult", "volume_on", "rsi_on", "rsi_period", "rsi_ob", "rsi_os",
                 "macd_on", "macd_fast", "macd_slow", "macd_signal", "stoch_on", "stoch_k", "stoch_d",
                 "adx_on", "adx_period", "obv_on")
@@ -95,7 +95,8 @@ function trueRange(d) { return d.map((c, i) => i === 0 ? c.high - c.low : Math.m
 
 function compute(d) {
   const o = {}, close = d.map(c => c.close);
-  if (I.ema_on) { o.ema_fast = ema(close, I.ema_fast); o.ema_slow = ema(close, I.ema_slow); o.ema_trend = ema(close, I.ema_trend); }
+  if (I.ema_on) { o.ema_fast = ema(close, I.ema_fast); o.ema_slow = ema(close, I.ema_slow); }
+  if (I.ema_trend_on) o.ema_trend = ema(close, I.ema_trend);
   if (I.bb_on) { const m = sma(close, I.bb_period), s = rollStd(close, I.bb_period, m);
     o.bb_mid = m; o.bb_up = m.map((v, i) => v === null ? null : v + I.bb_std * s[i]); o.bb_low = m.map((v, i) => v === null ? null : v - I.bb_std * s[i]); }
   if (I.vwap_on) { let day = null, pv = 0, vv = 0;
@@ -145,8 +146,8 @@ const line = (key, color, pane, opts = {}) => SERIES.push({key, s: chart.addSeri
   priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, ...opts}, pane)});
 if (I.volume_on) { const s = chart.addSeries(L.HistogramSeries, {priceFormat: {type: "volume"}, priceScaleId: "vol", lastValueVisible: false, priceLineVisible: false}, 0);
   s.priceScale().applyOptions({scaleMargins: {top: 0.82, bottom: 0}}); SERIES.push({key: "volume", s, kind: "vol"}); }
-if (I.ema_on) { line("ema_fast", "#f5c518", 0, {title: "EMA " + I.ema_fast}); line("ema_slow", "#ff7f0e", 0, {title: "EMA " + I.ema_slow});
-  line("ema_trend", "#ab47bc", 0, {lineWidth: 2, title: "EMA " + I.ema_trend}); }
+if (I.ema_on) { line("ema_fast", "#f5c518", 0, {lineWidth: 2, title: "EMA " + I.ema_fast}); line("ema_slow", "#ff7f0e", 0, {lineWidth: 2, title: "EMA " + I.ema_slow}); }
+if (I.ema_trend_on) line("ema_trend", "#ab47bc", 0, {lineWidth: 2, title: "EMA " + I.ema_trend});
 if (I.bb_on) { ["bb_up", "bb_mid", "bb_low"].forEach(k => line(k, "rgba(100,149,237,.75)", 0, {lineStyle: k === "bb_mid" ? 0 : 1})); }
 if (I.vwap_on) line("vwap", "#00bcd4", 0, {lineWidth: 2, lineStyle: 2, title: "VWAP"});
 if (I.supertrend_on) { line("st_up", UP, 0, {lineWidth: 2}); line("st_dn", DN, 0, {lineWidth: 2}); }

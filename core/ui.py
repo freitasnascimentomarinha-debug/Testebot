@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import engine, risk
+from core import engine, personalities, risk
 from core.broker import get_broker
 from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
 from core import leverage as lev_rules
@@ -20,7 +20,8 @@ from core.storage import get_secret, load_json
 
 # Seletor rápido de indicadores → chaves de configuração (as mesmas da aba Indicadores)
 INDICATOR_FLAGS = {
-    "Médias móveis (EMA)": "ema_on", "Bandas de Bollinger": "bb_on", "VWAP": "vwap_on", "SuperTrend": "supertrend_on",
+    "Médias móveis (EMA rápida e lenta)": "ema_on", "EMA de tendência (200)": "ema_trend_on",
+    "Bandas de Bollinger": "bb_on", "VWAP": "vwap_on", "SuperTrend": "supertrend_on",
     "Volume": "volume_on", "RSI": "rsi_on", "MACD": "macd_on", "Estocástico": "stoch_on", "ADX / DMI": "adx_on",
     "OBV": "obv_on", "Suportes e resistências": "sr_on", "Pivôs": "pivots_on", "Fibonacci": "fib_on",
     "Ichimoku (só na análise técnica)": "ichimoku_on",
@@ -448,17 +449,50 @@ def leverage_controls(profile: BotProfile, cfg: dict) -> None:
 def ai_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     st.divider()
-    st.subheader("🤖 Análise e programação de ordens com IA")
+    st.subheader("🤖 Controle do bot")
     key = api_key()
-    c1, c2, c3 = st.columns([1.4, 1, 1.6])
-    run = c1.button("⚡ Analisar mercado e programar ordem", type="primary", width="stretch", key=f"{bot}__run_ai")
-    c2.toggle("Executar automaticamente se aprovado", key=_k(bot, "ai_auto_execute"))
-    c3.toggle("Piloto automático (a cada candle fechado)", key=_k(bot, "autopilot"),
-              help="Enquanto esta página estiver aberta, o bot analisa cada candle fechado e executa as ordens "
-                   "aprovadas pelo gestor de risco. Para operar 24/7 use o worker.py.")
-    if not key:
-        st.info("Sem chave da OpenRouter: o bot usa somente as habilidades de programação. Informe a chave na barra "
-                "lateral ou em `.streamlit/secrets.toml` para ativar o DeepSeek.")
+    on = bool(cfg.get("autopilot"))
+    options = [p["id"] for p in personalities.list_all()]
+    pkey = _k(bot, "personality")
+    if st.session_state.get(pkey) not in options:
+        st.session_state[pkey] = personalities.DEFAULT_BY_BOT[bot]
+    persona = personalities.get(st.session_state[pkey])
+
+    with st.container(border=True):
+        c1, c2 = st.columns([1.3, 1])
+        with c1:
+            if on:
+                st.markdown("### 🟢 Bot LIGADO")
+                st.caption("Analisa sozinho a cada candle fechado e executa as ordens aprovadas pelo gestor de risco.")
+            else:
+                st.markdown("### ⚪ Bot desligado")
+                st.caption("Ligue para o bot operar sozinho, ou use **Analisar agora** para uma análise pontual.")
+            b1, b2 = st.columns(2)
+            if b1.button("⏹️ Desligar bot" if on else "▶️ Ligar bot", type="secondary" if on else "primary",
+                         width="stretch", key=f"{bot}__power"):
+                set_setting(bot, "autopilot", not on)
+                st.session_state.pop(f"{bot}__autopilot_last", None)
+                st.rerun()
+            run = b2.button("🔍 Analisar agora", width="stretch", key=f"{bot}__run_ai",
+                            type="primary" if not on else "secondary")
+            st.toggle("Na análise manual, executar automaticamente se aprovado", key=_k(bot, "ai_auto_execute"))
+        with c2:
+            st.selectbox("🧠 Personalidade (estratégia)", options, key=pkey,
+                         format_func=lambda pid: (personalities.get(pid) or {}).get("name", pid),
+                         help="Define como o bot pensa: indicadores, direção, filtros e stop/alvo. Compare o "
+                              "desempenho de cada uma na página Personalidades.")
+            if persona:
+                st.caption(f"{persona.get('summary') or persona.get('description', '')[:140]} · "
+                           f"{personalities.DIRECTIONS[persona.get('direction', 'misto')]} · "
+                           f"indicado: {persona.get('timeframes', '—')}")
+            st.page_link("views/personalities.py", label="Ranking e criar estratégia", icon="🏆")
+            st.markdown(f"**Cérebro:** {'IA DeepSeek + regras' if key else 'somente regras (sem IA)'}")
+            if not key:
+                st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "
+                           "OpenRouter, o DeepSeek interpreta o cenário antes de cada entrada.")
+        if on:
+            st.caption("⚠️ O bot fica ligado enquanto esta página estiver aberta no navegador. Para operar 24 h, "
+                       "use o worker.py num servidor.")
     lim = get_broker(bot).limit_stats(cfg, {cfg["symbol"]: st.session_state.get(f"{bot}__last_price", 0) or 0})
     st.caption(f"Limites do bot hoje: {lim['trades_today']}/{cfg['max_trades_day']} operações · "
                f"{lim['open_positions']}/{cfg['max_open_positions']} posições ({risk.TRADES_SCOPES[cfg['limits_trades_scope']].lower()})"
@@ -482,8 +516,9 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
 
     result = st.session_state.get(f"{bot}__analysis")
     if not result:
-        st.caption("Clique no botão para o bot executar as habilidades técnicas, enviar o contexto ao DeepSeek e "
-                   "propor a ordem já dimensionada pela sua perda máxima por trade.")
+        st.caption("Clique em **Analisar agora** para o bot executar as habilidades da personalidade escolhida"
+                   + (", consultar o DeepSeek" if key else "") + " e propor a ordem já dimensionada pela sua perda "
+                   "máxima por trade — ou **Ligar bot** para ele fazer isso sozinho a cada candle.")
         return
     render_analysis(profile, cfg, result)
 
@@ -535,9 +570,11 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
             except Exception as exc:  # noqa: BLE001
                 st.error(str(exc))
 
-        with st.expander("Habilidades de programação (votos que alimentaram a IA)"):
+        persona = personalities.get((result.personality or {}).get("id"))
+        weights = (persona or {}).get("skills") or profile.skill_weights
+        with st.expander(f"Habilidades da personalidade {persona['name'] if persona else ''} (votos que alimentaram a decisão)"):
             st.dataframe(pd.DataFrame([{"Habilidade": sk["name"], "Voto": round(sk["vote"], 2),
-                                        "Peso": profile.skill_weights.get(sk["key"], 1.0), "Leitura": sk["detail"]}
+                                        "Peso": weights.get(sk["key"], 1.0), "Leitura": sk["detail"]}
                                        for sk in result.plan["skills"]]),
                          hide_index=True, column_config={"Voto": st.column_config.ProgressColumn(
                              min_value=-1, max_value=1, format="%.2f")})
@@ -742,10 +779,11 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
         c = st.columns(4)
         with c[0]:
             st.markdown("**Tendência**")
-            st.checkbox("Médias móveis (EMA)", key=k("ema_on"))
-            st.number_input("EMA rápida", 2, 100, key=k("ema_fast"))
-            st.number_input("EMA lenta", 3, 200, key=k("ema_slow"))
-            st.number_input("EMA de tendência", 20, 400, key=k("ema_trend"))
+            st.checkbox("Médias móveis (EMA rápida e lenta)", key=k("ema_on"))
+            st.number_input("EMA rápida", 2, 200, key=k("ema_fast"))
+            st.number_input("EMA lenta", 3, 400, key=k("ema_slow"))
+            st.checkbox("EMA de tendência", key=k("ema_trend_on"))
+            st.number_input("EMA de tendência (período)", 20, 400, key=k("ema_trend"))
             st.checkbox("SuperTrend", key=k("supertrend_on"))
             st.number_input("SuperTrend período", 5, 50, key=k("st_period"))
             st.number_input("SuperTrend multiplicador", 1.0, 6.0, step=0.5, key=k("st_mult"))

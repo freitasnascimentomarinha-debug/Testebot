@@ -186,6 +186,6 @@ def compute(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     out["obv"] = obv(out)
     out["st_line"], out["st_dir"] = supertrend(out, int(cfg["st_period"]), float(cfg["st_mult"]))
     out["vol_sma"] = sma(out["volume"], 20)
-    if cfg.get("ichimoku_on"):
-        out["ichi_tenkan"], out["ichi_kijun"], out["ichi_span_a"], out["ichi_span_b"] = ichimoku(out)
+    # Ichimoku é calculado sempre: a habilidade Ichimoku o usa mesmo com o indicador oculto no gráfico
+    out["ichi_tenkan"], out["ichi_kijun"], out["ichi_span_a"], out["ichi_span_b"] = ichimoku(out)
     return out

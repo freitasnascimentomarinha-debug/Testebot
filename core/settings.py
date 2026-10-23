@@ -5,11 +5,20 @@ As configurações ficam em ``data/settings.json`` para que a interface e o
 """
 from __future__ import annotations
 
+from core.personalities import DEFAULT_BY_BOT
 from core.profiles import PROFILES, BotProfile
 from core.storage import load_json, locked_update
 
 SETTINGS_FILE = "settings.json"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
+
+# Par de médias móveis exibido por padrão em cada estilo (rápida, lenta)
+EMA_PAIRS = {"day": (9, 21), "swing": (21, 50), "long": (50, 200)}
+
+# Chaves de exibição de indicadores; versões antigas das configurações são migradas
+# uma vez para o novo padrão enxuto (2 médias + volume).
+INDICATOR_KEYS = ("ema_on", "ema_fast", "ema_slow", "bb_on", "vwap_on", "supertrend_on", "ichimoku_on", "rsi_on",
+                  "macd_on", "stoch_on", "adx_on", "obv_on", "volume_on", "sr_on", "fib_on", "pivots_on")
 
 
 def default_settings(profile: BotProfile) -> dict:
@@ -44,21 +53,25 @@ def default_settings(profile: BotProfile) -> dict:
         "fee_pct": 0.05 if futures else 0.10,
         "slippage_pct": 0.02,
         # Indicadores
-        "ema_on": True, "ema_fast": 9, "ema_slow": 21, "ema_trend": 200,
-        "bb_on": True, "bb_period": 20, "bb_std": 2.0,
-        "vwap_on": futures,
-        "supertrend_on": True, "st_period": 10, "st_mult": 3.0,
+        # Indicadores: por padrão só duas médias móveis + volume (os demais são adicionados pelo usuário)
+        "ema_on": True, "ema_fast": EMA_PAIRS[profile.key][0], "ema_slow": EMA_PAIRS[profile.key][1],
+        "ema_trend_on": False, "ema_trend": 200,
+        "bb_on": False, "bb_period": 20, "bb_std": 2.0,
+        "vwap_on": False,
+        "supertrend_on": False, "st_period": 10, "st_mult": 3.0,
         "ichimoku_on": False,
-        "rsi_on": True, "rsi_period": 14, "rsi_ob": 70, "rsi_os": 30,
-        "macd_on": True, "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+        "rsi_on": False, "rsi_period": 14, "rsi_ob": 70, "rsi_os": 30,
+        "macd_on": False, "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
         "stoch_on": False, "stoch_k": 14, "stoch_d": 3,
-        "adx_on": True, "adx_period": 14,
+        "adx_on": False, "adx_period": 14,
         "atr_period": 14,
         "obv_on": False,
         "volume_on": True,
-        "sr_on": True,
+        "sr_on": False,
         "fib_on": False,
-        "pivots_on": futures,
+        "pivots_on": False,
+        # Personalidade (estratégia) do bot — ver página Personalidades
+        "personality": DEFAULT_BY_BOT[profile.key],
         # IA
         "ai_model": DEFAULT_MODEL,
         "ai_temperature": 0.2,
@@ -77,6 +90,8 @@ def default_settings(profile: BotProfile) -> dict:
 def load_settings(bot: str) -> dict:
     defaults = default_settings(PROFILES[bot])
     stored = (load_json(SETTINGS_FILE, {}) or {}).get(bot, {})
+    if stored and "ema_trend_on" not in stored:  # configuração anterior ao padrão enxuto
+        stored = {k: v for k, v in stored.items() if k not in INDICATOR_KEYS}
     return {**defaults, **{k: v for k, v in stored.items() if k in defaults}}
 
 

@@ -1,0 +1,86 @@
+"""Backtest rápido de uma personalidade sobre candles reais.
+
+Simula as habilidades de programação (sem chamar a IA, para não gastar
+tokens): a cada candle fechado, se não houver posição e o plano indicar
+entrada, entra na abertura do candle seguinte; stop e alvo são verificados
+com máximas e mínimas (stop primeiro quando ambos cabem no mesmo candle);
+posições abertas há mais de ``max_hold`` candles saem no fechamento.
+
+Resultados em R (múltiplos do risco), o que torna o teste independente do
+tamanho da banca: +2R = ganhou 2× o que arriscou.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+import pandas as pd
+
+from core import indicators as ind
+from core.profiles import BotProfile
+from core.strategy import analyze
+
+
+def run(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict, *, fee_pct: float | None = None,
+        max_hold: int = 100, warmup: int = 210) -> dict:
+    df = ind.compute(df_raw, cfg).reset_index(drop=True)
+    fee = (cfg["fee_pct"] if fee_pct is None else fee_pct) / 100
+    cfg_bt = {**cfg, "allow_short": True, "leverage_on": True}  # direção é controlada pela personalidade
+    trades: list[dict] = []
+    pos = None
+    i = warmup
+    n = len(df)
+    while i < n - 1:
+        row = df.iloc[i]
+        if pos:
+            long = pos["side"] == "BUY"
+            hit_sl = row.low <= pos["sl"] if long else row.high >= pos["sl"]
+            hit_tp = row.high >= pos["tp"] if long else row.low <= pos["tp"]
+            exit_price, reason = None, None
+            if hit_sl:
+                exit_price, reason = pos["sl"], "Stop"
+            elif hit_tp:
+                exit_price, reason = pos["tp"], "Alvo"
+            elif i - pos["i"] >= max_hold:
+                exit_price, reason = row.close, "Tempo"
+            if exit_price is not None:
+                sign = 1 if long else -1
+                risk = abs(pos["entry"] - pos["sl"])
+                r = (sign * (exit_price - pos["entry"]) - fee * (pos["entry"] + exit_price)) / risk
+                trades.append({"entrada": pos["time"], "saida": row.time, "lado": "Compra" if long else "Venda",
+                               "preco_entrada": pos["entry"], "preco_saida": exit_price, "motivo": reason, "r": r})
+                pos = None
+            i += 1
+            continue
+        plan = analyze(df.iloc[: i + 1], cfg_bt, profile, personality, live=False)
+        if plan.direction in ("BUY", "SELL") and plan.stop_loss:
+            nxt = df.iloc[i + 1]
+            entry = float(nxt.open)
+            sign = 1 if plan.direction == "BUY" else -1
+            sl_dist = abs(plan.entry - plan.stop_loss)
+            tp_dist = abs(plan.take_profit - plan.entry)
+            pos = {"side": plan.direction, "entry": entry, "sl": entry - sign * sl_dist, "tp": entry + sign * tp_dist,
+                   "i": i + 1, "time": nxt.time}
+            i += 1  # o candle de entrada já é verificado no próximo laço
+            continue
+        i += 1
+
+    rs = [t["r"] for t in trades]
+    wins = [r for r in rs if r > 0]
+    losses = [r for r in rs if r <= 0]
+    equity, peak, max_dd = 0.0, 0.0, 0.0
+    curve = []
+    for t in trades:
+        equity += t["r"]
+        peak = max(peak, equity)
+        max_dd = max(max_dd, peak - equity)
+        curve.append({"time": t["saida"], "r_acumulado": equity})
+    return {
+        "personality": personality["id"], "personality_name": personality["name"], "symbol": cfg["symbol"],
+        "interval": cfg["interval"], "market": profile.market, "candles": n,
+        "period": f"{df.time.iloc[warmup]:%d/%m/%Y} a {df.time.iloc[-1]:%d/%m/%Y}",
+        "trades": len(trades), "win_rate": len(wins) / len(rs) * 100 if rs else 0.0,
+        "avg_r": sum(rs) / len(rs) if rs else 0.0, "total_r": sum(rs),
+        "profit_factor": sum(wins) / abs(sum(losses)) if losses and sum(losses) else None,
+        "max_dd_r": max_dd, "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "detail": trades, "curve": curve,
+    }

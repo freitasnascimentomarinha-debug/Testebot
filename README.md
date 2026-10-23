@@ -34,6 +34,17 @@ pronta para receber a API de negociação da Binance numa segunda fase.
 * **Alavancagem no padrão da Binance**: futuros com as faixas oficiais por par (ex.: BTC até 150×, com a
   posição máxima diminuindo conforme a alavancagem), margem isolada/cruzada, fórmula oficial de liquidação e
   funding a cada 8 h; no spot, Binance Margin (cruzada 3×, isolada 10×).
+* **Personalidades (estratégias)** — página 🏆 Personalidades:
+  * 9 prontas: Seguidor de Tendência, Reversão à Média, Rompimento, Scalper VWAP, Momentum, Price Action,
+    Ichimoku, Conservador (multi-confirmação) e Posicional Comprador;
+  * crie a sua descrevendo a estratégia em texto (a IA — ou, sem chave, palavras-chave — preenche indicadores,
+    pesos, direção só compra/só venda/misto, filtros e stop/alvo), dê um nome e salve: fica disponível para todos;
+  * **ranking** por R médio por operação (resultado ÷ risco), somando operações reais dos bots e backtests;
+  * **backtest** rápido em candles reais (só regras, sem gastar tokens), individual ou de todas de uma vez.
+* **Controle do bot**: botão Ligar/Desligar (piloto automático a cada candle), Analisar agora e escolha da
+  personalidade. Funciona sem IA (somente regras) e com IA (DeepSeek interpreta antes de cada entrada).
+* **Gráfico enxuto por padrão**: duas médias móveis (Day 9/21, Swing 21/50, Long 50/200) + volume; os demais
+  indicadores são adicionados no seletor acima do gráfico.
 * **Você × bot configurável**: escolha se as suas ordens manuais contam na meta de operações/posições do bot,
   se a meta de lucro e o limite de perda valem só para o bot, para a página ou para a carteira inteira, e se as
   suas ordens são livres (só aviso) ou respeitam os limites. A IA nunca encerra posições manuais.
@@ -115,10 +126,12 @@ Observações:
 
 ```
 app.py               navegação (sidebar) e chave da IA
-views/               Painel + páginas dos três bots
+views/               Painel, Carteira, Personalidades e páginas dos três bots
 core/data.py         candles e cotações reais (Binance/OKX, APIs públicas)
 core/indicators.py   indicadores em pandas puro
-core/strategy.py     habilidades de programação e plano por regras
+core/strategy.py     14 habilidades de programação e plano por regras (com personalidade)
+core/personalities.py personalidades prontas e da comunidade, ranking
+core/backtest.py     backtest das personalidades em candles reais (resultado em R)
 core/ai.py           cliente OpenRouter (DeepSeek) e prompt
 core/risk.py         calculadora de trade e gestor de risco
 core/paper.py        corretora simulada (stops/alvos/liquidação com máximas e mínimas reais)

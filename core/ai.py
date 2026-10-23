@@ -54,7 +54,9 @@ interpretar o contexto para decidir a próxima ordem. Regras obrigatórias:
 5. Use CLOSE apenas quando houver posição aberta pelo bot (source diferente de "manual") no ativo e o
    cenário tiver se invertido. Posições "manual" são do usuário: considere-as como exposição já existente,
    mas nunca as encerre.
-6. "order_type": "LIMIT" só quando houver nível técnico claro para entrada melhor
+6. Siga a "personalidade" recebida (estratégia, direção permitida e filtros): ela define o estilo do bot.
+   Se o cenário não se encaixar na estratégia dela, responda HOLD. As "instrucoes_do_usuario" complementam.
+7. "order_type": "LIMIT" só quando houver nível técnico claro para entrada melhor
    (informe "entry"); caso contrário use "MARKET".
 Formato:
 {"decision":"BUY|SELL|HOLD|CLOSE","order_type":"MARKET|LIMIT","entry":number|null,
@@ -71,8 +73,21 @@ def get_api_key(explicit: str | None = None) -> str | None:
 
 def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: list[dict],
                   indicators_now: dict, account: dict, positions: list[dict], risk_rules: dict,
-                  funding_rate: float | None = None) -> dict:
+                  funding_rate: float | None = None, personality: dict | None = None) -> dict:
+    persona = None
+    if personality:
+        from core.personalities import DIRECTIONS, FILTERS
+
+        filters = personality.get("filters", {})
+        persona = {"nome": personality["name"], "estrategia": personality.get("description", ""),
+                   "direcao_permitida": DIRECTIONS.get(personality.get("direction", "misto")),
+                   "filtros": [FILTERS[k] for k, v in filters.items() if v and k in FILTERS]
+                   + ([f"ADX mínimo {filters['adx_min']}"] if filters.get("adx_min") else [])
+                   + ([f"ADX máximo {filters['adx_max']}"] if filters.get("adx_max") else []),
+                   "stop_atr": personality.get("sl_atr"), "alvo_atr": personality.get("tp_atr"),
+                   "tempos_graficos_indicados": personality.get("timeframes", "")}
     return {
+        "personalidade": persona,
         "bot": {"estilo": profile.name, "mercado": profile.market_label, "horizonte": profile.horizon,
                 "ativo": symbol, "timeframe": interval,
                 "venda_permitida": bool(cfg.get("allow_short")) and (profile.market == "futures" or cfg.get("leverage_on"))},
@@ -156,3 +171,66 @@ def rules_fallback(plan: dict, reason: str) -> AIDecision:
         reasoning=f"Decisão gerada apenas pelas habilidades de programação (placar {plan['score']:+.1f}, regime {plan['regime']}). {plan.get('note', '')}",
         risks="Sem interpretação da IA: " + reason, model="regras", source="regras",
     )
+
+
+# ------------------------------------------------- estratégia a partir de texto
+STRATEGY_PROMPT = """Você converte a descrição de uma estratégia de trading em parâmetros de um bot.
+Responda SOMENTE um JSON com:
+{"summary": "resumo em 1 frase", "direction": "misto|compra|venda",
+ "skills": {"<chave>": peso 0.5-2.0, ...}, "threshold": 15-55,
+ "filters": {"trend_ema": bool, "avoid_lateral": bool, "volume_confirm": bool, "rsi_guard": bool,
+             "ignore_regime": bool, "adx_min": número ou 0, "adx_max": número ou 0},
+ "sl_atr": 0.5-5, "tp_atr": 1-15, "timeframes": "ex.: 15m a 4h"}
+Chaves de habilidades disponíveis: tendencia (médias móveis), momentum (RSI), macd, bollinger, supertrend,
+vwap, volume, estrutura (topos/fundos), suporte_resistencia, rompimento (Donchian), reversao (reversão à média),
+ichimoku, estocastico, adx. Use só as citadas ou claramente implícitas na descrição. threshold menor = mais
+agressivo (mais entradas), maior = mais seletivo."""
+
+_KEYWORDS = {
+    "tendencia": ("média", "media", "ema", "sma", "tendência", "tendencia", "cruzamento"),
+    "momentum": ("rsi", "ifr", "momentum", "força relativa"),
+    "macd": ("macd",),
+    "bollinger": ("bollinger", "bandas"),
+    "supertrend": ("supertrend", "super trend"),
+    "vwap": ("vwap",),
+    "volume": ("volume", "obv"),
+    "estrutura": ("topo", "fundo", "estrutura", "price action", "pivô"),
+    "suporte_resistencia": ("suporte", "resistência", "resistencia", "zona"),
+    "rompimento": ("rompimento", "breakout", "romper", "donchian"),
+    "reversao": ("reversão", "reversao", "sobrevend", "sobrecompr", "exagero"),
+    "ichimoku": ("ichimoku", "nuvem", "kumo"),
+    "estocastico": ("estocástico", "estocastico", "stoch"),
+    "adx": ("adx", "dmi", "força da tendência"),
+}
+
+
+def strategy_from_text_rules(text: str) -> dict:
+    """Interpretação simples por palavras-chave (usada sem chave da IA)."""
+    t = text.lower()
+    skills = {k: 1.0 for k, words in _KEYWORDS.items() if any(w in t for w in words)} or {"tendencia": 1.0, "momentum": 1.0}
+    direction = "compra" if re.search(r"(s[oó]|apenas|somente) compra", t) else \
+        "venda" if re.search(r"(s[oó]|apenas|somente) vend", t) else "misto"
+    filters = {"trend_ema": "a favor da tendência" in t or "200" in t, "volume_confirm": "volume" in t,
+               "avoid_lateral": "lateral" in t, "rsi_guard": "sobrecompr" in t and "reversao" not in skills}
+    aggressive = any(w in t for w in ("agressiv", "scalp", "muitas entradas"))
+    selective = any(w in t for w in ("conservador", "seletiv", "poucas entradas", "confirmação", "confirmacao"))
+    return {"summary": text.strip().split(".")[0][:140], "direction": direction, "skills": skills,
+            "threshold": 20 if aggressive else 40 if selective else 30, "filters": filters,
+            "sl_atr": 1.5, "tp_atr": 3.0, "timeframes": ""}
+
+
+def strategy_from_text(text: str, *, api_key: str | None, model: str) -> tuple[dict, str]:
+    """Converte a descrição em parâmetros. Devolve (parâmetros, fonte)."""
+    if api_key:
+        try:
+            resp = requests.post(OPENROUTER_URL, timeout=TIMEOUT, json={
+                "model": model, "temperature": 0.1, "response_format": {"type": "json_object"},
+                "messages": [{"role": "system", "content": STRATEGY_PROMPT}, {"role": "user", "content": text}]},
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "X-Title": "TradeBot Platform"})
+            resp.raise_for_status()
+            data = _extract_json(resp.json()["choices"][0]["message"]["content"])
+            return data, "IA"
+        except Exception as exc:  # noqa: BLE001
+            return strategy_from_text_rules(text), f"palavras-chave (IA indisponível: {str(exc)[:80]})"
+    return strategy_from_text_rules(text), "palavras-chave"

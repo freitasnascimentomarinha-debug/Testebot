@@ -38,6 +38,7 @@ def build_chart(df, cfg: dict, *, symbol: str, interval: str, positions=(), orde
     if cfg["ema_on"]:
         line("ema_fast", f"EMA {cfg['ema_fast']}", "#f5c518")
         line("ema_slow", f"EMA {cfg['ema_slow']}", "#ff7f0e")
+    if cfg.get("ema_trend_on"):
         line("ema_trend", f"EMA {cfg['ema_trend']}", "#ab47bc", 1.6)
     if cfg["bb_on"]:
         line("bb_up", "BB sup.", "rgba(100,149,237,.7)", 1, "dot")

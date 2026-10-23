@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import ai, indicators as ind, risk
+from core import ai, indicators as ind, personalities, risk
 from core.broker import get_broker
 from core.data import get_funding_rate
 from core.profiles import BotProfile
@@ -31,6 +31,7 @@ class AnalysisResult:
     interval: str
     time: str
     error: str = ""
+    personality: dict | None = None
     executed: dict | None = None
     events: list = field(default_factory=list)
 
@@ -47,7 +48,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     broker = get_broker(profile.key)
     acct = broker.account()
     st_ = broker.limit_stats(cfg, {symbol: price})
-    plan = analyze(df, cfg, profile)
+    personality = personalities.get(cfg.get("personality")) or personalities.get(personalities.DEFAULT_BY_BOT[profile.key])
+    plan = analyze(df, cfg, profile, personality)
     plan_d = plan.to_dict()
 
     last = df.iloc[-2]
@@ -74,7 +76,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     context = ai.build_context(profile=profile, cfg=cfg, symbol=symbol, interval=interval, plan=plan_d,
                                snapshot=market_snapshot(df.iloc[:-1], int(cfg["ai_candles_context"])),
                                indicators_now=indicators_now, account=account_view, positions=positions,
-                               risk_rules=risk_rules, funding_rate=funding)
+                               risk_rules=risk_rules, funding_rate=funding, personality=personality)
     error = ""
     if api_key:
         try:
@@ -93,7 +95,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
             check.add("confianca", f"Confiança {decision.confidence}% abaixo do mínimo configurado ({cfg['ai_min_confidence']}%).")
 
     result = AnalysisResult(plan=plan_d, decision=decision, check=check, price=price, symbol=symbol,
-                            interval=interval, time=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=error)
+                            interval=interval, time=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=error,
+                            personality={"id": personality["id"], "name": personality["name"]} if personality else None)
     log_decision(profile.key, result)
     return result
 
@@ -116,6 +119,7 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
             stop_loss=d.stop_loss, take_profit=d.take_profit, leverage=calc.leverage,
             fee_pct=float(cfg["fee_pct"]), slippage_pct=float(cfg["slippage_pct"]),
             source=d.source, note=d.reasoning[:300], max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"],
+            personality=result.personality,
         )
     else:
         raise ValueError("Não há ordem aprovada para executar.")
@@ -130,7 +134,8 @@ def log_decision(bot: str, result: AnalysisResult, executed: bool = False) -> No
              "entry": result.decision.entry, "stop_loss": result.decision.stop_loss, "take_profit": result.decision.take_profit,
              "score": result.plan["score"], "approved": bool(result.check and result.check.allowed),
              "reasons": result.check.reasons if result.check else [], "reasoning": result.decision.reasoning,
-             "executed": executed, "error": result.error}
+             "executed": executed, "error": result.error,
+             "personality": (result.personality or {}).get("name", "")}
 
     def _apply(data):
         logs = data.setdefault(bot, [])

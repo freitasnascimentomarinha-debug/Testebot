@@ -297,3 +297,80 @@ def test_limit_scopes_you_vs_bot():
     cfg["limits_pnl_scope"] = "carteira"
     chk = risk.check_trade(cfg, day.limit_stats(cfg, {"X": 100}, manual=True), "BUY", 100, 97, 110, "futures")
     assert chk.blocking(risk.MANUAL_BLOCKS["pnl"])  # perda de −50 na carteira ≥ limite de 40
+
+
+def test_personalities_rules_and_direction():
+    from core import personalities as Pm
+
+    cfg = default_settings(PROFILES["day"])
+    df = ind.compute(make_df(400, trend=-0.6, seed=3), cfg)  # mercado em queda
+    bear = analyze(df, cfg, PROFILES["day"], Pm.get("momentum"))
+    only_long = {**Pm.get("momentum"), "direction": "compra"}
+    plan = analyze(df, cfg, PROFILES["day"], only_long)
+    assert plan.direction != "SELL"
+    if bear.direction == "SELL":
+        assert "só comprado" in plan.note
+    # todas as prontas rodam e respeitam a geometria do stop/alvo
+    for p in Pm.BUILTINS:
+        pl = analyze(df, cfg, PROFILES["day"], p)
+        if pl.direction == "BUY":
+            assert pl.stop_loss < pl.entry < pl.take_profit
+        if pl.direction == "SELL":
+            assert pl.take_profit < pl.entry < pl.stop_loss
+
+
+def test_custom_personality_crud_and_ranking():
+    from core import personalities as Pm
+
+    saved = Pm.save_custom({"name": "Teste Pullback", "author": "eu", "description": "x", "direction": "compra",
+                            "skills": {"tendencia": 1.0}, "threshold": 20, "sl_atr": 1, "tp_atr": 3, "filters": {}})
+    assert Pm.get(saved["id"])["author"] == "eu"
+    with pytest.raises(ValueError):
+        Pm.save_custom({**Pm.get("tendencia"), "name": "x"})
+    # operações reais simuladas: 3 ganhos de +2R e 1 perda de −1R
+    paper.reset_account("rk", 1000)
+    def add(data):
+        hist = data["rk"]["history"]
+        for pnl in (20, 20, 20, -10):
+            hist.append({"personality": saved["id"], "source": "ia", "pnl": pnl, "max_loss_planned": 10, "bot": "day"})
+    paper.locked_update(paper.ACCOUNT_FILE, {}, add)
+    Pm.save_backtest(saved["id"], {"trades": 7, "avg_r": 0.1, "win_rate": 40, "symbol": "BTCUSDT", "interval": "1h"})
+    Pm.save_backtest(saved["id"], {"trades": 10, "avg_r": 0.5, "win_rate": 50, "symbol": "BTCUSDT", "interval": "1h"})
+    row = next(r for r in Pm.ranking() if r["id"] == saved["id"])
+    assert row["live_trades"] == 4 and row["live_avg_r"] == pytest.approx(1.25)
+    assert row["bt_trades"] == 10 and row["score"] > 0
+    assert Pm.ranking()[0]["id"] == saved["id"]  # única com resultado positivo
+    Pm.delete_custom(saved["id"])
+    assert Pm.get(saved["id"]) is None
+
+
+def test_backtest_runs_and_reports_r():
+    from core import backtest, personalities as Pm
+
+    cfg = default_settings(PROFILES["swing"])
+    res = backtest.run(make_df(600, trend=0.3, seed=5), cfg, PROFILES["swing"], Pm.get("tendencia"))
+    assert res["trades"] == len(res["detail"])
+    if res["trades"]:
+        assert res["total_r"] == pytest.approx(sum(t["r"] for t in res["detail"]))
+        assert all(t["r"] > -1.2 for t in res["detail"])  # stop ≈ −1R (+ taxas)
+
+
+def test_strategy_from_text_keywords():
+    from core.ai import strategy_from_text_rules
+
+    p = strategy_from_text_rules("Só compra em rompimento com volume, usando ADX. Estratégia conservadora.")
+    assert p["direction"] == "compra" and {"rompimento", "volume", "adx"} <= set(p["skills"])
+    assert p["threshold"] == 40
+
+
+def test_lean_indicator_defaults_and_migration():
+    from core import settings as S
+
+    d = S.default_settings(PROFILES["swing"])
+    shown = [k for k in S.INDICATOR_KEYS if k.endswith("_on") and d[k]]
+    assert shown == ["ema_on", "volume_on"] and (d["ema_fast"], d["ema_slow"]) == (21, 50)
+    S.save_settings("swing", {**d, "rsi_on": True})  # já no formato novo: mantém a escolha
+    assert S.load_settings("swing")["rsi_on"] is True
+    old = {k: v for k, v in d.items() if k != "ema_trend_on"}
+    S.save_settings("swing", {**old, "rsi_on": True, "macd_on": True})  # formato antigo: migra
+    assert S.load_settings("swing")["rsi_on"] is False
