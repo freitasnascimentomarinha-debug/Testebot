@@ -35,8 +35,9 @@ def _code_version() -> str:
 # já importados. Se o código no disco mudou (novo commit), descarta os módulos do app para que tudo seja
 # recarregado na mesma versão — evita erros de versões misturadas sem precisar reiniciar o servidor.
 _disk_version = _code_version()
+# Módulo já carregado sem a marcação (versão anterior a esta correção) também conta como desatualizado.
 _loaded_version = getattr(sys.modules.get("core"), "LOADED_COMMIT", None)
-if _loaded_version is not None and _disk_version and _loaded_version != _disk_version:
+if "core" in sys.modules and _disk_version and _loaded_version != _disk_version:
     for _name in [n for n in sys.modules if n == "core" or n.startswith(("core.", "views."))]:
         del sys.modules[_name]
     st.cache_data.clear()
