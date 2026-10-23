@@ -9,7 +9,6 @@ usuário.
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import asdict, dataclass, field
 
@@ -63,7 +62,9 @@ Formato:
 
 
 def get_api_key(explicit: str | None = None) -> str | None:
-    return explicit or os.environ.get("OPENROUTER_API_KEY")
+    from core.storage import get_secret
+
+    return explicit or get_secret("OPENROUTER_API_KEY")
 
 
 def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: list[dict],

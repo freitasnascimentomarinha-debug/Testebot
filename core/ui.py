@@ -1,8 +1,7 @@
 """Interface Streamlit compartilhada pelas três páginas de bot."""
 from __future__ import annotations
 
-import os
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -14,8 +13,9 @@ from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
 from core.data import MarketDataError, get_klines, get_ticker
 from core.paper import stats
 from core.profiles import PROFILES, SYMBOLS, BotProfile
+from core.realtime import realtime_chart_html
 from core.settings import DEFAULT_MODEL, default_settings, load_settings, save_settings
-from core.storage import load_json
+from core.storage import get_secret, load_json
 
 AI_MODELS = (DEFAULT_MODEL, "deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v3.2")
 
@@ -32,13 +32,7 @@ def cached_ticker(symbol: str, market: str):
 
 
 def api_key() -> str | None:
-    key = st.session_state.get("openrouter_key") or os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        try:
-            key = st.secrets.get("OPENROUTER_API_KEY")
-        except Exception:  # noqa: BLE001 - secrets.toml ausente
-            key = None
-    return key or None
+    return st.session_state.get("openrouter_key") or get_secret("OPENROUTER_API_KEY")
 
 
 def fmt(v: float | None, d: int = 2) -> str:
@@ -101,31 +95,48 @@ def render_bot_page(bot: str) -> None:
     cfg = {name: st.session_state[_k(bot, name)] for name in cfg}
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
-    tab_chart, tab_tv = st.tabs(["📈 Gráfico de trade (dados reais + indicadores)", "🖊️ TradingView — ferramentas de desenho"])
-    with tab_chart:
-        col_chart, col_ticket = st.columns([3.2, 1.25], gap="medium")
-        with col_chart:
-            live_section(profile, cfg)
-        with col_ticket:
-            trade_ticket(profile, cfg)
-    with tab_tv:
-        st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua de medição e as "
-                   "ferramentas **Posição comprada / vendida** (risco:retorno visual). Os desenhos ficam no navegador; "
-                   "níveis que a IA deve considerar podem ser cadastrados em *Níveis do usuário*, abaixo.")
-        components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+    live_metrics(profile, cfg)
+    col_chart, col_ticket = st.columns([3.2, 1.25], gap="medium")
+    with col_chart:
+        tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
+                                             "🖊️ TradingView — ferramentas de desenho"])
+        with tab_rt:
+            components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
+                                                ema_periods=[int(cfg["ema_fast"]), int(cfg["ema_slow"]), int(cfg["ema_trend"])]
+                                                if cfg["ema_on"] else [],
+                                                lines=realtime_lines(bot, cfg), height=620), height=625)
+            st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
+                       "negociação move o candle. As linhas mostram posições, ordens, plano da IA e seus níveis.")
+        with tab_chart:
+            analysis_chart(profile, cfg)
+        with tab_tv:
+            st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua de medição e as "
+                       "ferramentas **Posição comprada / vendida** (risco:retorno visual). Os desenhos ficam no navegador; "
+                       "níveis que a IA deve considerar podem ser cadastrados em *Níveis do usuário*, abaixo.")
+            components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+    with col_ticket:
+        trade_ticket(profile, cfg)
 
     ai_section(profile, cfg)
     portfolio_section(profile, cfg)
     settings_section(profile, cfg)
 
 
-# ------------------------------------------------------- seção ao vivo (fragment)
-def live_section(profile: BotProfile, cfg: dict) -> None:
+# ------------------------------------------------------- seção ao vivo (fragments)
+def _cfg_now(profile: BotProfile, cfg: dict) -> dict:
+    cfg_now = {**cfg, **{k: st.session_state.get(_k(profile.key, k), v) for k, v in cfg.items()}}
+    cfg_now["symbol"] = str(cfg_now["symbol"]).upper().strip()
+    return cfg_now
+
+
+def live_metrics(profile: BotProfile, cfg: dict) -> None:
+    """Atualiza dados, verifica stops/alvos da conta simulada, mostra as
+    métricas e roda o piloto automático a cada ``refresh_sec`` segundos."""
+
     @st.fragment(run_every=int(cfg["refresh_sec"]))
     def _live():
         bot = profile.key
-        cfg_now = {**cfg, **{k: st.session_state.get(_k(bot, k), v) for k, v in cfg.items()}}
-        cfg_now["symbol"] = str(cfg_now["symbol"]).upper().strip()
+        cfg_now = _cfg_now(profile, cfg)
         symbol, interval = cfg_now["symbol"], cfg_now["interval"]
         try:
             raw = cached_klines(symbol, interval, int(cfg_now["candles"]), profile.market)
@@ -138,6 +149,7 @@ def live_section(profile: BotProfile, cfg: dict) -> None:
         st.session_state[f"{bot}__last_price"] = price
         st.session_state[f"{bot}__atr"] = float(df["atr"].iloc[-2])
         st.session_state[f"{bot}__df"] = df
+        st.session_state[f"{bot}__source"] = f"{df.attrs.get('source')} · cotação: {ticker.source}"
 
         broker = get_broker(bot)
         events = broker.sync(symbol, raw, price)
@@ -145,6 +157,8 @@ def live_section(profile: BotProfile, cfg: dict) -> None:
             t = ev.get("trade")
             msg = f"{ev['type']}: {t['side']} {t['symbol']} {t['pnl']:+.2f} USDT" if t else ev["type"]
             st.toast(msg, icon="🔔")
+        if events:
+            st.session_state[f"{bot}__need_rerun"] = True
         acct = broker.account()
         s = stats(acct, {symbol: price})
 
@@ -156,19 +170,67 @@ def live_section(profile: BotProfile, cfg: dict) -> None:
         m[4].metric("Não realizado", fmt(s["unrealized"]))
         m[5].metric("Taxa de acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
 
+        if cfg_now.get("autopilot"):
+            autopilot_step(profile, cfg_now, df, price)
+        if st.session_state.pop(f"{bot}__need_rerun", False):
+            st.rerun()  # posição encerrada/ordem executada: atualiza linhas do gráfico e carteira
+
+    _live()
+
+
+def analysis_chart(profile: BotProfile, cfg: dict) -> None:
+    @st.fragment(run_every=int(cfg["refresh_sec"]))
+    def _chart():
+        bot = profile.key
+        df = st.session_state.get(f"{bot}__df")
+        if df is None:
+            st.info("Carregando dados…")
+            return
+        cfg_now = _cfg_now(profile, cfg)
+        acct = get_broker(bot).account()
         result = st.session_state.get(f"{bot}__analysis")
-        plan = result.decision.to_dict() if result and result.symbol == symbol else None
-        fig = build_chart(df, cfg_now, symbol=symbol, interval=interval, positions=acct["positions"],
+        plan = result.decision.to_dict() if result and result.symbol == cfg_now["symbol"] else None
+        fig = build_chart(df, cfg_now, symbol=cfg_now["symbol"], interval=cfg_now["interval"], positions=acct["positions"],
                           orders=acct["orders"], history=acct["history"], plan=plan)
         st.plotly_chart(fig, config=PLOTLY_CONFIG, key=f"{bot}_chart")
-        st.caption(f"Fonte: {df.attrs.get('source')} · cotação: {ticker.source} · atualizado às "
+        st.caption(f"Fonte: {st.session_state.get(f'{bot}__source', '')} · atualizado às "
                    f"{datetime.now().strftime('%H:%M:%S')} · role para zoom, arraste para mover, use a barra do "
                    "gráfico para desenhar linhas, retângulos e círculos.")
 
-        if cfg_now.get("autopilot"):
-            autopilot_step(profile, cfg_now, df, price)
+    _chart()
 
-    _live()
+
+def realtime_lines(bot: str, cfg: dict) -> list[dict]:
+    """Linhas de preço do gráfico em tempo real (só mudam quando há ação do
+    usuário, para o gráfico não recarregar a cada atualização)."""
+    acct = get_broker(bot).account()
+    lines = []
+    for p in acct["positions"]:
+        if p["symbol"] != cfg["symbol"]:
+            continue
+        lines.append({"price": p["entry"], "color": "#42a5f5", "width": 2, "style": "solid",
+                      "title": f"{'COMPRA' if p['side'] == 'BUY' else 'VENDA'} {p['qty']:g}"})
+        if p.get("stop_loss"):
+            lines.append({"price": p["stop_loss"], "color": "#ef5350", "title": "SL"})
+        if p.get("take_profit"):
+            lines.append({"price": p["take_profit"], "color": "#26a69a", "title": "TP"})
+        if p.get("liquidation"):
+            lines.append({"price": p["liquidation"], "color": "#ff9800", "style": "dotted", "title": "Liq."})
+    for o in acct["orders"]:
+        if o["symbol"] == cfg["symbol"]:
+            lines.append({"price": o["limit_price"], "color": "#bdbdbd", "title": f"LIMIT {o['side']}"})
+    result = st.session_state.get(f"{bot}__analysis")
+    if result and result.symbol == cfg["symbol"] and result.decision.decision in ("BUY", "SELL") and not result.executed:
+        d = result.decision
+        for price, color, title in ((d.entry, "#90caf9", "Plano: entrada"), (d.stop_loss, "#ef9a9a", "Plano: stop"),
+                                    (d.take_profit, "#a5d6a7", "Plano: alvo")):
+            if price:
+                lines.append({"price": price, "color": color, "style": "dotted", "title": title})
+    for lv in cfg.get("user_levels", []):
+        if lv.get("type") == "horizontal":
+            lines.append({"price": lv["price"], "color": lv.get("color", "#e91e63"), "style": "solid",
+                          "title": lv.get("label") or "Nível"})
+    return lines
 
 
 def autopilot_step(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float) -> None:

@@ -102,3 +102,24 @@ def test_extract_json_and_fallback():
     d = rules_fallback({"direction": "HOLD", "score": 3, "entry": 1, "stop_loss": None, "take_profit": None,
                         "regime": "lateral"}, "teste")
     assert d.decision == "HOLD" and d.source == "regras"
+
+
+@pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="sem Postgres de teste")
+def test_postgres_backend_concurrent_updates():
+    import threading as th
+
+    from core.storage import PostgresBackend
+
+    b = PostgresBackend(os.environ["TEST_DATABASE_URL"])
+    b.save("t.json", {"n": 0})
+
+    def inc():
+        for _ in range(20):
+            b.update("t.json", {"n": 0}, lambda d: d.__setitem__("n", d["n"] + 1))
+
+    threads = [th.Thread(target=inc) for _ in range(4)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert b.load("t.json", None)["n"] == 80
+    assert b.load("nao_existe.json", {"x": 1}) == {"x": 1}
+    assert "t.json" in b.names()

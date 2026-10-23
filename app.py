@@ -9,7 +9,9 @@ import streamlit as st
 st.set_page_config(page_title="TradeBot · Plataforma de Bots", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
 
-from core.ui import api_key  # noqa: E402  (depois do set_page_config)
+from core.auth import is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
+from core.storage import backend  # noqa: E402
+from core.ui import api_key  # noqa: E402
 
 st.markdown("""<style>
 [data-testid="stMetricValue"] {font-size: 1.35rem;}
@@ -25,7 +27,9 @@ pages = {
         st.Page("views/long_trade.py", title="Long Trade · Spot", icon="🏔️", url_path="long-trade"),
     ],
 }
-nav = st.navigation(pages, position="sidebar", expanded=True)
+# A navegação é criada antes do login (oculta) para preservar a página pedida na URL.
+nav = st.navigation(pages, position="sidebar" if is_authenticated() else "hidden", expanded=True)
+require_login()
 
 with st.sidebar:
     st.divider()
@@ -36,8 +40,25 @@ with st.sidebar:
                   help="Também pode ser definida em .streamlit/secrets.toml (OPENROUTER_API_KEY) ou na variável de ambiente.")
     st.caption("Modelo padrão: `deepseek/deepseek-v4.1-flash`")
     st.divider()
+    st.markdown("### 💾 Armazenamento")
+    store = backend()
+    if store.persistent:
+        st.success(f"{store.name} — dados permanentes.")
+    else:
+        st.warning("Arquivos locais: no Streamlit Community os dados somem quando o app reinicia. "
+                   "Configure `DATABASE_URL` nos secrets.")
+        if getattr(store, "error", None):
+            st.error(f"Falha ao conectar no banco: {store.error[:200]}")
+    st.divider()
     st.markdown("### 🏦 Execução")
     st.info("**Conta simulada** com preços reais.\n\nFase 2: Binance API Key (Testnet → Real).")
     st.caption("Dados: Binance (spot/futuros) com fallback OKX. Nenhum dado aqui é recomendação de investimento.")
+
+    st.divider()
+    if password_configured():
+        if st.button("Sair", icon="🚪", width="stretch"):
+            logout()
+    else:
+        st.caption("⚠️ Sem senha: defina `APP_PASSWORD` nos secrets antes de publicar.")
 
 nav.run()

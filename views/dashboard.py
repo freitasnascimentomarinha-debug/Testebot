@@ -5,7 +5,10 @@ import streamlit as st
 from core.paper import get_account, stats
 from core.profiles import PROFILES
 from core.settings import load_settings
-from core.storage import load_json
+import json
+from datetime import datetime
+
+from core.storage import backend, export_all, import_all, load_json
 from core.ui import cached_ticker, fmt
 
 st.title("📊 Plataforma de Bots de Trade")
@@ -67,3 +70,14 @@ with st.expander("Como funciona o fluxo de decisão"):
 5. **Execução** — ordem enviada à conta simulada (fase 2: Binance). Stops e alvos são monitorados com as máximas e
    mínimas reais de cada candle.
 """)
+
+with st.expander("💾 Backup e restauração dos dados"):
+    st.caption(f"Armazenamento atual: **{backend().name}**. O backup inclui contas simuladas, configurações e logs.")
+    c1, c2 = st.columns(2)
+    c1.download_button("⬇️ Baixar backup (JSON)", json.dumps(export_all(), ensure_ascii=False, default=str, indent=1),
+                       file_name=f"tradebot_backup_{datetime.now():%Y%m%d_%H%M}.json", mime="application/json")
+    up = c2.file_uploader("Restaurar backup", type="json")
+    if up and c2.button("Restaurar (substitui os dados atuais)", type="primary"):
+        n = import_all(json.load(up))
+        st.success(f"{n} conjuntos de dados restaurados.")
+        st.rerun()

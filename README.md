@@ -11,7 +11,10 @@ pronta para receber a API de negociação da Binance numa segunda fase.
 
 ## Recursos de cada página
 
-* **Gráfico de trade** (Plotly) com candles reais, EMAs, Bollinger, VWAP, SuperTrend, Ichimoku, RSI, MACD,
+* **Gráfico em tempo real**: o navegador recebe os candles por WebSocket direto da corretora (Binance →
+  espelho público da Binance → OKX), então cada negociação move o candle, com contagem regressiva para o
+  fechamento e linhas de posição, stop, alvo, liquidação, plano da IA e níveis do usuário.
+* **Gráfico de análise técnica** (Plotly) com candles reais, EMAs, Bollinger, VWAP, SuperTrend, Ichimoku, RSI, MACD,
   Estocástico, ADX/DMI, OBV, volume, suportes/resistências automáticos, pivôs e Fibonacci; ferramentas de
   desenho (linha, caminho, retângulo, círculo, borracha), zoom com a roda e marcação de entradas/saídas,
   stops, alvos e preço de liquidação.
@@ -57,6 +60,32 @@ python worker.py --bots day swing long
 
 Testes: `python -m pytest -q tests`
 
+## Publicar no Streamlit Community Cloud
+
+1. **Banco gratuito (para os dados não sumirem)** — crie um projeto em [neon.tech](https://neon.tech) (ou
+   Supabase), região São Paulo se houver, e copie a *connection string* `postgresql://...?sslmode=require`.
+   A tabela `tradebot_kv` é criada sozinha no primeiro acesso.
+2. Em [share.streamlit.io](https://share.streamlit.io): **Create app** → repositório, branch e arquivo
+   `app.py`.
+3. **Advanced settings → Secrets**, cole (veja `.streamlit/secrets.toml.example`):
+   ```toml
+   APP_PASSWORD = "sua-senha-forte"
+   OPENROUTER_API_KEY = "sk-or-v1-..."
+   DATABASE_URL = "postgresql://usuario:senha@host/neondb?sslmode=require"
+   ```
+4. Recomendado: em **Share**, deixe o app privado (somente convidados) além da senha.
+
+Observações:
+* A barra lateral mostra se o armazenamento está em **Postgres (permanente)** ou em arquivos locais.
+* O Painel tem **backup/restauração** em JSON de todos os dados.
+* Os servidores do Community ficam nos EUA, onde a Binance bloqueia a API: os dados do servidor (usados pela
+  IA e pela conta simulada) vêm do espelho público da Binance (spot) e da OKX (futuros). O gráfico em tempo
+  real conecta a partir do seu navegador, então no Brasil usa a Binance diretamente.
+* O app hiberna sem acessos; o piloto automático só roda com a página aberta. Para 24/7, rode o
+  `worker.py` em um servidor com o mesmo `DATABASE_URL`.
+* Login: após entrar com "manter conectado", o link da página leva um token de acesso — não compartilhe
+  esse link. Trocar a senha invalida os tokens.
+
 ## Estrutura
 
 ```
@@ -70,9 +99,12 @@ core/risk.py         calculadora de trade e gestor de risco
 core/paper.py        corretora simulada (stops/alvos/liquidação com máximas e mínimas reais)
 core/broker.py       interface de execução (PaperBroker hoje, BinanceBroker na fase 2)
 core/engine.py       pipeline completo (usado pela UI e pelo worker)
+core/realtime.py     gráfico em tempo real (lightweight-charts + WebSocket no navegador)
+core/auth.py         senha de acesso
+core/storage.py      persistência: Postgres (DATABASE_URL) ou arquivos JSON locais
 core/ui.py           componentes Streamlit
 worker.py            piloto automático em segundo plano
-data/                contas, configurações e logs (JSON, fora do Git)
+data/                contas, configurações e logs quando não há banco (fora do Git)
 ```
 
 ## Fase 2 — Binance
