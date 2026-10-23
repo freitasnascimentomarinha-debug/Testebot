@@ -83,7 +83,9 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
                    "direcao_permitida": DIRECTIONS.get(personality.get("direction", "misto")),
                    "filtros": [FILTERS[k] for k, v in filters.items() if v and k in FILTERS]
                    + ([f"ADX mínimo {filters['adx_min']}"] if filters.get("adx_min") else [])
-                   + ([f"ADX máximo {filters['adx_max']}"] if filters.get("adx_max") else []),
+                   + ([f"ADX máximo {filters['adx_max']}"] if filters.get("adx_max") else [])
+                   + ([f"Volume ≥ {filters['vol_mult']}× a média"] if filters.get("vol_mult") else [])
+                   + ([f"Contextos: {', '.join(filters['contexts'])}"] if filters.get("contexts") else []),
                    "stop_atr": personality.get("sl_atr"), "alvo_atr": personality.get("tp_atr"),
                    "tempos_graficos_indicados": personality.get("timeframes", "")}
     return {

@@ -177,6 +177,8 @@ with tab_lib:
                     filt.append(f"ADX ≥ {f['adx_min']}")
                 if f.get("adx_max"):
                     filt.append(f"ADX ≤ {f['adx_max']}")
+                if f.get("vol_mult"):
+                    filt.append(f"Volume ≥ {f['vol_mult']:g}× a média")
                 st.markdown(f"**Direção:** {P.DIRECTIONS[p.get('direction', 'misto')]} · **Limiar de entrada:** "
                             f"{p.get('threshold')} · **Stop/alvo:** {p.get('sl_atr')}× / {p.get('tp_atr')}× ATR · "
                             f"**Tempos gráficos:** {p.get('timeframes') or '—'}")
@@ -224,6 +226,7 @@ def load_template(p: dict, duplicate: bool) -> None:
         ss[f"pe_f_{k}"] = bool(f.get(k))
     ss["pe_adx_min"] = int(f.get("adx_min") or 0)
     ss["pe_adx_max"] = int(f.get("adx_max") or 0)
+    ss["pe_vol_mult"] = float(f.get("vol_mult") or 0.0)
 
 
 if st.session_state.pop("pe_reset", False):
@@ -234,7 +237,7 @@ if "persona_template" in st.session_state:
     load_template(tpl, tpl.get("duplicate", False))
 for key, default in (("pe_name", ""), ("pe_author", ""), ("pe_summary", ""), ("pe_desc", ""), ("pe_dir", "misto"),
                      ("pe_skills", ["tendencia", "momentum"]), ("pe_threshold", 30), ("pe_sl", 1.5), ("pe_tp", 3.0),
-                     ("pe_tf", ""), ("pe_markets", ["futures", "spot"]), ("pe_adx_min", 0), ("pe_adx_max", 0),
+                     ("pe_tf", ""), ("pe_markets", ["futures", "spot"]), ("pe_adx_min", 0), ("pe_adx_max", 0), ("pe_vol_mult", 0.0),
                      ("pe_id", None)):
     st.session_state.setdefault(key, default)
 
@@ -293,6 +296,8 @@ with tab_new:
     c1, c2 = st.columns(2)
     c1.number_input("ADX mínimo para entrar (0 = sem filtro)", 0, 60, key="pe_adx_min")
     c2.number_input("ADX máximo para entrar (0 = sem filtro)", 0, 80, key="pe_adx_max")
+    st.number_input("Volume mínimo em relação à média (0 = sem filtro; ex.: 1,5 = 50% acima)", 0.0, 5.0, step=0.1,
+                    key="pe_vol_mult")
 
     c1, c2, _ = st.columns([1, 1, 2])
     if c1.button("💾 Salvar e compartilhar", type="primary", width="stretch"):
@@ -301,7 +306,7 @@ with tab_new:
             st.error("Dê um nome e escolha pelo menos um indicador.")
         else:
             filters = {k: ss[f"pe_f_{k}"] for k in P.FILTERS}
-            filters.update(adx_min=ss["pe_adx_min"], adx_max=ss["pe_adx_max"])
+            filters.update(adx_min=ss["pe_adx_min"], adx_max=ss["pe_adx_max"], vol_mult=ss["pe_vol_mult"])
             data = {"name": ss["pe_name"].strip(), "author": ss["pe_author"].strip() or "anônimo",
                     "summary": ss["pe_summary"].strip(), "description": ss["pe_desc"].strip(),
                     "direction": ss["pe_dir"], "skills": weights, "threshold": ss["pe_threshold"],

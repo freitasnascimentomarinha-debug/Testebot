@@ -138,6 +138,8 @@ with tab_gal:
                     filt.append(f"ADX ≥ {f['adx_min']}")
                 if f.get("adx_max"):
                     filt.append(f"ADX ≤ {f['adx_max']}")
+                if f.get("vol_mult"):
+                    filt.append(f"Volume ≥ {f['vol_mult']:g}× a média")
                 st.markdown(f"**Direção:** {P.DIRECTIONS[p.get('direction', 'misto')]} · **Stop/alvo:** "
                             f"{p.get('sl_atr')}× / {p.get('tp_atr')}× ATR · **Filtros:** {', '.join(filt) or 'nenhum'}")
                 if rs.get("per_symbol"):
