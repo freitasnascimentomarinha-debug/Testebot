@@ -692,6 +692,29 @@ def test_personality_only_where_trained():
     for bot, pid in Pm.DEFAULT_BY_BOT.items():  # o padrão de cada bot vale no tempo gráfico padrão dele
         assert Pm.is_allowed(pid, PROFILES[bot].market, PROFILES[bot].default_interval)
 
+
+def test_bot_page_renders_with_analysis_and_advice():
+    """Renderiza a página inteira do bot, clica em Analisar e exige leitura do especialista, sem citar o modelo nem resposta bruta."""
+    from streamlit.testing.v1 import AppTest
+
+    def page():
+        import streamlit as st
+
+        st.page_link = lambda *a, **k: None  # o menu só existe no app completo
+        from core.ui import render_bot_page
+
+        render_bot_page("day")
+
+    at = AppTest.from_function(page, default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
+    btn = next(b for b in at.button if "Analisar agora" in b.label)
+    btn.click()
+    at = at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
+    assert "Leitura do especialista" in text and "Melhor bot para este momento" in text and "Plano condicional" in text
+    assert "deepseek" not in text.lower() and not any("Resposta bruta" in (e.label or "") for e in at.expander)
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

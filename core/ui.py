@@ -711,6 +711,103 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
                        " · Resistências: " + ", ".join(fmt_price(x["price"]) for x in lv["resistances"]))
 
 
+def armed_panel(profile: BotProfile, cfg: dict) -> None:
+    """Mostra o plano condicional armado (se houver) e permite desarmar."""
+    from core import advisor
+
+    bot = profile.key
+    rec = advisor.armed(bot)
+    if not rec:
+        return
+    with st.container(border=True):
+        c1, c2 = st.columns([4, 1])
+        c1.markdown("**📌 Plano condicional armado** — o sistema confere o gatilho a cada candle fechado.")
+        c1.write(rec["descricao"])
+        df = st.session_state.get(f"{bot}__df")
+        extra = ""
+        if rec["ativo"] != cfg["symbol"] or rec["tempo"] != cfg["interval"]:
+            extra = f" ⚠️ Plano de {rec['ativo']} no {rec['tempo']}: só é conferido enquanto o bot estiver nesse ativo e tempo gráfico."
+        elif df is not None:
+            state, info = advisor.evaluate(rec, df, cfg["interval"])
+            extra = f" Situação: **{state}**" + (f" ({info['candles']} de {rec['plano']['validade_candles']} candles)" if "candles" in info else "")
+        c1.caption(f"Armado em {rec['criado'][:16].replace('T', ' ')} UTC · origem: {rec['origem']}.{extra}"
+                   + ("" if cfg.get("autopilot") else " O bot está desligado: ligue o piloto automático para o plano abrir a ordem."))
+        if c2.button("Desarmar", key=f"{bot}__disarm", width="stretch"):
+            advisor.disarm(bot, "desarmado pelo usuário")
+            st.rerun()
+
+
+def render_advice(profile: BotProfile, cfg: dict, result: engine.AnalysisResult) -> None:
+    """Leitura do especialista: cenário, oportunidade, dica, bot recomendado e plano condicional."""
+    from core import advisor
+
+    bot = profile.key
+    adv = result.decision.advice
+    if not adv:
+        return
+    fonte = "IA" if adv.get("fonte") == "ia" else "regras (sem IA)"
+    st.divider()
+    st.markdown(f"#### 🎓 Leitura do especialista · {result.symbol} no {result.interval}")
+    st.caption(f"Fonte: {fonte}. Conteúdo educativo; não é recomendação de investimento.")
+    st.markdown(adv.get("cenario", ""))
+    if adv.get("leitura_tecnica"):
+        st.markdown("**Leitura técnica**\n" + "\n".join(f"- {x}" for x in adv["leitura_tecnica"]))
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"**🎯 Melhor oportunidade no {result.interval}**")
+        st.info(adv.get("oportunidade", "—"))
+    with c2:
+        st.markdown("**💡 Dica**")
+        st.success(adv.get("dica", "—"))
+
+    best = adv.get("bot")
+    st.markdown("**🤖 Melhor bot para este momento**")
+    if best and best.get("id"):
+        p = personalities.get(best["id"]) or {}
+        rs = p.get("research") or {}
+        tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}.get(rs.get("status"), "")
+        st.markdown(f"{tag} **{best['nome']}** — {best['motivo']}")
+        if p.get("tip"):
+            st.caption(p["tip"])
+        b1, b2 = st.columns([1.2, 2])
+        if best.get("ativo"):
+            b1.success("Já é o bot ativo")
+        elif b1.button("Usar este bot", key=f"{bot}__use_best", type="primary", width="stretch"):
+            set_setting(bot, "personality", best["id"])
+            st.session_state[_k(bot, "personality")] = best["id"]
+            tested = p.get("tested_interval")
+            if tested and tested in profile.intervals:
+                set_setting(bot, "interval", tested)
+            st.rerun()
+        if best.get("alternativas"):
+            b2.caption("Alternativas: " + " · ".join(a["nome"] for a in best["alternativas"]))
+    elif best:
+        st.warning(best.get("motivo", "Nenhum bot com vantagem comprovada agora: aguardar."))
+
+    plan = adv.get("plano")
+    st.markdown("**📌 Plano condicional (a ordem só abre se o mercado confirmar)**")
+    if not plan:
+        st.caption("Nenhum gatilho claro no momento.")
+        return
+    st.write(advisor.describe_plan(plan, result.symbol, result.interval))
+    if plan.get("explicacao"):
+        st.caption("Por quê: " + plan["explicacao"])
+    rec = advisor.armed(bot)
+    same = rec and rec["plano"] == plan and rec["ativo"] == result.symbol
+    if same:
+        st.success("Este plano está armado. O sistema confere o gatilho a cada candle fechado.")
+    else:
+        auto = cfg.get("autopilot") and cfg.get("ai_auto_arm") and adv.get("fonte") == "ia"
+        st.caption(("O piloto automático arma planos da IA sozinho. " if auto else "") +
+                   "Armar não abre ordem agora: só se o candle fechar confirmando o gatilho, e ainda passa pelo gestor de risco. "
+                   "Esse tipo de entrada condicional não tem backtest.")
+        if st.button("📌 Armar este plano", key=f"{bot}__arm_plan", type="primary"):
+            df = st.session_state.get(f"{bot}__df")
+            if df is not None:
+                engine.arm_plan(profile, cfg, plan, df, "ia" if adv.get("fonte") == "ia" else "regras")
+                st.rerun()
+
+
 # ------------------------------------------------------------- carteira
 def portfolio_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
