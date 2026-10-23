@@ -7343,5 +7343,3733 @@
   "monthly_pct_risk_half": 1.21,
   "prev_ret_pct": 1.02,
   "prev_pos_coins": "5/10"
+ },
+ "mk_commodities_1d_E_surf": {
+  "period_label": "9,0 anos",
+  "period_days": 3272,
+  "ret_pct": 9.07,
+  "monthly_pct": 0.08,
+  "ret_seen": 10.24,
+  "ret_new": 7.91,
+  "win_pct": 45.0,
+  "dd_pct": 5.0,
+  "trades_month": 0.2,
+  "pos_coins": "10/10",
+  "per_symbol": {
+   "CL": 3.09,
+   "GC": 24.83,
+   "NG": 9.47,
+   "HG": 8.82,
+   "ZC": 5.0,
+   "SI": 20.95,
+   "BZ": 7.53,
+   "ZS": 4.77,
+   "KC": 3.35,
+   "SB": 2.95
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 4.46,
+  "monthly_pct_risk_half": 0.04,
+  "prev_ret_pct": 4.5,
+  "prev_pos_coins": "10/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 4.3,
+  "recent_pos_coins": "7/10",
+  "pf": 2.24,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 7,
+    "win_pct": 57.1,
+    "avg_r": 0.326,
+    "seen_n": 5,
+    "seen_avg_r": 0.624,
+    "new_avg_r": -0.42,
+    "ret_pct": 0.23
+   },
+   "rompimento_baixa": {
+    "n": 18,
+    "win_pct": 22.2,
+    "avg_r": -0.037,
+    "seen_n": 9,
+    "seen_avg_r": 0.156,
+    "new_avg_r": -0.23,
+    "ret_pct": -0.07
+   },
+   "reversao_alta": {
+    "n": 23,
+    "win_pct": 56.5,
+    "avg_r": 1.051,
+    "seen_n": 9,
+    "seen_avg_r": 0.811,
+    "new_avg_r": 1.205,
+    "ret_pct": 2.43
+   },
+   "reversao_baixa": {
+    "n": 16,
+    "win_pct": 62.5,
+    "avg_r": 0.39,
+    "seen_n": 9,
+    "seen_avg_r": 0.428,
+    "new_avg_r": 0.34,
+    "ret_pct": 0.63
+   },
+   "pullback_alta": {
+    "n": 122,
+    "win_pct": 40.2,
+    "avg_r": 0.351,
+    "seen_n": 63,
+    "seen_avg_r": 0.354,
+    "new_avg_r": 0.348,
+    "ret_pct": 4.39
+   },
+   "pullback_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_alta": {
+    "n": 38,
+    "win_pct": 44.7,
+    "avg_r": 0.689,
+    "seen_n": 19,
+    "seen_avg_r": 0.713,
+    "new_avg_r": 0.664,
+    "ret_pct": 2.63
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 1.8,
+   "rompimento_baixa": 1.4,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 3.2,
+   "pullback_alta": 14.2,
+   "pullback_baixa": 13.0,
+   "tendencia_alta": 11.8,
+   "tendencia_baixa": 7.0,
+   "lateral": 15.1,
+   "indefinido": 30.9
+  },
+  "best_contexts": [
+   "tendencia_alta",
+   "pullback_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.332,
+    50,
+    5
+   ],
+   "2a": [
+    0.489,
+    45,
+    4
+   ]
+  }
+ },
+ "mk_commodities_1d_D_surf": {
+  "period_label": "9,0 anos",
+  "period_days": 3272,
+  "ret_pct": 14.21,
+  "monthly_pct": 0.12,
+  "ret_seen": 19.11,
+  "ret_new": 9.31,
+  "win_pct": 24.4,
+  "dd_pct": 10.2,
+  "trades_month": 0.2,
+  "pos_coins": "10/10",
+  "per_symbol": {
+   "CL": 8.33,
+   "GC": 38.52,
+   "NG": 8.62,
+   "HG": 33.53,
+   "ZC": 6.54,
+   "SI": 20.74,
+   "BZ": 5.41,
+   "ZS": 8.1,
+   "KC": 6.29,
+   "SB": 5.98
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 6.96,
+  "monthly_pct_risk_half": 0.06,
+  "prev_ret_pct": 8.85,
+  "prev_pos_coins": "10/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 4.93,
+  "recent_pos_coins": "5/10",
+  "pf": 2.42,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 85,
+    "win_pct": 25.9,
+    "avg_r": 0.557,
+    "seen_n": 42,
+    "seen_avg_r": 0.957,
+    "new_avg_r": 0.166,
+    "ret_pct": 4.77
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 90,
+    "win_pct": 26.7,
+    "avg_r": 0.764,
+    "seen_n": 54,
+    "seen_avg_r": 0.521,
+    "new_avg_r": 1.127,
+    "ret_pct": 6.98
+   },
+   "pullback_alta": {
+    "n": 18,
+    "win_pct": 16.7,
+    "avg_r": 0.031,
+    "seen_n": 7,
+    "seen_avg_r": -0.469,
+    "new_avg_r": 0.348,
+    "ret_pct": 0.08
+   },
+   "pullback_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_alta": {
+    "n": 127,
+    "win_pct": 20.5,
+    "avg_r": 0.488,
+    "seen_n": 73,
+    "seen_avg_r": 0.38,
+    "new_avg_r": 0.634,
+    "ret_pct": 6.23
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 25,
+    "win_pct": 32.0,
+    "avg_r": 1.157,
+    "seen_n": 18,
+    "seen_avg_r": 1.561,
+    "new_avg_r": 0.115,
+    "ret_pct": 2.93
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 1.8,
+   "rompimento_baixa": 1.4,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 3.2,
+   "pullback_alta": 14.2,
+   "pullback_baixa": 13.0,
+   "tendencia_alta": 11.8,
+   "tendencia_baixa": 7.0,
+   "lateral": 15.1,
+   "indefinido": 30.9
+  },
+  "best_contexts": [
+   "lateral",
+   "rompimento_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.637,
+    55,
+    5
+   ],
+   "2a": [
+    0.237,
+    51,
+    3
+   ]
+  }
+ },
+ "mk_commodities_1d_C_tp20": {
+  "period_label": "9,0 anos",
+  "period_days": 3272,
+  "ret_pct": 17.11,
+  "monthly_pct": 0.14,
+  "ret_seen": 19.77,
+  "ret_new": 14.44,
+  "win_pct": 42.3,
+  "dd_pct": 11.8,
+  "trades_month": 0.6,
+  "pos_coins": "10/10",
+  "per_symbol": {
+   "CL": 8.91,
+   "GC": 51.19,
+   "NG": 12.05,
+   "HG": 15.46,
+   "ZC": 11.26,
+   "SI": 15.04,
+   "BZ": 16.86,
+   "ZS": 20.54,
+   "KC": 1.12,
+   "SB": 18.64
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 8.28,
+  "monthly_pct_risk_half": 0.07,
+  "prev_ret_pct": 11.84,
+  "prev_pos_coins": "8/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 5.21,
+  "recent_pos_coins": "7/10",
+  "pf": 1.39,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 100,
+    "win_pct": 41.0,
+    "avg_r": 0.194,
+    "seen_n": 49,
+    "seen_avg_r": 0.242,
+    "new_avg_r": 0.148,
+    "ret_pct": 1.91
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 1,
+    "win_pct": 100.0,
+    "avg_r": 1.985,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 1.985,
+    "ret_pct": 0.2
+   },
+   "reversao_baixa": {
+    "n": 194,
+    "win_pct": 43.3,
+    "avg_r": 0.256,
+    "seen_n": 107,
+    "seen_avg_r": 0.237,
+    "new_avg_r": 0.278,
+    "ret_pct": 5.11
+   },
+   "pullback_alta": {
+    "n": 238,
+    "win_pct": 35.3,
+    "avg_r": 0.03,
+    "seen_n": 130,
+    "seen_avg_r": 0.105,
+    "new_avg_r": -0.061,
+    "ret_pct": 0.66
+   },
+   "pullback_baixa": {
+    "n": 2,
+    "win_pct": 50.0,
+    "avg_r": 0.472,
+    "seen_n": 1,
+    "seen_avg_r": 1.961,
+    "new_avg_r": -1.017,
+    "ret_pct": 0.09
+   },
+   "tendencia_alta": {
+    "n": 357,
+    "win_pct": 42.3,
+    "avg_r": 0.232,
+    "seen_n": 198,
+    "seen_avg_r": 0.184,
+    "new_avg_r": 0.291,
+    "ret_pct": 8.28
+   },
+   "tendencia_baixa": {
+    "n": 1,
+    "win_pct": 0.0,
+    "avg_r": -1.017,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": -1.017,
+    "ret_pct": -0.1
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 1.8,
+   "rompimento_baixa": 1.4,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 3.2,
+   "pullback_alta": 14.2,
+   "pullback_baixa": 13.0,
+   "tendencia_alta": 11.8,
+   "tendencia_baixa": 7.0,
+   "lateral": 15.1,
+   "indefinido": 30.9
+  },
+  "best_contexts": [
+   "rompimento_alta",
+   "reversao_baixa",
+   "tendencia_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.29,
+    172,
+    3
+   ],
+   "2a": [
+    0.133,
+    151,
+    4
+   ]
+  }
+ },
+ "mk_commodities_1h_D_tp15": {
+  "period_label": "1,9 anos",
+  "period_days": 710,
+  "ret_pct": 7.67,
+  "monthly_pct": 0.31,
+  "ret_seen": 11.87,
+  "ret_new": 3.46,
+  "win_pct": 46.3,
+  "dd_pct": 15.5,
+  "trades_month": 3.7,
+  "pos_coins": "9/10",
+  "per_symbol": {
+   "CL": 20.74,
+   "GC": 8.18,
+   "NG": 12.13,
+   "HG": 10.01,
+   "ZC": 8.29,
+   "SI": 14.66,
+   "BZ": 3.09,
+   "ZS": -10.95,
+   "KC": 9.38,
+   "SB": 1.11
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "1h",
+  "status": "ressalva",
+  "ret_pct_risk_half": 3.85,
+  "monthly_pct_risk_half": 0.16,
+  "prev_ret_pct": 3.84,
+  "prev_pos_coins": "8/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 3.68,
+  "recent_pos_coins": "5/10",
+  "pf": 1.16,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 981,
+    "win_pct": 42.1,
+    "avg_r": -0.017,
+    "seen_n": 553,
+    "seen_avg_r": 0.024,
+    "new_avg_r": -0.07,
+    "ret_pct": -1.77
+   },
+   "rompimento_baixa": {
+    "n": 42,
+    "win_pct": 47.6,
+    "avg_r": 0.13,
+    "seen_n": 24,
+    "seen_avg_r": 0.245,
+    "new_avg_r": -0.023,
+    "ret_pct": 0.53
+   },
+   "reversao_alta": {
+    "n": 4,
+    "win_pct": 50.0,
+    "avg_r": 0.213,
+    "seen_n": 4,
+    "seen_avg_r": 0.213,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.08
+   },
+   "reversao_baixa": {
+    "n": 329,
+    "win_pct": 43.8,
+    "avg_r": 0.019,
+    "seen_n": 196,
+    "seen_avg_r": -0.033,
+    "new_avg_r": 0.097,
+    "ret_pct": 0.46
+   },
+   "pullback_alta": {
+    "n": 521,
+    "win_pct": 45.1,
+    "avg_r": 0.052,
+    "seen_n": 283,
+    "seen_avg_r": 0.099,
+    "new_avg_r": -0.004,
+    "ret_pct": 2.61
+   },
+   "pullback_baixa": {
+    "n": 224,
+    "win_pct": 43.8,
+    "avg_r": 0.039,
+    "seen_n": 123,
+    "seen_avg_r": -0.001,
+    "new_avg_r": 0.088,
+    "ret_pct": 0.94
+   },
+   "tendencia_alta": {
+    "n": 591,
+    "win_pct": 46.7,
+    "avg_r": 0.092,
+    "seen_n": 351,
+    "seen_avg_r": 0.102,
+    "new_avg_r": 0.077,
+    "ret_pct": 5.28
+   },
+   "tendencia_baixa": {
+    "n": 5,
+    "win_pct": 40.0,
+    "avg_r": -0.504,
+    "seen_n": 2,
+    "seen_avg_r": -0.291,
+    "new_avg_r": -0.646,
+    "ret_pct": -0.25
+   },
+   "lateral": {
+    "n": 299,
+    "win_pct": 43.8,
+    "avg_r": 0.029,
+    "seen_n": 163,
+    "seen_avg_r": 0.037,
+    "new_avg_r": 0.02,
+    "ret_pct": 0.89
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.9,
+   "rompimento_baixa": 2.5,
+   "reversao_alta": 1.7,
+   "reversao_baixa": 2.2,
+   "pullback_alta": 13.9,
+   "pullback_baixa": 12.9,
+   "tendencia_alta": 12.4,
+   "tendencia_baixa": 11.0,
+   "lateral": 9.8,
+   "indefinido": 30.7
+  },
+  "best_contexts": [
+   "rompimento_baixa",
+   "tendencia_alta",
+   "pullback_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.03,
+    177,
+    3
+   ],
+   "2a": [
+    0.064,
+    196,
+    2
+   ]
+  }
+ },
+ "mk_commodities_1h_B_tp20": {
+  "period_label": "1,9 anos",
+  "period_days": 710,
+  "ret_pct": 7.02,
+  "monthly_pct": 0.29,
+  "ret_seen": 11.22,
+  "ret_new": 2.82,
+  "win_pct": 40.3,
+  "dd_pct": 18.8,
+  "trades_month": 4.1,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "CL": -7.93,
+   "GC": 27.13,
+   "NG": 1.15,
+   "HG": 20.36,
+   "ZC": 15.38,
+   "SI": 17.64,
+   "BZ": -10.34,
+   "ZS": 3.25,
+   "KC": 5.29,
+   "SB": -1.77
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "1h",
+  "status": "ressalva",
+  "ret_pct_risk_half": 3.52,
+  "monthly_pct_risk_half": 0.15,
+  "prev_ret_pct": 4.31,
+  "prev_pos_coins": "6/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 2.59,
+  "recent_pos_coins": "6/10",
+  "pf": 1.12,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 726,
+    "win_pct": 37.6,
+    "avg_r": 0.019,
+    "seen_n": 408,
+    "seen_avg_r": 0.061,
+    "new_avg_r": -0.036,
+    "ret_pct": 1.31
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 317,
+    "win_pct": 37.9,
+    "avg_r": 0.027,
+    "seen_n": 188,
+    "seen_avg_r": -0.026,
+    "new_avg_r": 0.104,
+    "ret_pct": 0.69
+   },
+   "pullback_alta": {
+    "n": 36,
+    "win_pct": 50.0,
+    "avg_r": 0.047,
+    "seen_n": 21,
+    "seen_avg_r": -0.225,
+    "new_avg_r": 0.429,
+    "ret_pct": 0.18
+   },
+   "pullback_baixa": {
+    "n": 53,
+    "win_pct": 37.7,
+    "avg_r": -0.002,
+    "seen_n": 32,
+    "seen_avg_r": -0.062,
+    "new_avg_r": 0.089,
+    "ret_pct": -0.04
+   },
+   "tendencia_alta": {
+    "n": 476,
+    "win_pct": 42.6,
+    "avg_r": 0.154,
+    "seen_n": 283,
+    "seen_avg_r": 0.135,
+    "new_avg_r": 0.182,
+    "ret_pct": 7.16
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.9,
+   "rompimento_baixa": 2.5,
+   "reversao_alta": 1.7,
+   "reversao_baixa": 2.2,
+   "pullback_alta": 13.9,
+   "pullback_baixa": 12.9,
+   "tendencia_alta": 12.4,
+   "tendencia_baixa": 11.0,
+   "lateral": 9.8,
+   "indefinido": 30.7
+  },
+  "best_contexts": [
+   "tendencia_alta",
+   "rompimento_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.06,
+    202,
+    3
+   ],
+   "2a": [
+    0.017,
+    213,
+    3
+   ]
+  }
+ },
+ "mk_commodities_4h_D_surf": {
+  "period_label": "1,8 anos",
+  "period_days": 648,
+  "ret_pct": 8.26,
+  "monthly_pct": 0.37,
+  "ret_seen": 9.09,
+  "ret_new": 7.43,
+  "win_pct": 34.5,
+  "dd_pct": 7.7,
+  "trades_month": 0.6,
+  "pos_coins": "8/10",
+  "per_symbol": {
+   "CL": 12.04,
+   "GC": 29.11,
+   "NG": 3.69,
+   "HG": -3.87,
+   "ZC": 4.52,
+   "SI": 14.37,
+   "BZ": 15.03,
+   "ZS": 9.23,
+   "KC": -1.52,
+   "SB": 0.02
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "4h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 4.08,
+  "monthly_pct_risk_half": 0.19,
+  "prev_ret_pct": 3.17,
+  "prev_pos_coins": "6/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 5.41,
+  "recent_pos_coins": "7/10",
+  "pf": 1.95,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 190,
+    "win_pct": 26.8,
+    "avg_r": 0.147,
+    "seen_n": 108,
+    "seen_avg_r": 0.178,
+    "new_avg_r": 0.106,
+    "ret_pct": 2.84
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 84,
+    "win_pct": 31.0,
+    "avg_r": 0.321,
+    "seen_n": 52,
+    "seen_avg_r": 0.131,
+    "new_avg_r": 0.63,
+    "ret_pct": 2.64
+   },
+   "pullback_alta": {
+    "n": 26,
+    "win_pct": 26.9,
+    "avg_r": 0.149,
+    "seen_n": 14,
+    "seen_avg_r": 0.566,
+    "new_avg_r": -0.337,
+    "ret_pct": 0.36
+   },
+   "pullback_baixa": {
+    "n": 8,
+    "win_pct": 37.5,
+    "avg_r": 1.154,
+    "seen_n": 4,
+    "seen_avg_r": 2.197,
+    "new_avg_r": 0.11,
+    "ret_pct": 0.92
+   },
+   "tendencia_alta": {
+    "n": 115,
+    "win_pct": 35.7,
+    "avg_r": 0.513,
+    "seen_n": 64,
+    "seen_avg_r": 0.545,
+    "new_avg_r": 0.474,
+    "ret_pct": 6.02
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 3.0,
+   "rompimento_baixa": 2.3,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 2.6,
+   "pullback_alta": 15.1,
+   "pullback_baixa": 12.2,
+   "tendencia_alta": 12.8,
+   "tendencia_baixa": 9.1,
+   "lateral": 11.3,
+   "indefinido": 30.2
+  },
+  "best_contexts": [
+   "pullback_alta",
+   "tendencia_alta",
+   "rompimento_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.439,
+    32,
+    3
+   ],
+   "2a": [
+    0.878,
+    26,
+    3
+   ]
+  }
+ },
+ "mk_commodities_4h_A_surf": {
+  "period_label": "1,8 anos",
+  "period_days": 648,
+  "ret_pct": 6.49,
+  "monthly_pct": 0.29,
+  "ret_seen": 7.19,
+  "ret_new": 5.79,
+  "win_pct": 30.6,
+  "dd_pct": 9.4,
+  "trades_month": 1.0,
+  "pos_coins": "8/10",
+  "per_symbol": {
+   "CL": 7.26,
+   "GC": 19.7,
+   "NG": 3.6,
+   "HG": 7.61,
+   "ZC": -2.24,
+   "SI": 22.24,
+   "BZ": 1.69,
+   "ZS": 3.06,
+   "KC": -0.9,
+   "SB": 2.86
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "4h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 3.25,
+  "monthly_pct_risk_half": 0.15,
+  "prev_ret_pct": 3.3,
+  "prev_pos_coins": "5/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 4.09,
+  "recent_pos_coins": "8/10",
+  "pf": 1.56,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 148,
+    "win_pct": 28.4,
+    "avg_r": 0.182,
+    "seen_n": 79,
+    "seen_avg_r": 0.255,
+    "new_avg_r": 0.098,
+    "ret_pct": 2.59
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 1,
+    "win_pct": 100.0,
+    "avg_r": 4.241,
+    "seen_n": 1,
+    "seen_avg_r": 4.241,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.42
+   },
+   "reversao_baixa": {
+    "n": 71,
+    "win_pct": 38.0,
+    "avg_r": 0.242,
+    "seen_n": 43,
+    "seen_avg_r": 0.164,
+    "new_avg_r": 0.36,
+    "ret_pct": 1.68
+   },
+   "pullback_alta": {
+    "n": 44,
+    "win_pct": 31.8,
+    "avg_r": 0.285,
+    "seen_n": 25,
+    "seen_avg_r": -0.093,
+    "new_avg_r": 0.783,
+    "ret_pct": 1.32
+   },
+   "pullback_baixa": {
+    "n": 51,
+    "win_pct": 21.6,
+    "avg_r": -0.191,
+    "seen_n": 24,
+    "seen_avg_r": 0.041,
+    "new_avg_r": -0.398,
+    "ret_pct": -0.98
+   },
+   "tendencia_alta": {
+    "n": 108,
+    "win_pct": 31.5,
+    "avg_r": 0.391,
+    "seen_n": 59,
+    "seen_avg_r": 0.567,
+    "new_avg_r": 0.18,
+    "ret_pct": 4.39
+   },
+   "tendencia_baixa": {
+    "n": 14,
+    "win_pct": 50.0,
+    "avg_r": 0.52,
+    "seen_n": 7,
+    "seen_avg_r": 0.413,
+    "new_avg_r": 0.627,
+    "ret_pct": 0.74
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 3.0,
+   "rompimento_baixa": 2.3,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 2.6,
+   "pullback_alta": 15.1,
+   "pullback_baixa": 12.2,
+   "tendencia_alta": 12.8,
+   "tendencia_baixa": 9.1,
+   "lateral": 11.3,
+   "indefinido": 30.2
+  },
+  "best_contexts": [
+   "tendencia_alta",
+   "rompimento_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.304,
+    50,
+    2
+   ],
+   "2a": [
+    0.286,
+    48,
+    3
+   ]
+  }
+ },
+ "mk_commodities_4h_C_surf": {
+  "period_label": "1,8 anos",
+  "period_days": 648,
+  "ret_pct": 6.97,
+  "monthly_pct": 0.31,
+  "ret_seen": 9.78,
+  "ret_new": 4.15,
+  "win_pct": 38.8,
+  "dd_pct": 6.5,
+  "trades_month": 0.9,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "CL": 20.23,
+   "GC": 24.08,
+   "NG": -0.88,
+   "HG": 1.95,
+   "ZC": 3.52,
+   "SI": 10.82,
+   "BZ": 8.65,
+   "ZS": 5.71,
+   "KC": -4.42,
+   "SB": -0.01
+  },
+  "tested_at": "23/10/2026",
+  "market": "commodities",
+  "interval": "4h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 3.45,
+  "monthly_pct_risk_half": 0.16,
+  "prev_ret_pct": 2.1,
+  "prev_pos_coins": "7/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 4.98,
+  "recent_pos_coins": "7/10",
+  "pf": 1.63,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 280,
+    "win_pct": 34.3,
+    "avg_r": 0.0,
+    "seen_n": 159,
+    "seen_avg_r": -0.025,
+    "new_avg_r": 0.033,
+    "ret_pct": -0.16
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 173,
+    "win_pct": 32.4,
+    "avg_r": 0.078,
+    "seen_n": 102,
+    "seen_avg_r": 0.056,
+    "new_avg_r": 0.11,
+    "ret_pct": 1.18
+   },
+   "pullback_alta": {
+    "n": 32,
+    "win_pct": 37.5,
+    "avg_r": 0.118,
+    "seen_n": 19,
+    "seen_avg_r": 0.087,
+    "new_avg_r": 0.163,
+    "ret_pct": 0.36
+   },
+   "pullback_baixa": {
+    "n": 21,
+    "win_pct": 42.9,
+    "avg_r": 0.162,
+    "seen_n": 9,
+    "seen_avg_r": 0.963,
+    "new_avg_r": -0.439,
+    "ret_pct": 0.34
+   },
+   "tendencia_alta": {
+    "n": 196,
+    "win_pct": 38.8,
+    "avg_r": 0.349,
+    "seen_n": 112,
+    "seen_avg_r": 0.419,
+    "new_avg_r": 0.255,
+    "ret_pct": 6.97
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 3.0,
+   "rompimento_baixa": 2.3,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 2.6,
+   "pullback_alta": 15.1,
+   "pullback_baixa": 12.2,
+   "tendencia_alta": 12.8,
+   "tendencia_baixa": 9.1,
+   "lateral": 11.3,
+   "indefinido": 30.2
+  },
+  "best_contexts": [
+   "tendencia_alta",
+   "pullback_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.144,
+    38,
+    3
+   ],
+   "2a": [
+    0.347,
+    46,
+    4
+   ]
+  }
+ },
+ "mk_forex_1d_E_tp20": {
+  "period_label": "9,0 anos",
+  "period_days": 3286,
+  "ret_pct": 6.89,
+  "monthly_pct": 0.06,
+  "ret_seen": 7.25,
+  "ret_new": 6.54,
+  "win_pct": 43.2,
+  "dd_pct": 12.8,
+  "trades_month": 0.3,
+  "pos_coins": "6/10",
+  "per_symbol": {
+   "EURUSD": -2.84,
+   "GBPUSD": 14.53,
+   "USDJPY": -6.32,
+   "AUDUSD": -0.11,
+   "USDCAD": 30.98,
+   "USDCHF": 20.13,
+   "NZDUSD": 8.85,
+   "EURJPY": 0.99,
+   "GBPJPY": 9.0,
+   "EURGBP": -6.28
+  },
+  "tested_at": "23/10/2026",
+  "market": "forex",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 3.33,
+  "monthly_pct_risk_half": 0.03,
+  "prev_ret_pct": 2.73,
+  "prev_pos_coins": "6/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 3.78,
+  "recent_pos_coins": "6/10",
+  "pf": 1.34,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 156,
+    "win_pct": 44.9,
+    "avg_r": 0.232,
+    "seen_n": 82,
+    "seen_avg_r": 0.144,
+    "new_avg_r": 0.329,
+    "ret_pct": 3.61
+   },
+   "reversao_baixa": {
+    "n": 183,
+    "win_pct": 42.1,
+    "avg_r": 0.179,
+    "seen_n": 97,
+    "seen_avg_r": 0.148,
+    "new_avg_r": 0.213,
+    "ret_pct": 3.33
+   },
+   "pullback_alta": {
+    "n": 142,
+    "win_pct": 41.5,
+    "avg_r": 0.138,
+    "seen_n": 73,
+    "seen_avg_r": 0.062,
+    "new_avg_r": 0.218,
+    "ret_pct": 1.99
+   },
+   "pullback_baixa": {
+    "n": 131,
+    "win_pct": 33.6,
+    "avg_r": -0.105,
+    "seen_n": 72,
+    "seen_avg_r": -0.065,
+    "new_avg_r": -0.154,
+    "ret_pct": -1.32
+   },
+   "tendencia_alta": {
+    "n": 174,
+    "win_pct": 40.2,
+    "avg_r": 0.122,
+    "seen_n": 95,
+    "seen_avg_r": 0.027,
+    "new_avg_r": 0.236,
+    "ret_pct": 2.16
+   },
+   "tendencia_baixa": {
+    "n": 169,
+    "win_pct": 43.2,
+    "avg_r": 0.19,
+    "seen_n": 77,
+    "seen_avg_r": 0.298,
+    "new_avg_r": 0.1,
+    "ret_pct": 3.28
+   },
+   "lateral": {
+    "n": 116,
+    "win_pct": 29.3,
+    "avg_r": -0.218,
+    "seen_n": 60,
+    "seen_avg_r": -0.454,
+    "new_avg_r": 0.034,
+    "ret_pct": -2.36
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.0,
+   "rompimento_baixa": 0.0,
+   "reversao_alta": 2.5,
+   "reversao_baixa": 2.7,
+   "pullback_alta": 16.1,
+   "pullback_baixa": 14.2,
+   "tendencia_alta": 9.0,
+   "tendencia_baixa": 9.4,
+   "lateral": 15.7,
+   "indefinido": 30.5
+  },
+  "best_contexts": [
+   "tendencia_baixa",
+   "reversao_baixa",
+   "reversao_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.235,
+    95,
+    4
+   ],
+   "2a": [
+    0.128,
+    72,
+    2
+   ]
+  }
+ },
+ "mk_forex_1d_E_surf": {
+  "period_label": "9,0 anos",
+  "period_days": 3286,
+  "ret_pct": 6.38,
+  "monthly_pct": 0.06,
+  "ret_seen": 9.87,
+  "ret_new": 2.88,
+  "win_pct": 30.6,
+  "dd_pct": 14.7,
+  "trades_month": 0.3,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "EURUSD": 6.73,
+   "GBPUSD": -4.95,
+   "USDJPY": 0.6,
+   "AUDUSD": 2.35,
+   "USDCAD": 44.65,
+   "USDCHF": 11.69,
+   "NZDUSD": 0.24,
+   "EURJPY": -0.43,
+   "GBPJPY": 14.93,
+   "EURGBP": -12.04
+  },
+  "tested_at": "23/10/2026",
+  "market": "forex",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 3.1,
+  "monthly_pct_risk_half": 0.03,
+  "prev_ret_pct": 2.33,
+  "prev_pos_coins": "5/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 3.7,
+  "recent_pos_coins": "6/10",
+  "pf": 1.33,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 145,
+    "win_pct": 29.7,
+    "avg_r": 0.237,
+    "seen_n": 74,
+    "seen_avg_r": 0.437,
+    "new_avg_r": 0.028,
+    "ret_pct": 3.57
+   },
+   "reversao_baixa": {
+    "n": 175,
+    "win_pct": 30.9,
+    "avg_r": -0.023,
+    "seen_n": 93,
+    "seen_avg_r": -0.007,
+    "new_avg_r": -0.041,
+    "ret_pct": -0.46
+   },
+   "pullback_alta": {
+    "n": 99,
+    "win_pct": 33.3,
+    "avg_r": 0.067,
+    "seen_n": 56,
+    "seen_avg_r": 0.074,
+    "new_avg_r": 0.058,
+    "ret_pct": 0.72
+   },
+   "pullback_baixa": {
+    "n": 95,
+    "win_pct": 27.4,
+    "avg_r": -0.024,
+    "seen_n": 55,
+    "seen_avg_r": -0.044,
+    "new_avg_r": 0.004,
+    "ret_pct": -0.27
+   },
+   "tendencia_alta": {
+    "n": 155,
+    "win_pct": 31.6,
+    "avg_r": 0.164,
+    "seen_n": 83,
+    "seen_avg_r": -0.114,
+    "new_avg_r": 0.485,
+    "ret_pct": 2.53
+   },
+   "tendencia_baixa": {
+    "n": 168,
+    "win_pct": 29.2,
+    "avg_r": 0.108,
+    "seen_n": 78,
+    "seen_avg_r": 0.532,
+    "new_avg_r": -0.26,
+    "ret_pct": 2.16
+   },
+   "lateral": {
+    "n": 89,
+    "win_pct": 22.5,
+    "avg_r": -0.211,
+    "seen_n": 48,
+    "seen_avg_r": -0.559,
+    "new_avg_r": 0.197,
+    "ret_pct": -1.8
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.0,
+   "rompimento_baixa": 0.0,
+   "reversao_alta": 2.5,
+   "reversao_baixa": 2.7,
+   "pullback_alta": 16.1,
+   "pullback_baixa": 14.2,
+   "tendencia_alta": 9.0,
+   "tendencia_baixa": 9.4,
+   "lateral": 15.7,
+   "indefinido": 30.5
+  },
+  "best_contexts": [
+   "tendencia_baixa",
+   "reversao_alta",
+   "pullback_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.137,
+    76,
+    3
+   ],
+   "2a": [
+    0.07,
+    66,
+    3
+   ]
+  }
+ },
+ "mk_forex_4h_E_tp15": {
+  "period_label": "1,8 anos",
+  "period_days": 668,
+  "ret_pct": 8.32,
+  "monthly_pct": 0.36,
+  "ret_seen": 11.67,
+  "ret_new": 4.96,
+  "win_pct": 53.4,
+  "dd_pct": 8.1,
+  "trades_month": 1.2,
+  "pos_coins": "8/10",
+  "per_symbol": {
+   "EURUSD": -6.19,
+   "GBPUSD": 5.38,
+   "USDJPY": 9.35,
+   "AUDUSD": 32.56,
+   "USDCAD": 17.28,
+   "USDCHF": -4.1,
+   "NZDUSD": 17.69,
+   "EURJPY": 3.4,
+   "GBPJPY": 5.78,
+   "EURGBP": 2.06
+  },
+  "tested_at": "23/10/2026",
+  "market": "forex",
+  "interval": "4h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 4.0,
+  "monthly_pct_risk_half": 0.18,
+  "prev_ret_pct": 6.03,
+  "prev_pos_coins": "7/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 1.8,
+  "recent_pos_coins": "8/10",
+  "pf": 1.6,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 94,
+    "win_pct": 56.4,
+    "avg_r": 0.356,
+    "seen_n": 53,
+    "seen_avg_r": 0.459,
+    "new_avg_r": 0.224,
+    "ret_pct": 3.39
+   },
+   "reversao_baixa": {
+    "n": 112,
+    "win_pct": 45.5,
+    "avg_r": 0.099,
+    "seen_n": 51,
+    "seen_avg_r": 0.128,
+    "new_avg_r": 0.074,
+    "ret_pct": 1.15
+   },
+   "pullback_alta": {
+    "n": 25,
+    "win_pct": 60.0,
+    "avg_r": 0.386,
+    "seen_n": 11,
+    "seen_avg_r": 0.432,
+    "new_avg_r": 0.351,
+    "ret_pct": 0.97
+   },
+   "pullback_baixa": {
+    "n": 18,
+    "win_pct": 33.3,
+    "avg_r": -0.203,
+    "seen_n": 12,
+    "seen_avg_r": -0.205,
+    "new_avg_r": -0.198,
+    "ret_pct": -0.37
+   },
+   "tendencia_alta": {
+    "n": 6,
+    "win_pct": 83.3,
+    "avg_r": 1.038,
+    "seen_n": 2,
+    "seen_avg_r": 1.452,
+    "new_avg_r": 0.831,
+    "ret_pct": 0.62
+   },
+   "tendencia_baixa": {
+    "n": 2,
+    "win_pct": 50.0,
+    "avg_r": 0.216,
+    "seen_n": 1,
+    "seen_avg_r": 1.459,
+    "new_avg_r": -1.028,
+    "ret_pct": 0.04
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.0,
+   "rompimento_baixa": 0.0,
+   "reversao_alta": 2.9,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 17.2,
+   "pullback_baixa": 13.2,
+   "tendencia_alta": 11.4,
+   "tendencia_baixa": 11.0,
+   "lateral": 11.9,
+   "indefinido": 29.4
+  },
+  "best_contexts": [
+   "reversao_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.322,
+    58,
+    3
+   ],
+   "2a": [
+    0.075,
+    72,
+    4
+   ]
+  }
+ },
+ "mk_forex_4h_E_tp20": {
+  "period_label": "1,8 anos",
+  "period_days": 668,
+  "ret_pct": 6.44,
+  "monthly_pct": 0.28,
+  "ret_seen": 9.84,
+  "ret_new": 3.04,
+  "win_pct": 46.0,
+  "dd_pct": 6.7,
+  "trades_month": 0.8,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "EURUSD": -1.11,
+   "GBPUSD": 0.18,
+   "USDJPY": 11.96,
+   "AUDUSD": 27.97,
+   "USDCAD": 10.2,
+   "USDCHF": -1.97,
+   "NZDUSD": 10.43,
+   "EURJPY": 5.52,
+   "GBPJPY": -3.05,
+   "EURGBP": 4.29
+  },
+  "tested_at": "23/10/2026",
+  "market": "forex",
+  "interval": "4h",
+  "status": "ressalva",
+  "ret_pct_risk_half": 3.14,
+  "monthly_pct_risk_half": 0.14,
+  "prev_ret_pct": 5.44,
+  "prev_pos_coins": "8/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 0.72,
+  "recent_pos_coins": "6/10",
+  "pf": 1.59,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 86,
+    "win_pct": 53.5,
+    "avg_r": 0.527,
+    "seen_n": 50,
+    "seen_avg_r": 0.666,
+    "new_avg_r": 0.335,
+    "ret_pct": 4.61
+   },
+   "reversao_baixa": {
+    "n": 103,
+    "win_pct": 38.8,
+    "avg_r": 0.134,
+    "seen_n": 46,
+    "seen_avg_r": 0.273,
+    "new_avg_r": 0.022,
+    "ret_pct": 1.43
+   },
+   "pullback_alta": {
+    "n": 1,
+    "win_pct": 100.0,
+    "avg_r": 0.185,
+    "seen_n": 1,
+    "seen_avg_r": 0.185,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.02
+   },
+   "pullback_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.0,
+   "rompimento_baixa": 0.0,
+   "reversao_alta": 2.9,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 17.2,
+   "pullback_baixa": 13.2,
+   "tendencia_alta": 11.4,
+   "tendencia_baixa": 11.0,
+   "lateral": 11.9,
+   "indefinido": 29.4
+  },
+  "best_contexts": [
+   "reversao_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.316,
+    42,
+    4
+   ],
+   "2a": [
+    0.043,
+    49,
+    3
+   ]
+  }
+ },
+ "mk_indices_1d_E_surf": {
+  "period_label": "8,9 anos",
+  "period_days": 3266,
+  "ret_pct": 21.88,
+  "monthly_pct": 0.18,
+  "ret_seen": 28.16,
+  "ret_new": 15.59,
+  "win_pct": 34.6,
+  "dd_pct": 14.5,
+  "trades_month": 0.3,
+  "pos_coins": "9/10",
+  "per_symbol": {
+   "BVSP": 14.66,
+   "GSPC": 34.91,
+   "NDX": 25.49,
+   "GDAXI": 40.04,
+   "N225": 25.71,
+   "DJI": 22.04,
+   "FTSE": 14.45,
+   "FCHI": 15.88,
+   "HSI": -4.81,
+   "AXJO": 30.39
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 10.52,
+  "monthly_pct_risk_half": 0.09,
+  "prev_ret_pct": 5.95,
+  "prev_pos_coins": "7/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 14.92,
+  "recent_pos_coins": "10/10",
+  "pf": 2.41,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 4,
+    "win_pct": 25.0,
+    "avg_r": -0.079,
+    "seen_n": 4,
+    "seen_avg_r": -0.079,
+    "new_avg_r": 0.0,
+    "ret_pct": -0.03
+   },
+   "rompimento_baixa": {
+    "n": 14,
+    "win_pct": 21.4,
+    "avg_r": 0.047,
+    "seen_n": 4,
+    "seen_avg_r": 0.291,
+    "new_avg_r": -0.05,
+    "ret_pct": 0.07
+   },
+   "reversao_alta": {
+    "n": 52,
+    "win_pct": 42.3,
+    "avg_r": 0.875,
+    "seen_n": 19,
+    "seen_avg_r": 1.097,
+    "new_avg_r": 0.747,
+    "ret_pct": 4.62
+   },
+   "reversao_baixa": {
+    "n": 4,
+    "win_pct": 0.0,
+    "avg_r": -0.743,
+    "seen_n": 2,
+    "seen_avg_r": -0.979,
+    "new_avg_r": -0.508,
+    "ret_pct": -0.3
+   },
+   "pullback_alta": {
+    "n": 106,
+    "win_pct": 32.1,
+    "avg_r": 0.39,
+    "seen_n": 60,
+    "seen_avg_r": 0.597,
+    "new_avg_r": 0.119,
+    "ret_pct": 4.27
+   },
+   "pullback_baixa": {
+    "n": 5,
+    "win_pct": 60.0,
+    "avg_r": 1.101,
+    "seen_n": 3,
+    "seen_avg_r": 0.95,
+    "new_avg_r": 1.327,
+    "ret_pct": 0.55
+   },
+   "tendencia_alta": {
+    "n": 6,
+    "win_pct": 33.3,
+    "avg_r": 0.756,
+    "seen_n": 4,
+    "seen_avg_r": 1.391,
+    "new_avg_r": -0.516,
+    "ret_pct": 0.45
+   },
+   "tendencia_baixa": {
+    "n": 97,
+    "win_pct": 41.2,
+    "avg_r": 1.246,
+    "seen_n": 43,
+    "seen_avg_r": 1.353,
+    "new_avg_r": 1.161,
+    "ret_pct": 12.64
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.6,
+   "rompimento_baixa": 1.0,
+   "reversao_alta": 1.2,
+   "reversao_baixa": 2.8,
+   "pullback_alta": 18.9,
+   "pullback_baixa": 7.4,
+   "tendencia_alta": 13.3,
+   "tendencia_baixa": 4.0,
+   "lateral": 16.7,
+   "indefinido": 34.2
+  },
+  "best_contexts": [
+   "tendencia_baixa",
+   "reversao_alta",
+   "pullback_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.166,
+    94,
+    3
+   ],
+   "2a": [
+    0.767,
+    76,
+    5
+   ]
+  }
+ },
+ "mk_indices_1d_E_tp20": {
+  "period_label": "8,9 anos",
+  "period_days": 3266,
+  "ret_pct": 14.11,
+  "monthly_pct": 0.12,
+  "ret_seen": 17.55,
+  "ret_new": 10.66,
+  "win_pct": 49.5,
+  "dd_pct": 11.5,
+  "trades_month": 0.3,
+  "pos_coins": "9/10",
+  "per_symbol": {
+   "BVSP": 26.87,
+   "GSPC": 4.47,
+   "NDX": 18.84,
+   "GDAXI": 28.99,
+   "N225": 8.58,
+   "DJI": 15.45,
+   "FTSE": 20.12,
+   "FCHI": 13.28,
+   "HSI": -8.23,
+   "AXJO": 12.69
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 6.8,
+  "monthly_pct_risk_half": 0.06,
+  "prev_ret_pct": 4.86,
+  "prev_pos_coins": "8/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 8.33,
+  "recent_pos_coins": "9/10",
+  "pf": 1.86,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 37,
+    "win_pct": 62.2,
+    "avg_r": 0.852,
+    "seen_n": 15,
+    "seen_avg_r": 0.789,
+    "new_avg_r": 0.895,
+    "ret_pct": 3.28
+   },
+   "reversao_alta": {
+    "n": 81,
+    "win_pct": 54.3,
+    "avg_r": 0.565,
+    "seen_n": 38,
+    "seen_avg_r": 0.52,
+    "new_avg_r": 0.604,
+    "ret_pct": 4.62
+   },
+   "reversao_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "pullback_alta": {
+    "n": 122,
+    "win_pct": 47.5,
+    "avg_r": 0.375,
+    "seen_n": 68,
+    "seen_avg_r": 0.516,
+    "new_avg_r": 0.198,
+    "ret_pct": 4.73
+   },
+   "pullback_baixa": {
+    "n": 4,
+    "win_pct": 25.0,
+    "avg_r": -0.266,
+    "seen_n": 2,
+    "seen_avg_r": 0.484,
+    "new_avg_r": -1.017,
+    "ret_pct": -0.11
+   },
+   "tendencia_alta": {
+    "n": 14,
+    "win_pct": 57.1,
+    "avg_r": 0.692,
+    "seen_n": 7,
+    "seen_avg_r": 0.693,
+    "new_avg_r": 0.69,
+    "ret_pct": 0.96
+   },
+   "tendencia_baixa": {
+    "n": 82,
+    "win_pct": 52.4,
+    "avg_r": 0.549,
+    "seen_n": 35,
+    "seen_avg_r": 0.61,
+    "new_avg_r": 0.503,
+    "ret_pct": 4.57
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.6,
+   "rompimento_baixa": 1.0,
+   "reversao_alta": 1.2,
+   "reversao_baixa": 2.8,
+   "pullback_alta": 18.9,
+   "pullback_baixa": 7.4,
+   "tendencia_alta": 13.3,
+   "tendencia_baixa": 4.0,
+   "lateral": 16.7,
+   "indefinido": 34.2
+  },
+  "best_contexts": [
+   "rompimento_baixa",
+   "tendencia_baixa",
+   "reversao_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.164,
+    83,
+    4
+   ],
+   "2a": [
+    0.562,
+    65,
+    4
+   ]
+  }
+ },
+ "mk_indices_1d_B_surf": {
+  "period_label": "8,9 anos",
+  "period_days": 3266,
+  "ret_pct": 17.41,
+  "monthly_pct": 0.15,
+  "ret_seen": 29.72,
+  "ret_new": 5.09,
+  "win_pct": 34.6,
+  "dd_pct": 24.3,
+  "trades_month": 0.3,
+  "pos_coins": "8/10",
+  "per_symbol": {
+   "BVSP": 20.54,
+   "GSPC": 38.94,
+   "NDX": 50.72,
+   "GDAXI": 24.62,
+   "N225": 13.79,
+   "DJI": 33.47,
+   "FTSE": -16.16,
+   "FCHI": -0.16,
+   "HSI": 4.58,
+   "AXJO": 3.74
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 8.27,
+  "monthly_pct_risk_half": 0.07,
+  "prev_ret_pct": 5.81,
+  "prev_pos_coins": "7/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 10.54,
+  "recent_pos_coins": "7/10",
+  "pf": 1.82,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 75,
+    "win_pct": 33.3,
+    "avg_r": 0.552,
+    "seen_n": 35,
+    "seen_avg_r": 0.785,
+    "new_avg_r": 0.347,
+    "ret_pct": 4.25
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 157,
+    "win_pct": 31.8,
+    "avg_r": 0.255,
+    "seen_n": 88,
+    "seen_avg_r": 0.368,
+    "new_avg_r": 0.111,
+    "ret_pct": 3.85
+   },
+   "pullback_alta": {
+    "n": 105,
+    "win_pct": 29.5,
+    "avg_r": 0.206,
+    "seen_n": 47,
+    "seen_avg_r": 0.816,
+    "new_avg_r": -0.288,
+    "ret_pct": 2.42
+   },
+   "pullback_baixa": {
+    "n": 55,
+    "win_pct": 47.3,
+    "avg_r": 1.16,
+    "seen_n": 26,
+    "seen_avg_r": 1.371,
+    "new_avg_r": 0.971,
+    "ret_pct": 6.55
+   },
+   "tendencia_alta": {
+    "n": 220,
+    "win_pct": 30.5,
+    "avg_r": 0.23,
+    "seen_n": 112,
+    "seen_avg_r": 0.586,
+    "new_avg_r": -0.139,
+    "ret_pct": 5.4
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.6,
+   "rompimento_baixa": 1.0,
+   "reversao_alta": 1.2,
+   "reversao_baixa": 2.8,
+   "pullback_alta": 18.9,
+   "pullback_baixa": 7.4,
+   "tendencia_alta": 13.3,
+   "tendencia_baixa": 4.0,
+   "lateral": 16.7,
+   "indefinido": 34.2
+  },
+  "best_contexts": [
+   "pullback_baixa",
+   "pullback_alta",
+   "rompimento_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.12,
+    83,
+    3
+   ],
+   "2a": [
+    0.165,
+    82,
+    2
+   ]
+  }
+ },
+ "mk_indices_1h_E_surf": {
+  "period_label": "1,8 anos",
+  "period_days": 674,
+  "ret_pct": 14.65,
+  "monthly_pct": 0.61,
+  "ret_seen": 17.68,
+  "ret_new": 11.63,
+  "win_pct": 41.8,
+  "dd_pct": 6.4,
+  "trades_month": 1.1,
+  "pos_coins": "10/10",
+  "per_symbol": {
+   "BVSP": 28.78,
+   "GSPC": 3.16,
+   "NDX": 2.23,
+   "GDAXI": 34.02,
+   "N225": 20.21,
+   "DJI": 10.59,
+   "FTSE": 18.64,
+   "FCHI": 6.89,
+   "HSI": 13.58,
+   "AXJO": 8.45
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "1h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 7.18,
+  "monthly_pct_risk_half": 0.31,
+  "prev_ret_pct": 8.69,
+  "prev_pos_coins": "9/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 5.45,
+  "recent_pos_coins": "6/10",
+  "pf": 2.07,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 9,
+    "win_pct": 0.0,
+    "avg_r": -0.934,
+    "seen_n": 6,
+    "seen_avg_r": -1.059,
+    "new_avg_r": -0.682,
+    "ret_pct": -0.83
+   },
+   "reversao_alta": {
+    "n": 97,
+    "win_pct": 41.2,
+    "avg_r": 0.68,
+    "seen_n": 45,
+    "seen_avg_r": 0.813,
+    "new_avg_r": 0.565,
+    "ret_pct": 6.64
+   },
+   "reversao_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "pullback_alta": {
+    "n": 91,
+    "win_pct": 39.6,
+    "avg_r": 0.518,
+    "seen_n": 39,
+    "seen_avg_r": 0.547,
+    "new_avg_r": 0.495,
+    "ret_pct": 4.66
+   },
+   "pullback_baixa": {
+    "n": 1,
+    "win_pct": 0.0,
+    "avg_r": -1.053,
+    "seen_n": 1,
+    "seen_avg_r": -1.053,
+    "new_avg_r": 0.0,
+    "ret_pct": -0.11
+   },
+   "tendencia_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_baixa": {
+    "n": 6,
+    "win_pct": 100.0,
+    "avg_r": 2.174,
+    "seen_n": 2,
+    "seen_avg_r": 2.985,
+    "new_avg_r": 1.769,
+    "ret_pct": 1.31
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.4,
+   "rompimento_baixa": 0.4,
+   "reversao_alta": 2.9,
+   "reversao_baixa": 3.6,
+   "pullback_alta": 17.7,
+   "pullback_baixa": 9.7,
+   "tendencia_alta": 17.3,
+   "tendencia_baixa": 7.8,
+   "lateral": 9.1,
+   "indefinido": 31.3
+  },
+  "best_contexts": [
+   "reversao_alta",
+   "pullback_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.469,
+    64,
+    4
+   ],
+   "2a": [
+    0.445,
+    62,
+    3
+   ]
+  }
+ },
+ "mk_indices_1h_E_tp20": {
+  "period_label": "1,8 anos",
+  "period_days": 674,
+  "ret_pct": 12.33,
+  "monthly_pct": 0.52,
+  "ret_seen": 12.76,
+  "ret_new": 11.89,
+  "win_pct": 43.7,
+  "dd_pct": 12.8,
+  "trades_month": 2.5,
+  "pos_coins": "9/10",
+  "per_symbol": {
+   "BVSP": 5.62,
+   "GSPC": 9.74,
+   "NDX": -1.37,
+   "GDAXI": 16.86,
+   "N225": 32.94,
+   "DJI": 12.96,
+   "FTSE": 10.8,
+   "FCHI": 20.76,
+   "HSI": 3.76,
+   "AXJO": 11.19
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "1h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 6.07,
+  "monthly_pct_risk_half": 0.26,
+  "prev_ret_pct": 4.92,
+  "prev_pos_coins": "8/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 7.06,
+  "recent_pos_coins": "10/10",
+  "pf": 1.34,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 1,
+    "win_pct": 100.0,
+    "avg_r": 1.945,
+    "seen_n": 1,
+    "seen_avg_r": 1.945,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.19
+   },
+   "rompimento_baixa": {
+    "n": 75,
+    "win_pct": 30.7,
+    "avg_r": -0.187,
+    "seen_n": 49,
+    "seen_avg_r": -0.246,
+    "new_avg_r": -0.075,
+    "ret_pct": -1.43
+   },
+   "reversao_alta": {
+    "n": 333,
+    "win_pct": 44.4,
+    "avg_r": 0.229,
+    "seen_n": 167,
+    "seen_avg_r": 0.249,
+    "new_avg_r": 0.209,
+    "ret_pct": 7.68
+   },
+   "reversao_baixa": {
+    "n": 6,
+    "win_pct": 50.0,
+    "avg_r": 0.398,
+    "seen_n": 2,
+    "seen_avg_r": 0.39,
+    "new_avg_r": 0.402,
+    "ret_pct": 0.24
+   },
+   "pullback_alta": {
+    "n": 710,
+    "win_pct": 36.9,
+    "avg_r": -0.023,
+    "seen_n": 345,
+    "seen_avg_r": -0.024,
+    "new_avg_r": -0.021,
+    "ret_pct": -1.4
+   },
+   "pullback_baixa": {
+    "n": 38,
+    "win_pct": 31.6,
+    "avg_r": -0.175,
+    "seen_n": 17,
+    "seen_avg_r": 0.471,
+    "new_avg_r": -0.698,
+    "ret_pct": -0.66
+   },
+   "tendencia_alta": {
+    "n": 71,
+    "win_pct": 33.8,
+    "avg_r": -0.111,
+    "seen_n": 33,
+    "seen_avg_r": -0.106,
+    "new_avg_r": -0.116,
+    "ret_pct": -0.84
+   },
+   "tendencia_baixa": {
+    "n": 333,
+    "win_pct": 43.5,
+    "avg_r": 0.209,
+    "seen_n": 156,
+    "seen_avg_r": 0.209,
+    "new_avg_r": 0.209,
+    "ret_pct": 6.98
+   },
+   "lateral": {
+    "n": 170,
+    "win_pct": 38.2,
+    "avg_r": 0.023,
+    "seen_n": 81,
+    "seen_avg_r": -0.068,
+    "new_avg_r": 0.107,
+    "ret_pct": 0.34
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.4,
+   "rompimento_baixa": 0.4,
+   "reversao_alta": 2.9,
+   "reversao_baixa": 3.6,
+   "pullback_alta": 17.7,
+   "pullback_baixa": 9.7,
+   "tendencia_alta": 17.3,
+   "tendencia_baixa": 7.8,
+   "lateral": 9.1,
+   "indefinido": 31.3
+  },
+  "best_contexts": [
+   "pullback_baixa",
+   "reversao_alta",
+   "tendencia_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.164,
+    113,
+    4
+   ],
+   "2a": [
+    0.242,
+    166,
+    5
+   ]
+  }
+ },
+ "mk_indices_1h_E_tp15": {
+  "period_label": "1,8 anos",
+  "period_days": 674,
+  "ret_pct": 2.4,
+  "monthly_pct": 0.11,
+  "ret_seen": 4.32,
+  "ret_new": 0.48,
+  "win_pct": 49.5,
+  "dd_pct": 8.6,
+  "trades_month": 0.9,
+  "pos_coins": "7/10",
+  "per_symbol": {
+   "BVSP": -0.26,
+   "GSPC": 3.35,
+   "NDX": 3.73,
+   "GDAXI": 5.28,
+   "N225": 9.46,
+   "DJI": 2.46,
+   "FTSE": 1.44,
+   "FCHI": -1.1,
+   "HSI": 3.31,
+   "AXJO": -3.68
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "1h",
+  "status": "ressalva",
+  "ret_pct_risk_half": 1.22,
+  "monthly_pct_risk_half": 0.05,
+  "prev_ret_pct": 1.17,
+  "prev_pos_coins": "7/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 1.26,
+  "recent_pos_coins": "6/10",
+  "pf": 1.22,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "rompimento_baixa": {
+    "n": 10,
+    "win_pct": 20.0,
+    "avg_r": -0.597,
+    "seen_n": 6,
+    "seen_avg_r": -1.085,
+    "new_avg_r": 0.135,
+    "ret_pct": -0.59
+   },
+   "reversao_alta": {
+    "n": 99,
+    "win_pct": 50.5,
+    "avg_r": 0.158,
+    "seen_n": 44,
+    "seen_avg_r": 0.265,
+    "new_avg_r": 0.072,
+    "ret_pct": 1.54
+   },
+   "reversao_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "pullback_alta": {
+    "n": 33,
+    "win_pct": 45.5,
+    "avg_r": 0.006,
+    "seen_n": 16,
+    "seen_avg_r": 0.444,
+    "new_avg_r": -0.407,
+    "ret_pct": 0.01
+   },
+   "pullback_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_baixa": {
+    "n": 12,
+    "win_pct": 50.0,
+    "avg_r": 0.141,
+    "seen_n": 4,
+    "seen_avg_r": 0.172,
+    "new_avg_r": 0.126,
+    "ret_pct": 0.17
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.4,
+   "rompimento_baixa": 0.4,
+   "reversao_alta": 2.9,
+   "reversao_baixa": 3.6,
+   "pullback_alta": 17.7,
+   "pullback_baixa": 9.7,
+   "tendencia_alta": 17.3,
+   "tendencia_baixa": 7.8,
+   "lateral": 9.1,
+   "indefinido": 31.3
+  },
+  "best_contexts": [
+   "pullback_alta",
+   "reversao_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.042,
+    56,
+    3
+   ],
+   "2a": [
+    0.014,
+    55,
+    2
+   ]
+  }
+ },
+ "mk_indices_4h_B_tp20": {
+  "period_label": "529 dias",
+  "period_days": 529,
+  "ret_pct": 5.57,
+  "monthly_pct": 0.31,
+  "ret_seen": 7.4,
+  "ret_new": 3.75,
+  "win_pct": 43.8,
+  "dd_pct": 10.0,
+  "trades_month": 1.3,
+  "pos_coins": "8/10",
+  "per_symbol": {
+   "BVSP": 10.47,
+   "GSPC": 7.96,
+   "NDX": 13.59,
+   "GDAXI": -2.09,
+   "N225": 7.06,
+   "DJI": 10.45,
+   "FTSE": 14.29,
+   "FCHI": -8.89,
+   "HSI": 2.29,
+   "AXJO": 0.6
+  },
+  "tested_at": "23/10/2026",
+  "market": "indices",
+  "interval": "4h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 2.75,
+  "monthly_pct_risk_half": 0.15,
+  "prev_ret_pct": 4.48,
+  "prev_pos_coins": "9/10",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 1.08,
+  "recent_pos_coins": "6/10",
+  "pf": 1.41,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 11,
+    "win_pct": 63.6,
+    "avg_r": 0.72,
+    "seen_n": 8,
+    "seen_avg_r": 0.634,
+    "new_avg_r": 0.947,
+    "ret_pct": 0.79
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 98,
+    "win_pct": 22.4,
+    "avg_r": -0.381,
+    "seen_n": 53,
+    "seen_avg_r": -0.203,
+    "new_avg_r": -0.59,
+    "ret_pct": -3.64
+   },
+   "pullback_alta": {
+    "n": 61,
+    "win_pct": 41.0,
+    "avg_r": 0.184,
+    "seen_n": 28,
+    "seen_avg_r": 0.139,
+    "new_avg_r": 0.222,
+    "ret_pct": 1.1
+   },
+   "pullback_baixa": {
+    "n": 3,
+    "win_pct": 100.0,
+    "avg_r": 1.973,
+    "seen_n": 1,
+    "seen_avg_r": 1.974,
+    "new_avg_r": 1.972,
+    "ret_pct": 0.59
+   },
+   "tendencia_alta": {
+    "n": 130,
+    "win_pct": 40.0,
+    "avg_r": 0.137,
+    "seen_n": 70,
+    "seen_avg_r": 0.189,
+    "new_avg_r": 0.077,
+    "ret_pct": 1.72
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 0.3,
+   "rompimento_baixa": 0.2,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 3.5,
+   "pullback_alta": 22.3,
+   "pullback_baixa": 4.3,
+   "tendencia_alta": 14.4,
+   "tendencia_baixa": 3.9,
+   "lateral": 15.2,
+   "indefinido": 34.6
+  },
+  "best_contexts": [
+   "tendencia_alta",
+   "pullback_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.219,
+    72,
+    4
+   ],
+   "2a": [
+    0.06,
+    38,
+    2
+   ]
+  }
+ },
+ "mk_stocks_1d_C_tp20": {
+  "period_label": "9,0 anos",
+  "period_days": 3276,
+  "ret_pct": 5.26,
+  "monthly_pct": 0.05,
+  "ret_seen": 4.47,
+  "ret_new": 6.06,
+  "win_pct": 43.2,
+  "dd_pct": 8.5,
+  "trades_month": 0.2,
+  "pos_coins": "9/12",
+  "per_symbol": {
+   "PETR4": 9.66,
+   "VALE3": -0.84,
+   "ITUB4": 8.18,
+   "BBDC4": 3.42,
+   "ABEV3": -2.05,
+   "WEGE3": 8.45,
+   "BBAS3": 14.26,
+   "B3SA3": 3.85,
+   "SUZB3": 0.09,
+   "RENT3": 10.94,
+   "LREN3": -0.44,
+   "GGBR4": 7.64
+  },
+  "tested_at": "23/10/2026",
+  "market": "stocks",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 2.62,
+  "monthly_pct_risk_half": 0.02,
+  "prev_ret_pct": 3.08,
+  "prev_pos_coins": "9/12",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 2.04,
+  "recent_pos_coins": "8/12",
+  "pf": 1.45,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 235,
+    "win_pct": 42.6,
+    "avg_r": 0.242,
+    "seen_n": 124,
+    "seen_avg_r": 0.178,
+    "new_avg_r": 0.315,
+    "ret_pct": 4.75
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 18,
+    "win_pct": 44.4,
+    "avg_r": 0.309,
+    "seen_n": 5,
+    "seen_avg_r": 0.767,
+    "new_avg_r": 0.132,
+    "ret_pct": 0.46
+   },
+   "pullback_alta": {
+    "n": 10,
+    "win_pct": 10.0,
+    "avg_r": -0.77,
+    "seen_n": 5,
+    "seen_avg_r": -1.021,
+    "new_avg_r": -0.519,
+    "ret_pct": -0.64
+   },
+   "pullback_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "tendencia_alta": {
+    "n": 56,
+    "win_pct": 46.4,
+    "avg_r": 0.326,
+    "seen_n": 23,
+    "seen_avg_r": 0.159,
+    "new_avg_r": 0.442,
+    "ret_pct": 1.5
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 25,
+    "win_pct": 36.0,
+    "avg_r": -0.021,
+    "seen_n": 15,
+    "seen_avg_r": -0.154,
+    "new_avg_r": 0.179,
+    "ret_pct": -0.04
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.0,
+   "rompimento_baixa": 1.7,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 14.7,
+   "pullback_baixa": 11.6,
+   "tendencia_alta": 13.0,
+   "tendencia_baixa": 7.3,
+   "lateral": 13.1,
+   "indefinido": 32.3
+  },
+  "best_contexts": [
+   "rompimento_alta",
+   "tendencia_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.339,
+    64,
+    4
+   ],
+   "2a": [
+    0.272,
+    52,
+    3
+   ]
+  }
+ },
+ "mk_stocks_1d_C_surf": {
+  "period_label": "9,0 anos",
+  "period_days": 3276,
+  "ret_pct": 5.73,
+  "monthly_pct": 0.05,
+  "ret_seen": 8.12,
+  "ret_new": 3.33,
+  "win_pct": 42.0,
+  "dd_pct": 8.8,
+  "trades_month": 0.4,
+  "pos_coins": "9/12",
+  "per_symbol": {
+   "PETR4": 7.09,
+   "VALE3": 4.65,
+   "ITUB4": 9.99,
+   "BBDC4": 10.22,
+   "ABEV3": -0.41,
+   "WEGE3": 17.18,
+   "BBAS3": 6.08,
+   "B3SA3": 5.94,
+   "SUZB3": -6.82,
+   "RENT3": 3.03,
+   "LREN3": -3.17,
+   "GGBR4": 14.93
+  },
+  "tested_at": "23/10/2026",
+  "market": "stocks",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 2.84,
+  "monthly_pct_risk_half": 0.03,
+  "prev_ret_pct": 2.31,
+  "prev_pos_coins": "8/12",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 3.34,
+  "recent_pos_coins": "8/12",
+  "pf": 1.41,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 290,
+    "win_pct": 44.8,
+    "avg_r": 0.186,
+    "seen_n": 144,
+    "seen_avg_r": 0.32,
+    "new_avg_r": 0.054,
+    "ret_pct": 4.6
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 35,
+    "win_pct": 31.4,
+    "avg_r": -0.058,
+    "seen_n": 15,
+    "seen_avg_r": -0.244,
+    "new_avg_r": 0.081,
+    "ret_pct": -0.17
+   },
+   "pullback_alta": {
+    "n": 20,
+    "win_pct": 20.0,
+    "avg_r": -0.32,
+    "seen_n": 11,
+    "seen_avg_r": -0.296,
+    "new_avg_r": -0.349,
+    "ret_pct": -0.54
+   },
+   "pullback_baixa": {
+    "n": 10,
+    "win_pct": 40.0,
+    "avg_r": 0.185,
+    "seen_n": 6,
+    "seen_avg_r": 0.133,
+    "new_avg_r": 0.262,
+    "ret_pct": 0.15
+   },
+   "tendencia_alta": {
+    "n": 122,
+    "win_pct": 50.0,
+    "avg_r": 0.332,
+    "seen_n": 59,
+    "seen_avg_r": 0.313,
+    "new_avg_r": 0.351,
+    "ret_pct": 3.37
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 39,
+    "win_pct": 46.2,
+    "avg_r": -0.026,
+    "seen_n": 23,
+    "seen_avg_r": -0.123,
+    "new_avg_r": 0.114,
+    "ret_pct": -0.09
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.0,
+   "rompimento_baixa": 1.7,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 14.7,
+   "pullback_baixa": 11.6,
+   "tendencia_alta": 13.0,
+   "tendencia_baixa": 7.3,
+   "lateral": 13.1,
+   "indefinido": 32.3
+  },
+  "best_contexts": [
+   "rompimento_alta",
+   "tendencia_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.086,
+    122,
+    3
+   ],
+   "2a": [
+    0.085,
+    109,
+    3
+   ]
+  }
+ },
+ "mk_stocks_1d_A_tp20": {
+  "period_label": "9,0 anos",
+  "period_days": 3276,
+  "ret_pct": 4.71,
+  "monthly_pct": 0.04,
+  "ret_seen": 5.96,
+  "ret_new": 3.46,
+  "win_pct": 43.3,
+  "dd_pct": 9.2,
+  "trades_month": 0.2,
+  "pos_coins": "11/12",
+  "per_symbol": {
+   "PETR4": 1.21,
+   "VALE3": 7.58,
+   "ITUB4": 13.04,
+   "BBDC4": 0.15,
+   "ABEV3": 0.26,
+   "WEGE3": 13.51,
+   "BBAS3": -3.0,
+   "B3SA3": 4.61,
+   "SUZB3": 8.66,
+   "RENT3": 5.42,
+   "LREN3": 0.6,
+   "GGBR4": 4.45
+  },
+  "tested_at": "23/10/2026",
+  "market": "stocks",
+  "interval": "1d",
+  "status": "aprovado",
+  "ret_pct_risk_half": 2.35,
+  "monthly_pct_risk_half": 0.02,
+  "prev_ret_pct": 2.85,
+  "prev_pos_coins": "10/12",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 1.87,
+  "recent_pos_coins": "7/12",
+  "pf": 1.45,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 183,
+    "win_pct": 41.5,
+    "avg_r": 0.211,
+    "seen_n": 99,
+    "seen_avg_r": 0.233,
+    "new_avg_r": 0.186,
+    "ret_pct": 3.16
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 86,
+    "win_pct": 40.7,
+    "avg_r": 0.178,
+    "seen_n": 47,
+    "seen_avg_r": 0.225,
+    "new_avg_r": 0.121,
+    "ret_pct": 1.29
+   },
+   "pullback_alta": {
+    "n": 68,
+    "win_pct": 29.4,
+    "avg_r": -0.146,
+    "seen_n": 33,
+    "seen_avg_r": -0.304,
+    "new_avg_r": 0.003,
+    "ret_pct": -0.84
+   },
+   "pullback_baixa": {
+    "n": 53,
+    "win_pct": 34.0,
+    "avg_r": 0.006,
+    "seen_n": 24,
+    "seen_avg_r": 0.001,
+    "new_avg_r": 0.01,
+    "ret_pct": 0.03
+   },
+   "tendencia_alta": {
+    "n": 127,
+    "win_pct": 42.5,
+    "avg_r": 0.243,
+    "seen_n": 63,
+    "seen_avg_r": 0.109,
+    "new_avg_r": 0.375,
+    "ret_pct": 2.55
+   },
+   "tendencia_baixa": {
+    "n": 5,
+    "win_pct": 60.0,
+    "avg_r": 0.773,
+    "seen_n": 2,
+    "seen_avg_r": 0.47,
+    "new_avg_r": 0.975,
+    "ret_pct": 0.32
+   },
+   "lateral": {
+    "n": 70,
+    "win_pct": 47.1,
+    "avg_r": 0.396,
+    "seen_n": 36,
+    "seen_avg_r": 0.492,
+    "new_avg_r": 0.295,
+    "ret_pct": 2.3
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.0,
+   "rompimento_baixa": 1.7,
+   "reversao_alta": 1.4,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 14.7,
+   "pullback_baixa": 11.6,
+   "tendencia_alta": 13.0,
+   "tendencia_baixa": 7.3,
+   "lateral": 13.1,
+   "indefinido": 32.3
+  },
+  "best_contexts": [
+   "lateral",
+   "rompimento_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.287,
+    57,
+    5
+   ],
+   "2a": [
+    0.113,
+    42,
+    3
+   ]
+  }
+ },
+ "mk_stocks_1h_E_surf": {
+  "period_label": "1,8 anos",
+  "period_days": 674,
+  "ret_pct": 13.92,
+  "monthly_pct": 0.58,
+  "ret_seen": 18.32,
+  "ret_new": 9.53,
+  "win_pct": 28.9,
+  "dd_pct": 23.2,
+  "trades_month": 3.3,
+  "pos_coins": "11/12",
+  "per_symbol": {
+   "PETR4": 20.68,
+   "VALE3": 19.15,
+   "ITUB4": 32.82,
+   "BBDC4": 22.35,
+   "ABEV3": 14.22,
+   "WEGE3": 0.71,
+   "BBAS3": 10.38,
+   "B3SA3": 28.11,
+   "SUZB3": -19.18,
+   "RENT3": 22.42,
+   "LREN3": 8.12,
+   "GGBR4": 7.31
+  },
+  "tested_at": "23/10/2026",
+  "market": "stocks",
+  "interval": "1h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 7.11,
+  "monthly_pct_risk_half": 0.31,
+  "prev_ret_pct": 7.37,
+  "prev_pos_coins": "9/12",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 7.06,
+  "recent_pos_coins": "11/12",
+  "pf": 1.28,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 3,
+    "win_pct": 33.3,
+    "avg_r": 1.555,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 1.555,
+    "ret_pct": 0.39
+   },
+   "rompimento_baixa": {
+    "n": 214,
+    "win_pct": 29.0,
+    "avg_r": 0.263,
+    "seen_n": 101,
+    "seen_avg_r": 0.424,
+    "new_avg_r": 0.119,
+    "ret_pct": 4.8
+   },
+   "reversao_alta": {
+    "n": 320,
+    "win_pct": 25.9,
+    "avg_r": 0.011,
+    "seen_n": 150,
+    "seen_avg_r": -0.038,
+    "new_avg_r": 0.054,
+    "ret_pct": -0.0
+   },
+   "reversao_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "pullback_alta": {
+    "n": 288,
+    "win_pct": 27.1,
+    "avg_r": 0.088,
+    "seen_n": 153,
+    "seen_avg_r": -0.051,
+    "new_avg_r": 0.245,
+    "ret_pct": 2.32
+   },
+   "pullback_baixa": {
+    "n": 80,
+    "win_pct": 25.0,
+    "avg_r": 0.005,
+    "seen_n": 31,
+    "seen_avg_r": 0.166,
+    "new_avg_r": -0.097,
+    "ret_pct": 0.06
+   },
+   "tendencia_alta": {
+    "n": 85,
+    "win_pct": 24.7,
+    "avg_r": -0.268,
+    "seen_n": 40,
+    "seen_avg_r": 0.05,
+    "new_avg_r": -0.55,
+    "ret_pct": -1.84
+   },
+   "tendencia_baixa": {
+    "n": 381,
+    "win_pct": 29.4,
+    "avg_r": 0.186,
+    "seen_n": 175,
+    "seen_avg_r": 0.155,
+    "new_avg_r": 0.212,
+    "ret_pct": 5.7
+   },
+   "lateral": {
+    "n": 76,
+    "win_pct": 40.8,
+    "avg_r": 0.572,
+    "seen_n": 35,
+    "seen_avg_r": 0.377,
+    "new_avg_r": 0.739,
+    "ret_pct": 3.58
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.0,
+   "rompimento_baixa": 1.6,
+   "reversao_alta": 2.2,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 14.1,
+   "pullback_baixa": 12.7,
+   "tendencia_alta": 14.8,
+   "tendencia_baixa": 11.7,
+   "lateral": 8.4,
+   "indefinido": 29.5
+  },
+  "best_contexts": [
+   "rompimento_baixa",
+   "lateral",
+   "pullback_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.081,
+    225,
+    4
+   ],
+   "2a": [
+    0.186,
+    231,
+    5
+   ]
+  }
+ },
+ "mk_stocks_1h_D_tp15": {
+  "period_label": "1,8 anos",
+  "period_days": 674,
+  "ret_pct": 6.04,
+  "monthly_pct": 0.26,
+  "ret_seen": 7.97,
+  "ret_new": 4.12,
+  "win_pct": 48.8,
+  "dd_pct": 13.4,
+  "trades_month": 1.7,
+  "pos_coins": "11/12",
+  "per_symbol": {
+   "PETR4": 11.47,
+   "VALE3": 5.13,
+   "ITUB4": 9.27,
+   "BBDC4": 8.12,
+   "ABEV3": 1.97,
+   "WEGE3": 11.86,
+   "BBAS3": 0.46,
+   "B3SA3": 16.29,
+   "SUZB3": -11.49,
+   "RENT3": 8.04,
+   "LREN3": 2.71,
+   "GGBR4": 8.71
+  },
+  "tested_at": "23/10/2026",
+  "market": "stocks",
+  "interval": "1h",
+  "status": "aprovado",
+  "ret_pct_risk_half": 3.0,
+  "monthly_pct_risk_half": 0.13,
+  "prev_ret_pct": 3.65,
+  "prev_pos_coins": "11/12",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 2.5,
+  "recent_pos_coins": "8/12",
+  "pf": 1.28,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 222,
+    "win_pct": 52.7,
+    "avg_r": 0.249,
+    "seen_n": 113,
+    "seen_avg_r": 0.373,
+    "new_avg_r": 0.12,
+    "ret_pct": 4.67
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 5,
+    "win_pct": 0.0,
+    "avg_r": -1.047,
+    "seen_n": 4,
+    "seen_avg_r": -1.047,
+    "new_avg_r": -1.047,
+    "ret_pct": -0.44
+   },
+   "reversao_baixa": {
+    "n": 109,
+    "win_pct": 43.1,
+    "avg_r": -0.016,
+    "seen_n": 57,
+    "seen_avg_r": 0.047,
+    "new_avg_r": -0.086,
+    "ret_pct": -0.17
+   },
+   "pullback_alta": {
+    "n": 82,
+    "win_pct": 39.0,
+    "avg_r": -0.077,
+    "seen_n": 45,
+    "seen_avg_r": -0.11,
+    "new_avg_r": -0.037,
+    "ret_pct": -0.55
+   },
+   "pullback_baixa": {
+    "n": 33,
+    "win_pct": 48.5,
+    "avg_r": 0.153,
+    "seen_n": 15,
+    "seen_avg_r": 0.437,
+    "new_avg_r": -0.085,
+    "ret_pct": 0.41
+   },
+   "tendencia_alta": {
+    "n": 238,
+    "win_pct": 44.1,
+    "avg_r": 0.037,
+    "seen_n": 133,
+    "seen_avg_r": 0.06,
+    "new_avg_r": 0.008,
+    "ret_pct": 0.71
+   },
+   "tendencia_baixa": {
+    "n": 16,
+    "win_pct": 50.0,
+    "avg_r": 0.147,
+    "seen_n": 7,
+    "seen_avg_r": 0.001,
+    "new_avg_r": 0.261,
+    "ret_pct": 0.2
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.0,
+   "rompimento_baixa": 1.6,
+   "reversao_alta": 2.2,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 14.1,
+   "pullback_baixa": 12.7,
+   "tendencia_alta": 14.8,
+   "tendencia_baixa": 11.7,
+   "lateral": 8.4,
+   "indefinido": 29.5
+  },
+  "best_contexts": [
+   "pullback_baixa",
+   "rompimento_alta",
+   "tendencia_alta"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.154,
+    104,
+    5
+   ],
+   "2a": [
+    0.068,
+    115,
+    3
+   ]
+  }
+ },
+ "mk_stocks_1h_C_tp20": {
+  "period_label": "1,8 anos",
+  "period_days": 674,
+  "ret_pct": 5.07,
+  "monthly_pct": 0.22,
+  "ret_seen": 6.88,
+  "ret_new": 3.26,
+  "win_pct": 46.0,
+  "dd_pct": 7.0,
+  "trades_month": 0.8,
+  "pos_coins": "9/12",
+  "per_symbol": {
+   "PETR4": 8.2,
+   "VALE3": -1.91,
+   "ITUB4": 19.55,
+   "BBDC4": 3.31,
+   "ABEV3": 3.55,
+   "WEGE3": 8.59,
+   "BBAS3": 3.46,
+   "B3SA3": 12.64,
+   "SUZB3": -5.17,
+   "RENT3": 11.05,
+   "LREN3": -4.61,
+   "GGBR4": 2.18
+  },
+  "tested_at": "23/10/2026",
+  "market": "stocks",
+  "interval": "1h",
+  "status": "ressalva",
+  "ret_pct_risk_half": 2.5,
+  "monthly_pct_risk_half": 0.11,
+  "prev_ret_pct": 1.9,
+  "prev_pos_coins": "7/12",
+  "prev_label": "1ª metade do período",
+  "recent_ret_pct": 3.0,
+  "recent_pos_coins": "10/12",
+  "pf": 1.47,
+  "contexts": {
+   "rompimento_alta": {
+    "n": 199,
+    "win_pct": 46.7,
+    "avg_r": 0.312,
+    "seen_n": 102,
+    "seen_avg_r": 0.465,
+    "new_avg_r": 0.151,
+    "ret_pct": 5.28
+   },
+   "rompimento_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_alta": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "reversao_baixa": {
+    "n": 100,
+    "win_pct": 39.0,
+    "avg_r": 0.004,
+    "seen_n": 50,
+    "seen_avg_r": 0.052,
+    "new_avg_r": -0.043,
+    "ret_pct": 0.04
+   },
+   "pullback_alta": {
+    "n": 44,
+    "win_pct": 40.9,
+    "avg_r": 0.13,
+    "seen_n": 19,
+    "seen_avg_r": -0.1,
+    "new_avg_r": 0.305,
+    "ret_pct": 0.47
+   },
+   "pullback_baixa": {
+    "n": 15,
+    "win_pct": 33.3,
+    "avg_r": -0.092,
+    "seen_n": 6,
+    "seen_avg_r": 0.365,
+    "new_avg_r": -0.397,
+    "ret_pct": -0.11
+   },
+   "tendencia_alta": {
+    "n": 198,
+    "win_pct": 39.9,
+    "avg_r": 0.094,
+    "seen_n": 111,
+    "seen_avg_r": 0.12,
+    "new_avg_r": 0.06,
+    "ret_pct": 1.46
+   },
+   "tendencia_baixa": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   },
+   "lateral": {
+    "n": 0,
+    "win_pct": 0.0,
+    "avg_r": 0.0,
+    "seen_n": 0,
+    "seen_avg_r": 0.0,
+    "new_avg_r": 0.0,
+    "ret_pct": 0.0
+   }
+  },
+  "context_share": {
+   "rompimento_alta": 2.0,
+   "rompimento_baixa": 1.6,
+   "reversao_alta": 2.2,
+   "reversao_baixa": 2.9,
+   "pullback_alta": 14.1,
+   "pullback_baixa": 12.7,
+   "tendencia_alta": 14.8,
+   "tendencia_baixa": 11.7,
+   "lateral": 8.4,
+   "indefinido": 29.5
+  },
+  "best_contexts": [
+   "rompimento_alta",
+   "tendencia_alta",
+   "reversao_baixa"
+  ],
+  "context_filtered": null,
+  "unseen_halves": {
+   "1a": [
+    0.039,
+    56,
+    3
+   ],
+   "2a": [
+    0.305,
+    55,
+    6
+   ]
+  }
  }
 }

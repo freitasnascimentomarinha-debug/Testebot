@@ -314,10 +314,11 @@ def test_personalities_rules_and_direction():
     # todas as prontas rodam e respeitam a geometria do stop/alvo
     for p in Pm.BUILTINS:
         pl = analyze(df, cfg, PROFILES["day"], p)
+        surf = bool(p.get("trail_atr"))  # modo surfar: sem alvo, só stop (que acompanha o preço)
         if pl.direction == "BUY":
-            assert pl.stop_loss < pl.entry < pl.take_profit
+            assert pl.stop_loss < pl.entry and (pl.take_profit is None if surf else pl.entry < pl.take_profit)
         if pl.direction == "SELL":
-            assert pl.take_profit < pl.entry < pl.stop_loss
+            assert pl.entry < pl.stop_loss and (pl.take_profit is None if surf else pl.take_profit < pl.entry)
 
 
 def test_custom_personality_crud_and_ranking():
@@ -1115,6 +1116,27 @@ def test_other_markets_profiles_nav_and_closed_market(monkeypatch):
     monkeypatch.setattr(data, "get_ticker", lambda s, m: data.Ticker(s, 1.1, 0.0, 1.2, 1.0, 0.0, "Yahoo Finance", 1.0))  # último negócio em 1970
     cfg = {**default_settings(PROFILES["forex"]), "symbol": "EURUSD", "interval": "1h"}
     assert engine.market_closed(PROFILES["forex"], cfg) and not engine.market_closed(PROFILES["day"], default_settings(PROFILES["day"]))
+
+
+def test_other_markets_have_validated_bots():
+    """Forex, commodities, índices e ações: só há bots que passaram na prova (instrumentos inéditos nas duas metades do período)."""
+    from core import markets
+    from core import personalities as Pm
+
+    for mk, info in markets.MARKETS.items():
+        assert Pm.trained_intervals(mk), mk
+        assert Pm.allowed(mk, info.default_interval), (mk, info.default_interval)   # a página abre já com bots disponíveis
+        assert Pm.DEFAULT_BY_BOT[mk] and Pm.get(Pm.DEFAULT_BY_BOT[mk])["research"]["status"] == "aprovado"
+    novos = [p for p in Pm.BUILTINS if p["id"].startswith("mk_")]
+    assert len(novos) >= 20
+    for p in novos:
+        rs = p["research"]
+        a, b = rs["unseen_halves"]["1a"], rs["unseen_halves"]["2a"]
+        assert a[0] > 0 and b[0] > 0 and rs["market"] == p["bot"] == p["markets"][0] and rs["interval"] == p["tested_interval"]
+        if rs["status"] == "aprovado":
+            assert min(a[0], b[0]) >= 0.05 and rs["ret_seen"] > 0 and rs["ret_new"] > 0 and rs["prev_ret_pct"] > 0 and rs["recent_ret_pct"] > 0
+        assert rs["prev_label"] and rs["contexts"] and "tendencia_alta" in rs["contexts"]
+    assert not Pm.allowed("forex", "1h") and not Pm.allowed("stocks", "5m")           # sem prova nesse tempo gráfico: bloqueado
 
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine

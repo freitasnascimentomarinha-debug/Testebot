@@ -1,133 +1,157 @@
 WEBVTT
 
 1
-00:00:00.000 --> 00:00:05.387
+00:00:00.000 --> 00:00:05.445
 Olá! Eu vou guiar você por cinco aulas curtas sobre o TradeBot, com calma, passo a passo.
 
 2
-00:00:05.900 --> 00:00:15.304
+00:00:06.000 --> 00:00:15.601
 Nesta primeira aula você entende o caminho completo de uma operação: de onde vêm os dados, quem decide, quem protege a sua banca e onde o dinheiro simulado fica guardado.
 
 3
-00:00:15.900 --> 00:00:22.332
+00:00:16.200 --> 00:00:22.702
 Um aviso importante: tudo aqui é educativo e simulado. Nada do que você vai ouvir é recomendação de investimento.
 
 4
-00:00:23.400 --> 00:00:25.234
+00:00:23.800 --> 00:00:25.623
 O TradeBot reúne três bots.
 
 5
-00:00:25.800 --> 00:00:31.977
+00:00:26.200 --> 00:00:32.365
 O Day Trade opera futuros perpétuos, comprado ou vendido, com alavancagem, em tempos gráficos curtos.
 
 6
-00:00:32.500 --> 00:00:37.724
+00:00:32.900 --> 00:00:38.217
 O Swing Trade e o Long Trade operam no mercado à vista, em tempos maiores, de horas até dias.
 
 7
-00:00:38.300 --> 00:00:45.150
+00:00:38.800 --> 00:00:45.603
 Os três usam cotações reais da Binance, com a OKX como reserva, mas as ordens são executadas numa carteira simulada.
 
 8
-00:00:45.700 --> 00:00:48.243
+00:00:46.200 --> 00:00:48.824
 Você treina de verdade, sem arriscar um centavo.
 
 9
-00:00:49.300 --> 00:00:51.622
-Esta é a tela inicial, o Painel.
+00:00:49.900 --> 00:00:57.388
+Além da cripto, existe o menu Outros mercados, com o mesmo formato: gráfico ao vivo, boleta, bots e carteira simulada.
 
 10
-00:00:52.200 --> 00:00:58.318
-Cada cartão é um bot, com a banca, o resultado do dia, as posições abertas e a taxa de acerto.
+00:00:57.900 --> 00:01:02.103
+Forex, com pares de moedas e alavancagem simulada de até trinta vezes.
 
 11
-00:00:58.900 --> 00:01:03.916
-Repare na linha do piloto automático: ele começa sempre desligado, e só você decide ligar.
+00:01:02.700 --> 00:01:05.370
+Commodities, como petróleo, ouro e grãos.
 
 12
-00:01:05.000 --> 00:01:07.287
-Toda operação percorre seis etapas.
+00:01:05.900 --> 00:01:08.733
+Índices, do Ibovespa às principais bolsas do mundo.
 
 13
-00:01:07.800 --> 00:01:11.132
-Primeiro, os dados reais: candles e preço atualizados.
+00:01:09.300 --> 00:01:12.922
+E as ações da B3, só compradas e sem alavancagem.
 
 14
-00:01:11.700 --> 00:01:19.664
-Segundo, as habilidades: quinze leituras do gráfico, como médias, volume e rompimentos, que votam entre comprar, vender ou esperar.
+00:01:13.500 --> 00:01:22.683
+Os dados vêm do Yahoo Finance e podem ter atraso de até quinze minutos. Fora do horário de negociação, o sistema avisa que o mercado está fechado e não abre ordens.
 
 15
-00:01:20.200 --> 00:01:26.713
-Terceiro, a personalidade do bot, que define quais votos pesam mais, a força mínima para entrar e os filtros.
+00:01:23.700 --> 00:01:26.045
+Esta é a tela inicial, o Painel.
 
 16
-00:01:27.300 --> 00:01:30.284
-Quarto, a inteligência artificial, que é opcional.
+00:01:26.600 --> 00:01:32.672
+Cada cartão é um bot, com a banca, o resultado do dia, as posições abertas e a taxa de acerto.
 
 17
-00:01:30.800 --> 00:01:34.155
-Quinto, o gestor de risco, que pode vetar qualquer ordem.
+00:01:33.200 --> 00:01:38.390
+Repare na linha do piloto automático: ele começa sempre desligado, e só você decide ligar.
 
 18
-00:01:34.700 --> 00:01:38.102
-E por fim a carteira simulada, que executa e registra tudo.
+00:01:39.400 --> 00:01:41.676
+Toda operação percorre seis etapas.
 
 19
-00:01:39.200 --> 00:01:43.774
-Os candles são reais. Se a Binance não responder, o sistema usa a OKX.
+00:01:42.200 --> 00:01:45.671
+Primeiro, os dados reais: candles e preço atualizados.
 
 20
-00:01:44.300 --> 00:01:50.360
-Já as taxas, o financiamento dos futuros e até a liquidação são simulados com as regras da corretora.
+00:01:46.200 --> 00:01:54.095
+Segundo, as habilidades: quinze leituras do gráfico, como médias, volume e rompimentos, que votam entre comprar, vender ou esperar.
 
 21
-00:01:50.900 --> 00:01:55.323
-E lembre sempre: um bom resultado no passado não garante resultado no futuro.
+00:01:54.600 --> 00:02:01.009
+Terceiro, a personalidade do bot, que define quais votos pesam mais, a força mínima para entrar e os filtros.
 
 22
-00:01:55.900 --> 00:02:01.600
-Executar em conta real é uma fase futura, e só depois de testar na conta de testes da Binance.
+00:02:01.600 --> 00:02:04.584
+Quarto, a inteligência artificial, que é opcional.
 
 23
-00:02:02.700 --> 00:02:06.009
-Você precisa de inteligência artificial para operar? Não.
+00:02:05.100 --> 00:02:08.328
+Quinto, o gestor de risco, que pode vetar qualquer ordem.
 
 24
-00:02:06.600 --> 00:02:10.594
-As regras da personalidade decidem sozinhas, e isso não custa nada.
+00:02:08.900 --> 00:02:12.337
+E por fim a carteira simulada, que executa e registra tudo.
 
 25
-00:02:11.100 --> 00:02:17.195
-Se você colocar a chave da OpenRouter, a IA lê o cenário e confirma ou veta o sinal das regras.
+00:02:13.400 --> 00:02:17.986
+Os candles são reais. Se a Binance não responder, o sistema usa a OKX.
 
 26
-00:02:17.700 --> 00:02:23.110
-Em qualquer caso, os limites de risco são seus, e o gestor de risco tem a última palavra.
+00:02:18.500 --> 00:02:24.456
+Já as taxas, o financiamento dos futuros e até a liquidação são simulados com as regras da corretora.
 
 27
-00:02:24.200 --> 00:02:26.650
-Uma dúvida comum é onde ficam os seus dados.
+00:02:25.000 --> 00:02:29.354
+E lembre sempre: um bom resultado no passado não garante resultado no futuro.
 
 28
-00:02:27.200 --> 00:02:32.483
-Se o aplicativo usar arquivos locais, os dados somem quando ele reinicia no Streamlit Community.
+00:02:29.900 --> 00:02:35.589
+Executar em conta real é uma fase futura, e só depois de testar na conta de testes da Binance.
 
 29
-00:02:33.000 --> 00:02:39.455
-Para guardar de forma permanente, configure um banco de dados ou um repositório do GitHub nos segredos do aplicativo.
+00:02:36.600 --> 00:02:39.944
+Você precisa de inteligência artificial para operar? Não.
 
 30
-00:02:40.000 --> 00:02:43.959
-Defina também uma senha de acesso nos segredos antes de publicar o endereço.
+00:02:40.500 --> 00:02:44.575
+As regras da personalidade decidem sozinhas, e isso não custa nada.
 
 31
-00:02:44.500 --> 00:02:50.781
-E a chave da IA, se não estiver nos segredos, você informa na aba IA das configurações de cada bot.
+00:02:45.100 --> 00:02:51.172
+Se você colocar a chave da OpenRouter, a IA lê o cenário e confirma ou veta o sinal das regras.
 
 32
-00:02:51.800 --> 00:03:00.008
-Nas próximas aulas, vamos ao gráfico e à carteira, depois ao risco, aos bots especialistas e, por fim, à operação com o piloto automático.
+00:02:51.700 --> 00:02:57.087
+Em qualquer caso, os limites de risco são seus, e o gestor de risco tem a última palavra.
 
 33
-00:03:00.600 --> 00:03:01.366
+00:02:58.100 --> 00:03:00.492
+Uma dúvida comum é onde ficam os seus dados.
+
+34
+00:03:01.000 --> 00:03:06.120
+Se o aplicativo usar arquivos locais, os dados somem quando ele reinicia no Streamlit Community.
+
+35
+00:03:06.700 --> 00:03:12.935
+Para guardar de forma permanente, configure um banco de dados ou um repositório do GitHub nos segredos do aplicativo.
+
+36
+00:03:13.500 --> 00:03:17.598
+Defina também uma senha de acesso nos segredos antes de publicar o endereço.
+
+37
+00:03:18.100 --> 00:03:24.427
+E a chave da IA, se não estiver nos segredos, você informa na aba IA das configurações de cada bot.
+
+38
+00:03:25.500 --> 00:03:33.639
+Nas próximas aulas, vamos ao gráfico e à carteira, depois ao risco, aos bots especialistas e, por fim, à operação com o piloto automático.
+
+39
+00:03:34.200 --> 00:03:34.920
 Até já!

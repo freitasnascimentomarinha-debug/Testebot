@@ -160,3 +160,7 @@ Implementar `BinanceBroker` em `core/broker.py` (spot: `/api/v3/order` + OCO; fu
 Testnet e trocar `get_broker`. Interface, IA e gestão de risco não mudam.
 
 > Ferramenta educacional/experimental. Nada aqui é recomendação de investimento.
+
+
+## Outros mercados
+Forex, commodities, índices e ações da B3 (dados do Yahoo Finance, carteira simulada em dólar, bots validados por mercado): veja [docs/outros_mercados.md](docs/outros_mercados.md).

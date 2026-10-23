@@ -3,7 +3,7 @@
   "id": "aula1",
   "titulo": "Como o sistema funciona",
   "resumo": "Do dado real à ordem na carteira simulada: quem decide, quem protege a banca e onde tudo fica guardado.",
-  "duracao_s": 182,
+  "duracao_s": 216,
   "video": "assets/aulas/aula1.mp4",
   "legenda": "assets/aulas/aula1.vtt",
   "capitulos": [
@@ -17,7 +17,7 @@
     ]
    },
    {
-    "t": 23,
+    "t": 24,
     "titulo": "Três bots, um só sistema",
     "fala": [
      "O TradeBot reúne três bots.",
@@ -28,7 +28,19 @@
     ]
    },
    {
-    "t": 49,
+    "t": 50,
+    "titulo": "Outros mercados, no mesmo formato",
+    "fala": [
+     "Além da cripto, existe o menu Outros mercados, com o mesmo formato: gráfico ao vivo, boleta, bots e carteira simulada.",
+     "Forex, com pares de moedas e alavancagem simulada de até trinta vezes.",
+     "Commodities, como petróleo, ouro e grãos.",
+     "Índices, do Ibovespa às principais bolsas do mundo.",
+     "E as ações da B3, só compradas e sem alavancagem.",
+     "Os dados vêm do Yahoo Finance e podem ter atraso de até quinze minutos. Fora do horário de negociação, o sistema avisa que o mercado está fechado e não abre ordens."
+    ]
+   },
+   {
+    "t": 84,
     "titulo": "O Painel: tudo num olhar",
     "fala": [
      "Esta é a tela inicial, o Painel.",
@@ -37,7 +49,7 @@
     ]
    },
    {
-    "t": 65,
+    "t": 99,
     "titulo": "O caminho de uma operação",
     "fala": [
      "Toda operação percorre seis etapas.",
@@ -50,7 +62,7 @@
     ]
    },
    {
-    "t": 99,
+    "t": 133,
     "titulo": "Dados reais, dinheiro simulado",
     "fala": [
      "Os candles são reais. Se a Binance não responder, o sistema usa a OKX.",
@@ -60,7 +72,7 @@
     ]
    },
    {
-    "t": 123,
+    "t": 157,
     "titulo": "Quem decide a operação?",
     "fala": [
      "Você precisa de inteligência artificial para operar? Não.",
@@ -70,7 +82,7 @@
     ]
    },
    {
-    "t": 144,
+    "t": 178,
     "titulo": "Onde ficam os seus dados",
     "fala": [
      "Uma dúvida comum é onde ficam os seus dados.",
@@ -81,7 +93,7 @@
     ]
    },
    {
-    "t": 172,
+    "t": 206,
     "titulo": "Nas próximas aulas",
     "fala": [
      "Nas próximas aulas, vamos ao gráfico e à carteira, depois ao risco, aos bots especialistas e, por fim, à operação com o piloto automático.",

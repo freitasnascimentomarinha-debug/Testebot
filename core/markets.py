@@ -105,14 +105,14 @@ _B3 = (
 
 MARKETS: dict[str, MarketInfo] = {
     "forex": MarketInfo(
-        key="forex", label="Forex", icon="💱", instruments=_fx(), intervals=("5m", "15m", "30m", "1h", "4h", "1d"), default_interval="1h",
+        key="forex", label="Forex", icon="💱", instruments=_fx(), intervals=("5m", "15m", "30m", "1h", "4h", "1d"), default_interval="4h",
         default_symbol="EURUSD", max_leverage=30, default_leverage=10, fee_pct=0.01, slippage_pct=0.005, qty_step=100.0, allow_short=True,
         delay_note="Cotações do Yahoo Finance, quase em tempo real. Mercado aberto de domingo à noite a sexta à noite (UTC).",
         unit="unidades da moeda base", description="Pares de moedas, comprado ou vendido, com alavancagem simulada de até 30×."),
     "commodities": MarketInfo(
         key="commodities", label="Commodities", icon="🛢️",
         instruments=tuple(Instrument(c, f"{c}=F", n, "USD", tv, g) for c, n, tv, g in _COM), intervals=("15m", "30m", "1h", "4h", "1d"),
-        default_interval="1h", default_symbol="GC", max_leverage=20, default_leverage=5, fee_pct=0.03, slippage_pct=0.01, qty_step=0.01,
+        default_interval="4h", default_symbol="GC", max_leverage=20, default_leverage=5, fee_pct=0.03, slippage_pct=0.01, qty_step=0.01,
         allow_short=True, delay_note="Contratos futuros contínuos (Yahoo Finance), com possível atraso de até 15 min. Há pausa diária e fecham no fim de semana.",
         unit="unidades do contrato", description="Petróleo, gás, metais, grãos e outros contratos futuros, simulados como CFDs (compra e venda)."),
     "indices": MarketInfo(
