@@ -180,7 +180,7 @@ with tab_lib:
                 if f.get("vol_mult"):
                     filt.append(f"Volume ≥ {f['vol_mult']:g}× a média")
                 st.markdown(f"**Direção:** {P.DIRECTIONS[p.get('direction', 'misto')]} · **Limiar de entrada:** "
-                            f"{p.get('threshold')} · **Stop/alvo:** {p.get('sl_atr')}× / {p.get('tp_atr')}× ATR · "
+                            f"{p.get('threshold')} · **Saída:** {P.exit_text(p)} · "
                             f"**Tempos gráficos:** {p.get('timeframes') or '—'}")
                 st.markdown("**Filtros:** " + (", ".join(filt) or "nenhum"))
                 if (rs := p.get("research")) and rs.get("monthly_pct") is not None:
@@ -220,6 +220,9 @@ def load_template(p: dict, duplicate: bool) -> None:
     ss["pe_sl"] = float(p.get("sl_atr", 1.5))
     ss["pe_tp"] = float(p.get("tp_atr", 3.0))
     ss["pe_tf"] = p.get("timeframes", "")
+    ss["pe_exit"] = "surf" if p.get("trail_atr") else "tp"
+    ss["pe_trail"] = float(p.get("trail_atr") or 3.0)
+    ss["pe_be"] = float(p.get("be_r") or 0.0)
     ss["pe_markets"] = p.get("markets", ["futures", "spot"])
     f = p.get("filters", {})
     for k in P.FILTERS:
@@ -237,7 +240,7 @@ if "persona_template" in st.session_state:
     load_template(tpl, tpl.get("duplicate", False))
 for key, default in (("pe_name", ""), ("pe_author", ""), ("pe_summary", ""), ("pe_desc", ""), ("pe_dir", "misto"),
                      ("pe_skills", ["tendencia", "momentum"]), ("pe_threshold", 30), ("pe_sl", 1.5), ("pe_tp", 3.0),
-                     ("pe_tf", ""), ("pe_markets", ["futures", "spot"]), ("pe_adx_min", 0), ("pe_adx_max", 0), ("pe_vol_mult", 0.0),
+                     ("pe_tf", ""), ("pe_exit", "tp"), ("pe_trail", 3.0), ("pe_be", 0.0), ("pe_markets", ["futures", "spot"]), ("pe_adx_min", 0), ("pe_adx_max", 0), ("pe_vol_mult", 0.0),
                      ("pe_id", None)):
     st.session_state.setdefault(key, default)
 
@@ -283,9 +286,18 @@ with tab_new:
               help="Força mínima do consenso (0–100) para entrar. Menor = mais agressivo (mais entradas); "
                    "maior = mais seletivo.")
     c2.number_input("Stop (× ATR)", 0.3, 10.0, step=0.1, key="pe_sl")
-    c3.number_input("Alvo (× ATR)", 0.5, 30.0, step=0.5, key="pe_tp")
+    c3.number_input("Alvo (× ATR)", 0.5, 30.0, step=0.5, key="pe_tp", disabled=st.session_state["pe_exit"] == "surf")
     c4.text_input("Tempos gráficos indicados", key="pe_tf", placeholder="Ex.: 15m a 4h")
-    if st.session_state["pe_sl"]:
+    st.radio("Saída", ["tp", "surf"], horizontal=True, key="pe_exit",
+             format_func=lambda k: "🎯 Alvo fixo (stop + take profit)" if k == "tp" else
+             "🏄 Surfar a tendência (só stop, que acompanha o preço; sem alvo)")
+    if st.session_state["pe_exit"] == "surf":
+        c1, c2 = st.columns(2)
+        c1.number_input("Stop móvel a (× ATR) do melhor preço", 1.0, 10.0, step=0.5, key="pe_trail",
+                        help="Distância fixa (ATR da entrada) entre o melhor preço atingido e o stop. Menor = sai mais cedo.")
+        c2.number_input("Levar o stop ao equilíbrio após (× risco) — 0 = não", 0.0, 5.0, step=0.5, key="pe_be",
+                        help="Depois de o preço andar esse múltiplo do risco a seu favor, o stop vai para a entrada (+ taxas).")
+    elif st.session_state["pe_sl"]:
         st.caption(f"Alvo/stop = {st.session_state['pe_tp'] / st.session_state['pe_sl']:.2f} : 1 (antes das taxas).")
 
     st.markdown("**Filtros**")
@@ -312,6 +324,8 @@ with tab_new:
                     "direction": ss["pe_dir"], "skills": weights, "threshold": ss["pe_threshold"],
                     "sl_atr": ss["pe_sl"], "tp_atr": ss["pe_tp"], "filters": filters,
                     "markets": ss["pe_markets"] or ["futures", "spot"], "timeframes": ss["pe_tf"].strip()}
+            if ss["pe_exit"] == "surf":
+                data.update(trail_atr=ss["pe_trail"], be_r=ss["pe_be"])
             if editing:
                 old = P.get(editing) or {}
                 data.update(id=editing, created=old.get("created"))

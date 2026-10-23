@@ -39,6 +39,8 @@ class RulePlan:
     levels: dict = field(default_factory=dict)
     note: str = ""
     context: str = "indefinido"   # contexto do gráfico no último candle fechado (core/regime.py)
+    trail_dist: float | None = None  # distância do stop móvel (modo "surfar": sem alvo)
+    be_r: float = 0.0                # leva o stop ao ponto de equilíbrio após esse múltiplo do risco
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -371,6 +373,12 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
 
             block(f"Filtro de tempo maior: o gráfico de {HTF_OF.get(cfg.get('interval'), 'tempo maior')} "
                   "não confirma a direção.")
+        elif filters.get("mtf_trend") and ((direction == "BUY" and last.get("mtf_dir", 0) != 1)
+                                           or (direction == "SELL" and last.get("mtf_dir", 0) != -1)):
+            from core.htf import MTF_OF
+
+            block(f"Filtro de tempo intermediário: o gráfico de {MTF_OF.get(cfg.get('interval'), 'tempo intermediário')} "
+                  "não confirma a direção.")
     context = str(last.get("regime", "indefinido"))
     allowed_ctx = cfg.get("context_filter") or filters.get("contexts")
     if direction != "HOLD" and allowed_ctx and context not in allowed_ctx:
@@ -401,7 +409,13 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
             candidate = lv - sign * a * 0.3
             if sl_dist < abs(price - candidate) < sl_dist * 1.3:
                 sl = candidate
-    return RulePlan(direction, round(score, 1), price, sl, tp, a, regime, results, levels, " ".join(notes), context)
+    trail_mult = float((personality or {}).get("trail_atr") or 0)
+    plan = RulePlan(direction, round(score, 1), price, sl, tp, a, regime, results, levels, " ".join(notes), context)
+    if trail_mult and direction != "HOLD":  # modo surfar: sem alvo, stop móvel
+        plan.take_profit = None
+        plan.trail_dist = a * trail_mult
+        plan.be_r = float((personality or {}).get("be_r") or 0)
+    return plan
 
 
 def market_snapshot(df: pd.DataFrame, n: int = 60) -> list[dict]:

@@ -38,7 +38,7 @@ with st.expander("⚙️ Configurar carteira (valor inicial e modo)", expanded=F
     new_mode = c1.radio("Modo", ["única", "separada"], index=0 if mode == "única" else 1, horizontal=True,
                         format_func=lambda m: "Carteira única (bots + você na mesma banca)" if m == "única"
                         else "Separada por bot (uma banca para cada)")
-    initial = c2.number_input("Valor inicial da banca (USDT)", min_value=10.0, max_value=1e8, value=1000.0, step=100.0)
+    initial = c2.number_input("Valor inicial da banca (USDT)", min_value=10.0, max_value=1e8, value=100.0, step=10.0)
     brl = usdt_brl()
     if brl:
         c2.caption(f"≈ R$ {fmt(initial * brl)} (USDT/BRL {fmt(brl, 4)})")

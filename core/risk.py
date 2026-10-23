@@ -63,6 +63,10 @@ def liquidation_price(side: str, entry: float, leverage: float, mmr: float = MAI
     return entry * (1 + 1 / leverage - mmr)
 
 
+# Valor mínimo (nocional) de uma ordem nos futuros USDT-M da Binance; as demais moedas aceitam 5 USDT
+MIN_NOTIONAL = {"BTCUSDT": 100.0, "ETHUSDT": 20.0}
+
+
 def risk_budget(cfg: dict, equity: float) -> float:
     if cfg.get("risk_mode") == "% do saldo":
         return max(0.0, equity * float(cfg["max_loss_pct"]) / 100)
@@ -131,6 +135,9 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
 
     if liq and stop and ((side == "BUY" and stop <= liq) or (side == "SELL" and stop >= liq)):
         warnings.append(f"O stop está além do preço de liquidação estimado ({liq:,.4f}). Reduza a alavancagem.")
+    if symbol and market == "futures" and 0 < qty * entry < MIN_NOTIONAL.get(symbol, 5.0):
+        warnings.append(f"Posição de {qty * entry:,.2f} USDT abaixo do mínimo da Binance para {symbol} "
+                        f"({MIN_NOTIONAL.get(symbol, 5.0):g} USDT): aumente o risco por trade ou a banca.")
     if qty <= 0:
         warnings.append("Quantidade resultante igual a zero — ajuste risco, stop ou saldo.")
 
@@ -183,7 +190,7 @@ class RiskCheck:
 
 
 def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: float | None,
-                take_profit: float | None, market: str) -> RiskCheck:
+                take_profit: float | None, market: str, trailing: bool = False) -> RiskCheck:
     """Aplica todas as regras do usuário antes de enviar uma ordem.
 
     Categorias dos motivos: ``regra`` (stop ausente, short não permitido,
@@ -218,7 +225,7 @@ def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: f
     if calc:
         if calc.rr is not None and calc.rr < float(cfg["min_rr"]):
             chk.add("rr", f"Relação risco:retorno {calc.rr:.2f} abaixo do mínimo configurado ({cfg['min_rr']}).")
-        if take_profit is None:
+        if take_profit is None and not trailing:
             chk.add("rr", "Defina um alvo (take profit) para validar a relação risco:retorno.")
         for w in calc.warnings:
             if "reduzida" not in w:

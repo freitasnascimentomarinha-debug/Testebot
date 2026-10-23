@@ -17,6 +17,7 @@ import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
 from core import indicators as ind
+from core.trail import step as trail_step
 
 SKILL_KEYS = ("tendencia", "momentum", "macd", "bollinger", "supertrend", "vwap", "volume", "estrutura",
               "suporte_resistencia", "rompimento", "reversao", "ichimoku", "estocastico", "adx", "fibonacci")
@@ -209,7 +210,8 @@ def compute_votes(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     out = pd.DataFrame({"time": df["time"].to_numpy(), "open": o, "high": h, "low": l, "close": c, "volume": vol,
                         "vol_sma": vs, "atr": atr, "adx": adx, "rsi": rsi, "ema_trend": et,
                         "regime": df["regime"].to_numpy(),
-                        "htf_dir": df["htf_dir"].to_numpy(dtype=float) if "htf_dir" in df else np.zeros(n)})
+                        "htf_dir": df["htf_dir"].to_numpy(dtype=float) if "htf_dir" in df else np.zeros(n),
+                        "mtf_dir": df["mtf_dir"].to_numpy(dtype=float) if "mtf_dir" in df else np.zeros(n)})
     for key in SKILL_KEYS:
         arr = np.clip(v[key], -1, 1)
         arr[:WARMUP] = np.nan
@@ -253,6 +255,9 @@ def signals(vt: pd.DataFrame, p: dict, cfg: dict) -> np.ndarray:
     if f.get("htf_trend"):
         hd = vt["htf_dir"].to_numpy()
         d = np.where(((d == 1) & (hd != 1)) | ((d == -1) & (hd != -1)), 0, d)
+    if f.get("mtf_trend"):
+        md = vt["mtf_dir"].to_numpy()
+        d = np.where(((d == 1) & (md != 1)) | ((d == -1) & (md != -1)), 0, d)
     ctx = cfg.get("context_filter") or f.get("contexts")
     if ctx:
         d = np.where(np.isin(vt["regime"].to_numpy(), list(ctx)), d, 0)
@@ -260,12 +265,16 @@ def signals(vt: pd.DataFrame, p: dict, cfg: dict) -> np.ndarray:
 
 
 def simulate(vt: pd.DataFrame, p: dict, cfg: dict, *, start_time=None, max_hold: int = 100) -> list[dict]:
-    """Operações (mesma regra de ``backtest.run``) a partir de ``start_time``."""
+    """Operações (mesma regra de ``backtest.run``) a partir de ``start_time``.
+
+    Com ``trail_atr`` na personalidade a operação não tem alvo: o stop acompanha o preço (``core/trail.py``)
+    e a posição só sai pelo stop."""
     d = signals(vt, p, cfg)
     o, h, l, c = (vt[k].to_numpy() for k in ("open", "high", "low", "close"))
     atr, sup, res, times = vt["atr"].to_numpy(), vt["sup"].to_numpy(), vt["res"].to_numpy(), vt["time"]
     fee = float(cfg["fee_pct"]) / 100
     slm, tpm = float(p.get("sl_atr") or cfg["atr_sl_mult"]), float(p.get("tp_atr") or cfg["atr_tp_mult"])
+    trail, be_r = float(p.get("trail_atr") or 0), float(p.get("be_r") or 0)
     n = len(c)
     i = WARMUP
     if start_time is not None:
@@ -273,17 +282,22 @@ def simulate(vt: pd.DataFrame, p: dict, cfg: dict, *, start_time=None, max_hold:
     trades, pos = [], None
     while i < n - 1:
         if pos is not None:
-            side, entry, sl, tp, i0, te = pos
+            side, entry, sl, tp, i0, te, risk0, dist, best = pos
             hit_sl = l[i] <= sl if side == 1 else h[i] >= sl
-            hit_tp = h[i] >= tp if side == 1 else l[i] <= tp
-            ex, why = (sl, "Stop") if hit_sl else (tp, "Alvo") if hit_tp else (
-                (c[i], "Tempo") if i - i0 >= max_hold else (None, None))
+            if trail:
+                ex, why = (sl, "Stop" if abs(sl - (entry - side * risk0)) < 1e-12 else "Stop móvel") if hit_sl else (None, None)
+            else:
+                hit_tp = h[i] >= tp if side == 1 else l[i] <= tp
+                ex, why = (sl, "Stop") if hit_sl else (tp, "Alvo") if hit_tp else (
+                    (c[i], "Tempo") if i - i0 >= max_hold else (None, None))
             if ex is not None:
-                risk = abs(entry - sl)
                 trades.append({"entrada": te, "saida": times.iloc[i], "lado": "Compra" if side == 1 else "Venda",
                                "preco_entrada": entry, "preco_saida": ex, "motivo": why,
-                               "r": (side * (ex - entry) - fee * (entry + ex)) / risk})
+                               "r": (side * (ex - entry) - fee * (entry + ex)) / risk0})
                 pos = None
+            elif trail:
+                sl, best = trail_step(side, entry, sl, best, h[i], l[i], dist, risk0, be_r, fee)
+                pos = (side, entry, sl, tp, i0, te, risk0, dist, best)
             i += 1
             continue
         s = d[i]
@@ -299,19 +313,20 @@ def simulate(vt: pd.DataFrame, p: dict, cfg: dict, *, start_time=None, max_hold:
                     sl_p = cand
             entry = o[i + 1]
             sd = abs(price - sl_p)
-            pos = (s, entry, entry - s * sd, entry + s * tp_dist, i + 1, times.iloc[i + 1])
+            pos = (s, entry, entry - s * sd, entry + s * tp_dist, i + 1, times.iloc[i + 1], sd, trail * atr[i], entry)
             i += 1
             continue
         i += 1
     return trades
 
 
-def prepare(df_raw: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None) -> pd.DataFrame:
+def prepare(df_raw: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None,
+            mtf_raw: pd.DataFrame | None = None) -> pd.DataFrame:
     df = ind.compute(df_raw, cfg).reset_index(drop=True)
-    if htf_raw is not None and len(htf_raw):
+    if htf_raw is not None or mtf_raw is not None:
         from core.htf import attach
 
-        df = attach(df, htf_raw, cfg["interval"])
+        df = attach(df, htf_raw, cfg["interval"], mtf_raw)
     return compute_votes(df, cfg)
 
 

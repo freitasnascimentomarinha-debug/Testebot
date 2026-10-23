@@ -21,12 +21,13 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from core import leverage as lev_rules
+from core import trail
 from core.storage import load_json, locked_update
 
 ACCOUNT_FILE = "paper_accounts.json"
 WALLET_FILE = "wallet.json"
 SHARED_ACCOUNT = "carteira"
-INITIAL_BALANCE = 1_000.0
+INITIAL_BALANCE = 100.0  # banca-padrão pequena (50 a 100 USDT) para testar o bot como na vida real
 FUNDING_HOURS = 8  # financiamento dos perpétuos a cada 8 h (00, 08 e 16 UTC)
 
 
@@ -140,6 +141,8 @@ def _open_position(acct: dict, order: dict, fill_price: float, fee_pct: float) -
         "fee_pct": fee_pct, "fees_paid": fee, "funding_paid": 0.0, "opened": _now(), "last_check": _now(),
         "last_funding": _now(), "source": order.get("source", "manual"), "note": order.get("note", ""),
         "max_loss_planned": order.get("max_loss_planned"),
+        "trail_dist": order.get("trail_dist"), "be_r": order.get("be_r") or 0.0, "best": fill_price,
+        "risk_dist": abs(fill_price - order["stop_loss"]) if order.get("stop_loss") else None,
         "personality": (order.get("personality") or {}).get("id"),
         "personality_name": (order.get("personality") or {}).get("name"),
     }
@@ -154,7 +157,7 @@ def place_order(acc: str, *, symbol: str, market: str, side: str, qty: float, or
                 take_profit: float | None = None, leverage: float = 1.0, fee_pct: float = 0.1,
                 slippage_pct: float = 0.0, source: str = "manual", note: str = "",
                 max_loss_planned: float | None = None, bot: str = "", margin_mode: str = "Isolada",
-                personality: dict | None = None) -> dict:
+                personality: dict | None = None, trail_dist: float | None = None, be_r: float = 0.0) -> dict:
     """Envia uma ordem simulada. ``price`` é o último preço real de mercado."""
     if qty <= 0:
         raise ValueError("Quantidade deve ser maior que zero.")
@@ -162,7 +165,7 @@ def place_order(acc: str, *, symbol: str, market: str, side: str, qty: float, or
              "type": order_type, "limit_price": limit_price, "stop_loss": stop_loss, "take_profit": take_profit,
              "leverage": max(1.0, float(leverage)), "margin_mode": margin_mode, "fee_pct": fee_pct,
              "created": _now(), "source": source, "note": note, "max_loss_planned": max_loss_planned,
-             "personality": personality}
+             "personality": personality, "trail_dist": trail_dist, "be_r": be_r}
 
     def _apply(data):
         acct = _account(data, acc)
@@ -279,7 +282,7 @@ def sync(acc: str, symbol: str, candles: pd.DataFrame, last_price: float,
             if liq and ((long and lo <= liq) or (not long and hi >= liq)):
                 adverse.append((liq, "Liquidação"))
             if sl and ((long and lo <= sl) or (not long and hi >= sl)):
-                adverse.append((sl, "Stop loss"))
+                adverse.append((sl, "Stop móvel" if pos.get("stop_moves") else "Stop loss"))
             hit = None
             if adverse:  # o nível mais próximo da entrada é atingido primeiro
                 hit = max(adverse) if long else min(adverse)
@@ -288,6 +291,14 @@ def sync(acc: str, symbol: str, candles: pd.DataFrame, last_price: float,
             if hit:
                 events.append({"type": hit[1], "trade": _close(acct, pos, hit[0], hit[1])})
             else:
+                if pos.get("trail_dist") and sl and pos.get("risk_dist"):  # modo surfar: stop acompanha o preço
+                    new_sl, pos["best"] = trail.step(1 if long else -1, pos["entry"], sl, pos.get("best", pos["entry"]),
+                                                     hi, lo, pos["trail_dist"], pos["risk_dist"], pos.get("be_r") or 0.0,
+                                                     pos["fee_pct"] / 100)
+                    if new_sl != sl:
+                        pos["stop_loss"] = new_sl
+                        pos.setdefault("stop_moves", 0)
+                        pos["stop_moves"] += 1
                 pos["last_check"] = _now()
 
         equity = equity_of(acct, {symbol: last_price})

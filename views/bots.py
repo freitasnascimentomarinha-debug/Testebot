@@ -23,6 +23,8 @@ STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo p
 
 
 def rr_label(p: dict) -> str:
+    if p.get("trail_atr"):
+        return "sem alvo (surfa)"
     sl, tp = float(p.get("sl_atr") or 1), float(p.get("tp_atr") or 1)
     r = tp / sl
     if r >= 1:
@@ -140,8 +142,8 @@ with tab_gal:
                     filt.append(f"ADX ≤ {f['adx_max']}")
                 if f.get("vol_mult"):
                     filt.append(f"Volume ≥ {f['vol_mult']:g}× a média")
-                st.markdown(f"**Direção:** {P.DIRECTIONS[p.get('direction', 'misto')]} · **Stop/alvo:** "
-                            f"{p.get('sl_atr')}× / {p.get('tp_atr')}× ATR · **Filtros:** {', '.join(filt) or 'nenhum'}")
+                st.markdown(f"**Direção:** {P.DIRECTIONS[p.get('direction', 'misto')]} · **Saída:** {P.exit_text(p)} · "
+                            f"**Filtros:** {', '.join(filt) or 'nenhum'}")
                 if rs.get("per_symbol"):
                     st.markdown(f"**Simulação ({rs['period_label']}, até {rs['tested_at']}):**")
                     st.dataframe(pd.DataFrame([{"Moeda": k.replace("USDT", ""), "Retorno": v}

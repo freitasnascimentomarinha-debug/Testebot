@@ -86,7 +86,9 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
                    + ([f"ADX máximo {filters['adx_max']}"] if filters.get("adx_max") else [])
                    + ([f"Volume ≥ {filters['vol_mult']}× a média"] if filters.get("vol_mult") else [])
                    + ([f"Contextos: {', '.join(filters['contexts'])}"] if filters.get("contexts") else []),
-                   "stop_atr": personality.get("sl_atr"), "alvo_atr": personality.get("tp_atr"),
+                   "stop_atr": personality.get("sl_atr"),
+                   "alvo_atr": personality.get("tp_atr") if not personality.get("trail_atr") else
+                   "SEM ALVO: o stop acompanha o preço (modo surfar); não defina take_profit",
                    "tempos_graficos_indicados": personality.get("timeframes", "")}
     return {
         "personalidade": persona,

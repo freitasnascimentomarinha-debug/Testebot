@@ -36,7 +36,8 @@ FILTERS = {
     "volume_confirm": "Exigir volume acima da média",
     "rsi_guard": "Não comprar sobrecomprado / vender sobrevendido",
     "ignore_regime": "Não reduzir o sinal em mercado lateral",
-    "htf_trend": "Só a favor da tendência do tempo maior (ex.: 4h para entradas de 15m)",
+    "htf_trend": "Só a favor da tendência do tempo maior (ex.: 4h para entradas de 15m e de 5m)",
+    "mtf_trend": "Só a favor da tendência do tempo intermediário (ex.: 15m para entradas de 5m)",
 }
 
 BUILTINS: list[dict] = [
@@ -166,6 +167,14 @@ for _p in BUILTINS:
 
 # Padrões: especialistas aprovados na prova final (moedas inéditas) da pesquisa de out/2026
 DEFAULT_BY_BOT = {"day": "esp_15m_ema_3x1", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
+
+
+def exit_text(p: dict) -> str:
+    """Descrição curta da saída da personalidade (alvo fixo ou surfar com stop móvel)."""
+    if p.get("trail_atr"):
+        be = f", stop no equilíbrio após {p['be_r']:g}R" if p.get("be_r") else ""
+        return f"🏄 surfar: stop inicial {p.get('sl_atr')}× ATR que acompanha o preço a {p['trail_atr']:g}× ATR, sem alvo{be}"
+    return f"stop {p.get('sl_atr')}× / alvo {p.get('tp_atr')}× ATR"
 
 
 def _now() -> str:

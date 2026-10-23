@@ -29,16 +29,16 @@ def default_settings(profile: BotProfile) -> dict:
         "interval": profile.default_interval,
         "candles": profile.candles,
         # Risco por operação
-        "risk_mode": "USDT",            # "USDT" ou "% do saldo"
-        "max_loss_usdt": 20.0,          # perda máxima aceitável por trade
-        "max_loss_pct": 1.0,
+        "risk_mode": "% do saldo",      # "USDT" ou "% do saldo" (banca-padrão pequena: 100 USDT)
+        "max_loss_usdt": 2.0,           # perda máxima aceitável por trade
+        "max_loss_pct": 2.0,
         "min_rr": 1.5,                  # relação risco:retorno mínima
         "atr_sl_mult": profile.atr_sl_mult,
         "atr_tp_mult": profile.atr_tp_mult,
         # Metas diárias
         "max_trades_day": 6 if futures else 3,
-        "daily_profit_target": 60.0,    # ao atingir, o bot para no dia
-        "daily_max_loss": 60.0,         # ao atingir, o bot para no dia
+        "daily_profit_target": 10.0,    # ao atingir, o bot para no dia
+        "daily_max_loss": 6.0,          # ao atingir, o bot para no dia
         "max_open_positions": 2 if futures else 3,
         # Escopo dos limites (você × bot)
         "limits_trades_scope": "bot",       # meta de operações e posições simultâneas

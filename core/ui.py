@@ -70,11 +70,16 @@ def cached_votes(symbol: str, interval: str, market: str, days: int):
     from core import htf
 
     raw = get_klines(symbol, interval, n, market)
-    try:  # tendência do tempo maior (para as personalidades com esse filtro)
+    try:  # tendência dos tempos maiores (para as personalidades com esses filtros)
         htf_raw = get_klines(symbol, htf.HTF_OF[interval], htf.htf_candles(interval, n), market)
     except Exception:  # noqa: BLE001
         htf_raw = None
-    return fastsim.prepare(raw, cfg, htf_raw), cfg
+    try:
+        mtf_raw = (get_klines(symbol, htf.MTF_OF[interval], int(n * htf.SECONDS[interval] / htf.SECONDS[htf.MTF_OF[interval]])
+                              + htf.CANDLES_NEEDED, market) if interval in htf.MTF_OF else None)
+    except Exception:  # noqa: BLE001
+        mtf_raw = None
+    return fastsim.prepare(raw, cfg, htf_raw, mtf_raw), cfg
 
 
 def api_key() -> str | None:
@@ -210,16 +215,14 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         except MarketDataError as exc:
             st.error(f"Falha ao carregar dados de {symbol}: {exc}")
             return
-        htf_raw = None
-        if engine.needs_htf(cfg_now):  # personalidade com filtro de tendência do tempo maior
-            from core import htf
-
+        htf_raw = mtf_raw = None
+        if engine.needs_htf(cfg_now):  # personalidade com filtro de tendência dos tempos maiores
             try:
-                htf_raw = cached_klines(symbol, htf.HTF_OF[interval], htf.htf_candles(interval, len(raw)),
-                                        profile.market)
+                htf_raw, mtf_raw = engine.htf_frames(
+                    lambda s, i, n, m: cached_klines(s, i, n, m), cfg_now, len(raw), profile.market)
             except MarketDataError:
                 st.warning("Sem dados do tempo maior: o filtro de tendência bloqueará entradas até voltar.")
-        df = engine.prepare(raw, cfg_now, htf_raw)
+        df = engine.prepare(raw, cfg_now, htf_raw, mtf_raw)
         price = ticker.last
         st.session_state[f"{bot}__last_price"] = price
         st.session_state[f"{bot}__atr"] = float(df["atr"].iloc[-2])

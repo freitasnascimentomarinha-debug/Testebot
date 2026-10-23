@@ -18,15 +18,17 @@ import pandas as pd
 from core import indicators as ind
 from core.profiles import BotProfile
 from core.strategy import analyze
+from core.trail import step as trail_step
 
 
 def run(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict, *, fee_pct: float | None = None,
-        max_hold: int = 100, warmup: int = 210, htf_raw: pd.DataFrame | None = None) -> dict:
+        max_hold: int = 100, warmup: int = 210, htf_raw: pd.DataFrame | None = None,
+        mtf_raw: pd.DataFrame | None = None) -> dict:
     df = ind.compute(df_raw, cfg).reset_index(drop=True)
-    if htf_raw is not None and len(htf_raw):
+    if htf_raw is not None or mtf_raw is not None:
         from core.htf import attach
 
-        df = attach(df, htf_raw, cfg["interval"])
+        df = attach(df, htf_raw, cfg["interval"], mtf_raw)
     fee = (cfg["fee_pct"] if fee_pct is None else fee_pct) / 100
     cfg_bt = {**cfg, "allow_short": True, "leverage_on": True}  # direção é controlada pela personalidade
     trades: list[dict] = []
@@ -41,14 +43,17 @@ def run(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict,
             hit_tp = row.high >= pos["tp"] if long else row.low <= pos["tp"]
             exit_price, reason = None, None
             if hit_sl:
-                exit_price, reason = pos["sl"], "Stop"
+                exit_price, reason = pos["sl"], "Stop" if not pos["trail"] else "Stop móvel"
+            elif pos["trail"]:
+                pos["sl"], pos["best"] = trail_step(1 if long else -1, pos["entry"], pos["sl"], pos["best"], row.high,
+                                                    row.low, pos["trail"], pos["risk"], pos["be_r"], fee)
             elif hit_tp:
                 exit_price, reason = pos["tp"], "Alvo"
-            elif i - pos["i"] >= max_hold:
+            elif i - pos["i"] >= max_hold and not pos["trail"]:
                 exit_price, reason = row.close, "Tempo"
             if exit_price is not None:
                 sign = 1 if long else -1
-                risk = abs(pos["entry"] - pos["sl"])
+                risk = pos["risk"]
                 r = (sign * (exit_price - pos["entry"]) - fee * (pos["entry"] + exit_price)) / risk
                 trades.append({"entrada": pos["time"], "saida": row.time, "lado": "Compra" if long else "Venda",
                                "preco_entrada": pos["entry"], "preco_saida": exit_price, "motivo": reason, "r": r})
@@ -61,9 +66,10 @@ def run(df_raw: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict,
             entry = float(nxt.open)
             sign = 1 if plan.direction == "BUY" else -1
             sl_dist = abs(plan.entry - plan.stop_loss)
-            tp_dist = abs(plan.take_profit - plan.entry)
+            tp_dist = abs(plan.take_profit - plan.entry) if plan.take_profit else 0.0
             pos = {"side": plan.direction, "entry": entry, "sl": entry - sign * sl_dist, "tp": entry + sign * tp_dist,
-                   "i": i + 1, "time": nxt.time}
+                   "i": i + 1, "time": nxt.time, "risk": sl_dist, "trail": plan.trail_dist or 0.0,
+                   "be_r": plan.be_r, "best": entry}
             i += 1  # o candle de entrada já é verificado no próximo laço
             continue
         i += 1

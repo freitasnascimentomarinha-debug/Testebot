@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import ai, indicators as ind, personalities, risk
+from core import ai, htf, indicators as ind, personalities, risk
 from core.broker import get_broker
 from core.data import get_funding_rate
 from core.profiles import BotProfile
@@ -110,7 +110,11 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     check = None
     if decision.decision in ("BUY", "SELL"):
         entry = decision.entry if decision.order_type == "LIMIT" and decision.entry else price
-        check = risk.check_trade(cfg, st_, decision.decision, entry, decision.stop_loss, decision.take_profit, profile.market)
+        trailing = bool(plan_d.get("trail_dist"))
+        if trailing:  # modo surfar: sem alvo, o stop acompanha o preço
+            decision.take_profit = None
+        check = risk.check_trade(cfg, st_, decision.decision, entry, decision.stop_loss, decision.take_profit, profile.market,
+                                 trailing=trailing)
         if decision.confidence < int(cfg["ai_min_confidence"]):
             check.add("confianca", f"Confiança {decision.confidence}% abaixo do mínimo configurado ({cfg['ai_min_confidence']}%).")
 
@@ -139,7 +143,7 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
             stop_loss=d.stop_loss, take_profit=d.take_profit, leverage=calc.leverage,
             fee_pct=float(cfg["fee_pct"]), slippage_pct=float(cfg["slippage_pct"]),
             source=d.source, note=d.reasoning[:300], max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"],
-            personality=result.personality,
+            personality=result.personality, trail_dist=result.plan.get("trail_dist"), be_r=result.plan.get("be_r") or 0.0,
         )
     else:
         raise ValueError("Não há ordem aprovada para executar.")
@@ -168,16 +172,21 @@ def log_decision(bot: str, result: AnalysisResult, executed: bool = False) -> No
     locked_update(LOG_FILE, {}, _apply)
 
 
-def prepare(df: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None) -> pd.DataFrame:
+def prepare(df: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None,
+            mtf_raw: pd.DataFrame | None = None) -> pd.DataFrame:
     out = ind.compute(df, cfg)
-    if htf_raw is not None and len(htf_raw):
-        from core.htf import attach
-
-        out = attach(out, htf_raw, cfg["interval"])
+    if htf_raw is not None or mtf_raw is not None:
+        out = htf.attach(out, htf_raw, cfg["interval"], mtf_raw)
     return out
 
 
 def needs_htf(cfg: dict) -> bool:
-    """A personalidade escolhida usa o filtro de tendência do tempo maior?"""
+    """A personalidade escolhida usa filtro de tendência de tempo maior/intermediário?"""
     p = personalities.get(cfg.get("personality"))
-    return bool(p and (p.get("filters") or {}).get("htf_trend"))
+    return bool(p and any(htf.needs(p.get("filters"))))
+
+
+def htf_frames(getter, cfg: dict, n: int, market: str):
+    """Candles dos tempos maiores exigidos pela personalidade escolhida: (htf_raw, mtf_raw)."""
+    p = personalities.get(cfg.get("personality"))
+    return htf.frames(getter, cfg["symbol"], cfg["interval"], n, market, (p or {}).get("filters"))

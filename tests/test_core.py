@@ -446,6 +446,60 @@ def test_study_bots_validated_and_htf_equivalence():
         assert len(fast) == real["trades"], pid
         assert sum(t["r"] for t in fast) == pytest.approx(real["total_r"]), pid
 
+
+def test_surf_exit_trailing_and_mtf_filters_equivalence():
+    """Modo surfar (sem alvo, stop móvel + equilíbrio) e filtros 4h/15m: fastsim idêntico ao backtest candle a candle."""
+    from core import backtest, fastsim
+    from core import personalities as Pm
+
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "interval": "5m"}
+    raw = make_df(4400, trend=0.02, seed=9)
+    raw["time"] = pd.date_range("2026-01-01", periods=len(raw), freq="5min", tz="UTC")
+
+    def rs(rule):
+        return raw.set_index("time").resample(rule).agg({"open": "first", "high": "max", "low": "min", "close": "last",
+                                                         "volume": "sum"}).reset_index()
+
+    h4, m15 = rs("4h"), rs("15min")
+    vt = fastsim.prepare(raw, cfg, h4, m15)
+    assert vt["htf_dir"].abs().sum() > 0 and vt["mtf_dir"].abs().sum() > 0
+    for be in (0.0, 1.0):
+        p = {"id": "t", "name": "t", "skills": {"tendencia": 1.0, "rompimento": 1.0, "volume": 1.0}, "threshold": 15,
+             "direction": "misto", "sl_atr": 2.0, "tp_atr": 4.0, "trail_atr": 3.0, "be_r": be,
+             "filters": {"htf_trend": True, "mtf_trend": True, "ignore_regime": True}}
+        fast = fastsim.simulate(vt, p, cfg, start_time=raw["time"].iloc[3500])
+        real = backtest.run(raw, cfg, PROFILES["day"], p, htf_raw=h4, mtf_raw=m15, warmup=3500)
+        assert len(fast) == real["trades"] > 0
+        assert sum(t["r"] for t in fast) == pytest.approx(real["total_r"])
+        assert all(t["motivo"].startswith("Stop") for t in fast)  # sem alvo
+
+
+def test_trailing_stop_in_paper_broker():
+    from core import trail
+
+    # compra: o stop sobe junto com o preço e depois do 1R vai ao equilíbrio; nunca recua
+    sl, best = trail.step(1, 100.0, 98.0, 100.0, 103.0, 100.5, 3.0, 2.0, 1.0, 0.0005)
+    assert best == 103.0 and sl == pytest.approx(100.1)  # 103−3 = 100 < equilíbrio 100,1
+    sl2, best2 = trail.step(1, 100.0, sl, best, 101.0, 99.0, 3.0, 2.0, 1.0, 0.0005)
+    assert sl2 == sl and best2 == best
+    # venda: espelhado
+    sl, best = trail.step(-1, 100.0, 102.0, 100.0, 99.5, 96.0, 3.0, 2.0, 0.0, 0.0005)
+    assert best == 96.0 and sl == pytest.approx(99.0)
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+    paper.place_order(paper.SHARED_ACCOUNT, symbol="SOLUSDT", market="futures", side="BUY", qty=1.0, price=100.0,
+                      stop_loss=98.0, leverage=5, fee_pct=0.05, trail_dist=3.0, be_r=1.0)
+    t0 = pd.Timestamp.now(tz="UTC").floor("min")
+    up = pd.DataFrame({"time": [t0], "open": [100.0], "high": [106.0], "low": [100.0], "close": [105.0], "volume": [1.0]})
+    paper.sync(paper.SHARED_ACCOUNT, "SOLUSDT", up, 105.0)
+    pos = paper.get_account(paper.SHARED_ACCOUNT)["positions"][0]
+    assert pos["stop_loss"] == pytest.approx(103.0) and pos["take_profit"] is None
+    down = pd.DataFrame({"time": [t0], "open": [105.0], "high": [105.0], "low": [102.5], "close": [103.0], "volume": [1.0]})
+    ev = paper.sync(paper.SHARED_ACCOUNT, "SOLUSDT", down, 103.0)
+    assert ev and ev[0]["type"] == "Stop móvel"
+    assert paper.get_account(paper.SHARED_ACCOUNT)["history"][-1]["pnl"] > 0  # saiu no lucro
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm
