@@ -4,3 +4,4 @@ numpy>=1.26
 plotly>=5.24
 requests>=2.31
 psycopg[binary]>=3.2
+openpyxl>=3.1

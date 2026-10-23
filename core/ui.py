@@ -10,8 +10,8 @@ import streamlit.components.v1 as components
 from core import engine, risk
 from core.broker import get_broker
 from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
-from core.data import MarketDataError, get_klines, get_ticker
-from core.paper import stats
+from core import leverage as lev_rules
+from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
 from core.profiles import PROFILES, SYMBOLS, BotProfile
 from core import indicators as ind
 from core.realtime import chart_height, realtime_chart_html
@@ -38,6 +38,24 @@ def cached_klines(symbol: str, interval: str, limit: int, market: str) -> pd.Dat
 @st.cache_data(ttl=10, show_spinner=False)
 def cached_ticker(symbol: str, market: str):
     return get_ticker(symbol, market)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cached_symbols(market: str) -> list[str]:
+    try:
+        return list_symbols(market)
+    except Exception:  # noqa: BLE001
+        return list(SYMBOLS)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_funding(symbol: str) -> float | None:
+    return get_funding_rate(symbol)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cached_brackets(symbol: str):
+    return lev_rules.brackets(symbol)
 
 
 def api_key() -> str | None:
@@ -93,9 +111,11 @@ def render_bot_page(bot: str) -> None:
 
     # Seleção de ativo e timeframe -------------------------------------------
     c1, c2, c3, c4 = st.columns([2, 1.2, 1, 1.2])
-    options = list(dict.fromkeys(list(SYMBOLS) + [cfg["symbol"]]))
-    c1.selectbox("Ativo", options, key=_k(bot, "symbol"), accept_new_options=True,
-                 help="Escolha da lista ou digite outro par em USDT (ex.: PEPEUSDT).")
+    all_symbols = cached_symbols(profile.market)
+    options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
+    c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
+                 help="Clique e digite para buscar qualquer moeda negociada na Binance "
+                      f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
     if st.session_state[_k(bot, "interval")] not in profile.intervals:
         st.session_state[_k(bot, "interval")] = profile.default_interval
     c2.selectbox("Timeframe", profile.intervals, key=_k(bot, "interval"))
@@ -179,19 +199,20 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.session_state[f"{bot}__source"] = f"{df.attrs.get('source')} · cotação: {ticker.source}"
 
         broker = get_broker(bot)
-        events = broker.sync(symbol, raw, price)
+        funding = cached_funding(symbol) if profile.market == "futures" else None
+        events = broker.sync(symbol, raw, price, funding)
         for ev in events:
             t = ev.get("trade")
             msg = f"{ev['type']}: {t['side']} {t['symbol']} {t['pnl']:+.2f} USDT" if t else ev["type"]
             st.toast(msg, icon="🔔")
         if events:
             st.session_state[f"{bot}__need_rerun"] = True
-        acct = broker.account()
-        s = stats(acct, {symbol: price})
+        s = broker.stats({symbol: price})
 
         m = st.columns(6)
         m[0].metric(symbol, fmt_price(price), f"{ticker.change_pct:+.2f}% 24h")
-        m[1].metric("Patrimônio", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)")
+        m[1].metric("Banca", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)",
+                    help="Patrimônio da carteira simulada (saldo livre + margens + P&L em aberto), em USDT.")
         m[2].metric("Resultado hoje", fmt(s["pnl_today"]), f"meta {fmt(cfg_now['daily_profit_target'], 0)}")
         m[3].metric("Operações hoje", f"{s['trades_today']}/{cfg_now['max_trades_day']}")
         m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]), f"{s['open_positions']} posição(ões)",
@@ -305,11 +326,12 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
         st.info("Carregando cotação…")
         return
     broker = get_broker(bot)
-    acct = broker.account()
-    s = stats(acct, {cfg["symbol"]: price})
-    lev = risk.effective_leverage(cfg)
+    s = broker.stats({cfg["symbol"]: price})
 
     st.subheader("🧮 Boleta e calculadora")
+    leverage_controls(profile, cfg)
+    cfg = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ("leverage_on", "leverage", "margin_mode")}}
+    lev = risk.effective_leverage(cfg)
     can_short = cfg["allow_short"] and (profile.market == "futures" or cfg["leverage_on"])
     sides = ["Compra (long)", "Venda (short)"] if can_short else ["Compra (long)"]
     side_label = st.segmented_control("Lado", sides, default=sides[0], key=f"{bot}__t_side") or sides[0]
@@ -338,12 +360,14 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
         risk_usdt = st.number_input("Perda máxima no trade (USDT)", min_value=0.0, value=float(round(budget, 2)),
                                     step=5.0, key=f"{bot}__t_risk")
         calc = risk.calculate(side, entry, sl, tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                              risk_usdt=risk_usdt, available=s["available"])
+                              risk_usdt=risk_usdt, available=s["available"], symbol=cfg["symbol"],
+                              market=profile.market, margin_mode=cfg["margin_mode"])
     else:
         margin = st.number_input("Margem a alocar (USDT)", min_value=0.0, value=float(min(500.0, s["available"])),
                                  step=50.0, key=f"{bot}__t_margin")
         calc = risk.calculate(side, entry, sl, tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                              margin_usdt=margin, available=s["available"])
+                              margin_usdt=margin, available=s["available"], symbol=cfg["symbol"],
+                              market=profile.market, margin_mode=cfg["margin_mode"])
 
     rr_ok = calc.rr is not None and calc.rr >= float(cfg["min_rr"])
     st.markdown(
@@ -379,11 +403,37 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
                                          limit_price=entry if otype == "Limitada" else None, stop_loss=sl,
                                          take_profit=tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
                                          slippage_pct=float(cfg["slippage_pct"]), source="manual",
-                                         max_loss_planned=calc.risk_usdt)
+                                         max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"])
                 st.success(f"Ordem {out['status'].lower()}.")
                 st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
+
+
+def leverage_controls(profile: BotProfile, cfg: dict) -> None:
+    """Alavancagem e modo de margem no topo da boleta, com os limites da Binance."""
+    bot = profile.key
+    futures = profile.market == "futures"
+    c1, c2 = st.columns([1, 1.2])
+    c1.toggle("Alavancado", key=_k(bot, "leverage_on"),
+              help="Futuros: alavancagem do contrato perpétuo. Spot: conta de Margem da Binance.")
+    c2.radio("Margem", ["Isolada", "Cruzada"], key=_k(bot, "margin_mode"), horizontal=True,
+             help="Isolada: o risco fica limitado à margem da posição. Cruzada: todo o saldo livre "
+                  "sustenta a posição (liquidação mais distante, mas pode perder mais).")
+    mode = st.session_state[_k(bot, "margin_mode")]
+    if futures:
+        tiers, source = cached_brackets(cfg["symbol"])
+        max_lev = tiers[0].max_leverage
+    else:
+        max_lev, source = lev_rules.SPOT_MARGIN_MAX[mode], "Binance Margin"
+    key = _k(bot, "leverage")
+    st.session_state[key] = int(min(max(1, st.session_state.get(key, 1)), max_lev))
+    if st.session_state.get(_k(bot, "leverage_on")):
+        st.slider(f"Alavancagem (máx. {max_lev}× em {cfg['symbol'] if futures else mode})", 1, max_lev, key=key,
+                  help=f"Limite conforme a tabela da {source}. Em futuros, a posição máxima diminui conforme "
+                       "a alavancagem — veja Configurações → Alavancagem.")
+    else:
+        st.caption("Sem alavancagem (1×)" + ("" if futures else " — compra à vista com saldo próprio."))
 
 
 # ------------------------------------------------------------------- IA
@@ -496,7 +546,7 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
     acct = broker.account()
     price = st.session_state.get(f"{bot}__last_price", 0)
     st.divider()
-    st.subheader("💼 Conta simulada")
+    st.subheader("💼 Carteira simulada — operações")
     t1, t2, t3, t4, t5 = st.tabs(["Posições abertas", "Ordens pendentes", "Histórico", "Curva de patrimônio", "Log de decisões"])
     with t1:
         open_positions(profile, cfg)
@@ -512,16 +562,18 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
                 st.rerun()
     with t3:
         if acct["history"]:
-            hist = pd.DataFrame(acct["history"])[["closed", "symbol", "side", "qty", "entry", "exit", "leverage",
-                                                  "reason", "pnl", "pnl_pct_margin", "fees_total", "source"]].iloc[::-1]
+            hist = pd.DataFrame(acct["history"]).reindex(columns=[
+                "closed", "bot", "symbol", "side", "qty", "entry", "exit", "leverage", "reason", "pnl",
+                "pnl_pct_margin", "fees_total", "source"]).iloc[::-1]
+            hist["bot"] = hist["bot"].map(lambda b: PROFILES[b].name if b in PROFILES else "")
             hist["closed"] = pd.to_datetime(hist["closed"]).dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m %H:%M")
             st.dataframe(hist, hide_index=True, column_config={
-                "closed": "Encerrado", "symbol": "Ativo", "side": "Lado", "qty": "Qtd.", "entry": "Entrada",
+                "closed": "Encerrado", "bot": "Bot", "symbol": "Ativo", "side": "Lado", "qty": "Qtd.", "entry": "Entrada",
                 "exit": "Saída", "leverage": "Alav.", "reason": "Motivo",
                 "pnl": st.column_config.NumberColumn("P&L (USDT)", format="%.2f"),
                 "pnl_pct_margin": st.column_config.NumberColumn("% margem", format="%.1f%%"),
                 "fees_total": st.column_config.NumberColumn("Taxas", format="%.2f"), "source": "Origem"})
-            s = stats(acct, {cfg["symbol"]: price})
+            s = broker.stats({cfg["symbol"]: price})
             c = st.columns(5)
             c[0].metric("Fator de lucro", "∞" if s["profit_factor"] == float("inf") else fmt(s["profit_factor"]))
             c[1].metric("Ganho médio", fmt(s["avg_win"]))
@@ -565,8 +617,10 @@ def open_positions(profile: BotProfile, cfg: dict) -> None:
             net = gross - p["fees_paid"] - p_price * p["qty"] * p["fee_pct"] / 100
             with st.container(border=True):
                 c = st.columns([1.6, 1, 1.1, 1, 1, 1.2, 1])
+                bot_name = PROFILES[p["bot"]].name if p.get("bot") in PROFILES else ""
                 c[0].markdown(f"**{'🟢 COMPRA' if p['side'] == 'BUY' else '🔴 VENDA'} {p['symbol']}**  \n"
-                              f"{p['qty']:g} @ {fmt_price(p['entry'])} · {p['leverage']:g}× · {p['source']}")
+                              f"{p['qty']:g} @ {fmt_price(p['entry'])} · {p['leverage']:g}× {p.get('margin_mode', '')}"
+                              f"  \n{bot_name} · {'você' if p['source'] == 'manual' else 'bot (' + p['source'] + ')'}")
                 c[1].metric("Atual", fmt_price(p_price))
                 c[2].metric("P&L líquido", fmt(net), f"{net / p['margin'] * 100:+.1f}% margem" if p["margin"] else None)
                 new_sl = c[3].number_input("Stop", value=float(p["stop_loss"] or 0), format="%.6f", key=f"{bot}_sl_{p['id']}")
@@ -625,17 +679,32 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
         c[3].number_input("Máx. posições simultâneas", 1, 20, key=k("max_open_positions"))
 
     with t_lev:
-        label = "Operar alavancado (futuros)" if profile.market == "futures" else "Operar alavancado (margem, como nos futuros)"
-        st.toggle(label, key=k("leverage_on"))
-        c = st.columns(3)
-        c[0].slider("Alavancagem", 1, profile.max_leverage, key=k("leverage"), disabled=not cfg["leverage_on"])
-        c[1].radio("Modo de margem", ["Isolada", "Cruzada"], key=k("margin_mode"), horizontal=True)
-        c[2].toggle("Permitir operações vendidas (short)", key=k("allow_short"),
-                    help="No spot, vender a descoberto exige margem (alavancagem ligada).")
-        if cfg["leverage_on"]:
-            liq_long = risk.liquidation_price("BUY", 100, cfg["leverage"])
-            st.caption(f"Com {cfg['leverage']}× uma posição comprada é liquidada com queda aproximada de "
-                       f"{100 - liq_long:.1f}% (margem isolada). O gestor de risco bloqueia stops além da liquidação.")
+        futures = profile.market == "futures"
+        st.caption("Liga/desliga, modo de margem e nível de alavancagem ficam no topo da **boleta**, como na Binance.")
+        st.toggle("Permitir operações vendidas (short)", key=k("allow_short"),
+                  help="No spot, vender a descoberto exige margem (alavancagem ligada).")
+        if futures:
+            tiers, source = cached_brackets(cfg["symbol"])
+            st.markdown(f"**Faixas de alavancagem de {cfg['symbol']}** (fonte: {source}) — quanto maior a posição, "
+                        "menor a alavancagem máxima e maior a margem de manutenção:")
+            st.dataframe(pd.DataFrame([{"Posição até (USDT)": f"{t.cap:,.0f}".replace(",", "."),
+                                        "Alavancagem máx.": f"{t.max_leverage}×",
+                                        "Margem de manutenção": f"{t.mmr * 100:.2f}%"} for t in tiers[:8]]),
+                         hide_index=True)
+            if cfg["leverage_on"]:
+                liq = lev_rules.liquidation_price(side="BUY", entry=100.0, qty=1.0, leverage=cfg["leverage"],
+                                                  market="futures", symbol=cfg["symbol"])
+                st.caption(f"Com {cfg['leverage']}× (isolada) uma posição comprada pequena é liquidada com queda de "
+                           f"≈{100 - (liq or 0):.2f}%. A conta simulada usa a fórmula oficial da Binance e cobra o "
+                           "financiamento (funding) a cada 8 h.")
+        else:
+            st.markdown("**Margem no spot (Binance Margin):** Cruzada até **3×** e Isolada até **10×**. A liquidação "
+                        "ocorre quando o nível de margem (ativos ÷ dívida) chega a **1,1**.")
+            if cfg["leverage_on"]:
+                liq = lev_rules.liquidation_price(side="BUY", entry=100.0, qty=1.0, leverage=cfg["leverage"],
+                                                  market="spot", symbol=cfg["symbol"])
+                st.caption(f"Com {cfg['leverage']}× uma compra é liquidada com queda de ≈{100 - (liq or 0):.1f}%. "
+                           "Os juros do empréstimo de margem ainda não são simulados.")
 
     with t_ind:
         st.caption("Ligue/desligue a exibição no gráfico. As habilidades da IA usam todos os indicadores calculados.")
@@ -727,16 +796,8 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                 st.rerun()
 
     with t_acct:
-        acct = get_broker(bot).account()
-        st.write(f"Saldo inicial: **{fmt(acct['initial'])} USDT** · criada em {acct['created'][:10]}")
-        c = st.columns([1, 1, 2])
-        initial = c[0].number_input("Novo saldo inicial (USDT)", 100.0, 1e7, value=float(acct["initial"]), step=1000.0,
-                                    key=f"{bot}__reset_val")
-        confirm = c[1].checkbox("Confirmo apagar posições e histórico", key=f"{bot}__reset_ok")
-        if c[2].button("Reiniciar conta simulada", disabled=not confirm, key=f"{bot}__reset_btn"):
-            get_broker(bot).reset(initial)
-            st.success("Conta reiniciada.")
-            st.rerun()
+        st.write("A banca, os aportes/retiradas, o extrato e o histórico completo ficam na página **Carteira**.")
+        st.page_link("views/wallet.py", label="Abrir Carteira simulada", icon="💰")
         if st.button("Restaurar configurações padrão deste bot", key=f"{bot}__defaults"):
             defaults = default_settings(profile)
             save_settings(bot, defaults)

@@ -59,10 +59,34 @@ def _get(url: str, params: dict | None = None):
     return resp.json()
 
 
+_MULT_PREFIX = (("1000000", 1_000_000), ("1M", 1_000_000), ("1000", 1_000))
+
+
+def okx_base(symbol: str) -> tuple[str, int]:
+    """Moeda-base na OKX e multiplicador de contrato da Binance
+    (ex.: 1000PEPEUSDT → PEPE, 1000)."""
+    base = symbol.upper().removesuffix("USDT")
+    for prefix, mult in _MULT_PREFIX:
+        if base.startswith(prefix) and len(base) > len(prefix) and not base[len(prefix)].isdigit():
+            return base[len(prefix):], mult
+    return base, 1
+
+
 def _okx_inst(symbol: str, market: str) -> str:
-    quote = "USDT" if symbol.endswith("USDT") else symbol[-4:]
-    base = symbol[: -len(quote)]
-    return f"{base}-{quote}-SWAP" if market == "futures" else f"{base}-{quote}"
+    base, _ = okx_base(symbol)
+    return f"{base}-USDT-SWAP" if market == "futures" else f"{base}-USDT"
+
+
+_ct_cache: dict[str, float] = {}
+
+
+def okx_contract_value(symbol: str) -> float:
+    """Quantidade da moeda-base em um contrato perpétuo da OKX."""
+    inst = _okx_inst(symbol, "futures")
+    if inst not in _ct_cache:
+        data = _get(OKX + "/api/v5/public/instruments", {"instType": "SWAP", "instId": inst})
+        _ct_cache[inst] = float(data["data"][0]["ctVal"]) if data.get("data") else 1.0
+    return _ct_cache[inst]
 
 
 def _frame(rows: list[list], source: str) -> pd.DataFrame:
@@ -114,7 +138,10 @@ def _okx_klines(symbol: str, interval: str, limit: int, market: str) -> list:
         after = batch[-1][0]
         endpoint = "/api/v5/market/history-candles"
     rows = rows[:limit]
-    return [[int(r[0]), r[1], r[2], r[3], r[4], r[5]] for r in reversed(rows)]
+    _, mult = okx_base(symbol)
+    vol_idx = 6 if market == "futures" else 5  # perpétuo: volume em moeda-base (não em contratos)
+    return [[int(r[0]), float(r[1]) * mult, float(r[2]) * mult, float(r[3]) * mult, float(r[4]) * mult,
+             float(r[vol_idx]) / mult] for r in reversed(rows)]
 
 
 def get_klines(symbol: str, interval: str, limit: int = 500, market: str = "spot") -> pd.DataFrame:
@@ -171,10 +198,11 @@ def _okx_ticker(symbol: str, market: str) -> Ticker:
     if data.get("code") != "0" or not data["data"]:
         raise MarketDataError(data.get("msg") or "sem dados")
     d = data["data"][0]
-    last, open24 = float(d["last"]), float(d["open24h"])
-    vol_quote = float(d.get("volCcy24h", 0)) * (last if market == "futures" else 1)
-    return Ticker(symbol, last, (last / open24 - 1) * 100 if open24 else 0.0, float(d["high24h"]),
-                  float(d["low24h"]), vol_quote, "OKX Perpétuo" if market == "futures" else "OKX Spot")
+    _, mult = okx_base(symbol)
+    last, open24 = float(d["last"]) * mult, float(d["open24h"]) * mult
+    vol_quote = float(d.get("volCcy24h", 0)) * (last / mult if market == "futures" else 1)
+    return Ticker(symbol, last, (last / open24 - 1) * 100 if open24 else 0.0, float(d["high24h"]) * mult,
+                  float(d["low24h"]) * mult, vol_quote, "OKX Perpétuo" if market == "futures" else "OKX Spot")
 
 
 def get_funding_rate(symbol: str) -> float | None:
@@ -198,3 +226,32 @@ def last_closed_candle_time(df: pd.DataFrame, interval: str) -> pd.Timestamp:
     if last + pd.Timedelta(seconds=INTERVAL_SECONDS[interval]) <= now:
         return last
     return df["time"].iloc[-2]
+
+
+def list_symbols(market: str) -> list[str]:
+    """Todos os pares em USDT negociáveis no mercado (spot: por volume)."""
+    if market == "futures":
+        from core.leverage import futures_symbols
+
+        symbols = futures_symbols()
+        if symbols:
+            return symbols
+        data = _get(OKX + "/api/v5/public/instruments", {"instType": "SWAP"})
+        return sorted(i["instId"].split("-")[0] + "USDT" for i in data["data"] if i["instId"].endswith("-USDT-SWAP"))
+    for base in BINANCE_SPOT:
+        try:
+            rows = _get(base + "/api/v3/ticker/24hr", {"type": "MINI"})
+            rows = [r for r in rows if r["symbol"].endswith("USDT") and float(r["quoteVolume"]) > 0]
+            return [r["symbol"] for r in sorted(rows, key=lambda r: -float(r["quoteVolume"]))]
+        except Exception:  # noqa: BLE001
+            continue
+    data = _get(OKX + "/api/v5/market/tickers", {"instType": "SPOT"})
+    return [d["instId"].replace("-", "") for d in data["data"] if d["instId"].endswith("-USDT")]
+
+
+def get_usdt_brl() -> float | None:
+    """Cotação do dólar cripto em reais (USDT/BRL), para exibir a banca em R$."""
+    try:
+        return get_ticker("USDTBRL", "spot").last
+    except Exception:  # noqa: BLE001
+        return None

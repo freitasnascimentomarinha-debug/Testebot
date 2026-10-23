@@ -9,6 +9,8 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass, field
 
+from core import leverage as lev_rules
+
 MAINT_MARGIN_RATE = 0.004  # taxa de manutenção típica dos perpétuos (faixa inicial)
 
 
@@ -74,7 +76,8 @@ def effective_leverage(cfg: dict) -> float:
 def calculate(side: str, entry: float, stop: float | None, take_profit: float | None, *,
               leverage: float = 1.0, fee_pct: float = 0.1, qty: float | None = None,
               risk_usdt: float | None = None, margin_usdt: float | None = None,
-              available: float | None = None) -> TradeCalc:
+              available: float | None = None, symbol: str | None = None, market: str = "futures",
+              margin_mode: str = "Isolada") -> TradeCalc:
     """Dimensiona a posição.
 
     Prioridade do tamanho: ``qty`` explícita → ``risk_usdt`` (perda máxima,
@@ -104,6 +107,12 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
         max_qty = available / (entry / lev + fee * entry)
         warnings.append(f"Quantidade reduzida pelo saldo disponível ({available:,.2f} USDT).")
         qty = max_qty
+    if symbol and market == "futures" and lev > 1:
+        cap = lev_rules.max_notional(symbol, lev)
+        if cap and qty * entry > cap:
+            warnings.append(f"Pela tabela da Binance, com {lev:g}× a posição máxima em {symbol} é "
+                            f"{cap:,.0f} USDT — quantidade reduzida.")
+            qty = cap / entry
     qty = round_qty(qty, entry)
 
     notional = qty * entry
@@ -113,7 +122,12 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
     reward = (qty * abs(take_profit - entry) - fees_open - qty * take_profit * fee) if take_profit else float("nan")
     rr = reward / risk if stop_dist and take_profit and risk > 0 else None
     breakeven = entry * (1 + sign * 2 * fee)
-    liq = liquidation_price(side, entry, lev) if lev > 1 or side == "SELL" else None
+    if symbol:
+        free = (available - margin - fees_open) if available is not None else 0.0
+        liq = lev_rules.liquidation_price(side=side, entry=entry, qty=qty, leverage=lev, market=market,
+                                          symbol=symbol, margin_mode=margin_mode, free_balance=free)
+    else:
+        liq = liquidation_price(side, entry, lev) if lev > 1 or side == "SELL" else None
 
     if liq and stop and ((side == "BUY" and stop <= liq) or (side == "SELL" and stop >= liq)):
         warnings.append(f"O stop está além do preço de liquidação estimado ({liq:,.4f}). Reduza a alavancagem.")
@@ -160,11 +174,15 @@ def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: f
 
     budget = risk_budget(cfg, account_stats["equity"])
     calc = calculate(side, entry, stop, take_profit, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                     risk_usdt=budget, available=account_stats["available"]) if stop else None
+                     risk_usdt=budget, available=account_stats["available"], symbol=cfg["symbol"], market=market,
+                     margin_mode=cfg["margin_mode"]) if stop else None
     if calc:
         if calc.rr is not None and calc.rr < float(cfg["min_rr"]):
             reasons.append(f"Relação risco:retorno {calc.rr:.2f} abaixo do mínimo configurado ({cfg['min_rr']}).")
         if take_profit is None:
             reasons.append("Defina um alvo (take profit) para validar a relação risco:retorno.")
         reasons.extend(w for w in calc.warnings if "reduzida" not in w)
+    max_lev = lev_rules.max_leverage(cfg["symbol"], market, cfg["margin_mode"])
+    if lev > max_lev:
+        reasons.append(f"Alavancagem {lev:g}× acima do máximo permitido pela Binance para {cfg['symbol']} ({max_lev}×).")
     return RiskCheck(allowed=not reasons, reasons=reasons, calc=calc)

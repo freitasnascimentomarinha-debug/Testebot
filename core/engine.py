@@ -14,7 +14,6 @@ import pandas as pd
 from core import ai, indicators as ind, risk
 from core.broker import get_broker
 from core.data import get_funding_rate
-from core.paper import stats
 from core.profiles import BotProfile
 from core.storage import locked_update
 from core.strategy import analyze, market_snapshot
@@ -47,7 +46,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     symbol, interval = cfg["symbol"], cfg["interval"]
     broker = get_broker(profile.key)
     acct = broker.account()
-    st_ = stats(acct, {symbol: price})
+    st_ = broker.stats({symbol: price})
     plan = analyze(df, cfg, profile)
     plan_d = plan.to_dict()
 
@@ -64,7 +63,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         "resultado_hoje_usdt": round(st_["pnl_today"], 2), "max_posicoes_abertas": cfg["max_open_positions"],
         "taxa_pct": cfg["fee_pct"],
     }
-    positions = [{k: p[k] for k in ("side", "qty", "entry", "stop_loss", "take_profit", "leverage", "opened")}
+    positions = [{k: p.get(k) for k in ("side", "qty", "entry", "stop_loss", "take_profit", "leverage", "liquidation",
+                                         "opened", "source")}
                  | {"pnl_nao_realizado": round((price - p["entry"]) * p["qty"] * (1 if p["side"] == "BUY" else -1), 2)}
                  for p in acct["positions"] if p["symbol"] == symbol]
     account_view = {k: round(v, 2) for k, v in st_.items() if isinstance(v, (int, float)) and not math.isinf(v)}
@@ -113,7 +113,7 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
             order_type=d.order_type, price=price, limit_price=d.entry if d.order_type == "LIMIT" else None,
             stop_loss=d.stop_loss, take_profit=d.take_profit, leverage=calc.leverage,
             fee_pct=float(cfg["fee_pct"]), slippage_pct=float(cfg["slippage_pct"]),
-            source=d.source, note=d.reasoning[:300], max_loss_planned=calc.risk_usdt,
+            source=d.source, note=d.reasoning[:300], max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"],
         )
     else:
         raise ValueError("Não há ordem aprovada para executar.")

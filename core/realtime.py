@@ -37,7 +37,10 @@ def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, l
                 "adx_on", "adx_period", "obv_on")
     pos = [{k: p.get(k) for k in ("side", "qty", "entry", "fee_pct", "fees_paid", "margin", "stop_loss",
                                   "take_profit", "leverage")} for p in positions]
-    conf = json.dumps({"symbol": symbol.upper(), "interval": interval, "market": market, "height": height,
+    from core.data import okx_base
+
+    base, mult = okx_base(symbol)
+    conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height,
                        "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos})
     return _TEMPLATE.replace("__LWC__", LWC_URL).replace("__CONF__", conf)
 
@@ -68,7 +71,9 @@ const SEC = {"1m":60,"3m":180,"5m":300,"15m":900,"30m":1800,"1h":3600,"2h":7200,
 const OKX_BAR = {"1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m","1h":"1H","2h":"2H","4h":"4H","6h":"6Hutc","12h":"12Hutc","1d":"1Dutc","3d":"3Dutc","1w":"1Wutc","1M":"1Mutc"}[C.interval];
 const TZ = -new Date().getTimezoneOffset() * 60;  // exibe no fuso do navegador
 const fut = C.market === "futures";
-const okxInst = C.symbol.replace(/USDT$/, "") + "-USDT" + (fut ? "-SWAP" : "");
+const okxInst = C.okx_base + "-USDT" + (fut ? "-SWAP" : "");
+const M = C.okx_mult, VI = fut ? 6 : 5;  // OKX: preço por moeda (×M p/ pares 1000X da Binance); volume em moeda-base
+const okxRow = k => row(+k[0], k[1] * M, k[2] * M, k[3] * M, k[4] * M, k[VI] / M);
 const $ = id => document.getElementById(id);
 const UP = "#26a69a", DN = "#ef5350";
 $("sym").textContent = C.symbol + (fut ? " · Perpétuo" : " · Spot") + " · " + C.interval;
@@ -246,8 +251,8 @@ async function okxHistory() {
     rows = rows.concat(j.data); after = j.data[j.data.length - 1][0]; url = "history-candles";
   }
   if (!rows.length) throw new Error("OKX sem dados");
-  try { const t = await (await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${okxInst}`)).json(); open24 = +t.data[0].open24h; } catch (e) {}
-  return rows.reverse().map(k => row(+k[0], k[1], k[2], k[3], k[4], k[5]));
+  try { const t = await (await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${okxInst}`)).json(); open24 = +t.data[0].open24h * M; } catch (e) {}
+  return rows.reverse().map(okxRow);
 }
 async function history(src) {
   if (src.kind === "okx") return okxHistory();
@@ -274,7 +279,7 @@ function stream(i) {
     const m = JSON.parse(ev.data);
     let c = null;
     if (src.kind === "bn" && m.k) c = row(m.k.t, m.k.o, m.k.h, m.k.l, m.k.c, m.k.v);
-    if (src.kind === "okx" && m.data) { const k = m.data[0]; c = row(+k[0], k[1], k[2], k[3], k[4], k[5]); }
+    if (src.kind === "okx" && m.data) c = okxRow(m.data[0]);
     if (!c) return;
     if (!opened) { opened = true; clearTimeout(failover); retry = 0; status("ao vivo · " + src.name + (source && source !== src.name ? " (histórico: " + source + ")" : ""), "live"); }
     upsert(c);

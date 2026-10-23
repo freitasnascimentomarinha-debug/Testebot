@@ -7,7 +7,10 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import pytest  # noqa: E402
 
-from core import indicators as ind, paper, risk  # noqa: E402
+from core import indicators as ind, leverage, paper, risk  # noqa: E402
+
+# Sem rede nos testes: faixas padrão de alavancagem
+leverage.brackets = lambda symbol: (leverage.DEFAULT_BRACKETS, "padrão")
 from core.ai import _extract_json, rules_fallback  # noqa: E402
 from core.profiles import PROFILES  # noqa: E402
 from core.settings import default_settings  # noqa: E402
@@ -83,6 +86,8 @@ def test_paper_round_trip_stop_loss():
     acct = paper.get_account("t")
     assert acct["balance"] == pytest.approx(995)
     assert acct["history"][0]["pnl"] == pytest.approx(-5)
+    assert [e["type"] for e in acct["ledger"]] == ["Depósito inicial", "Taxa de abertura", "Resultado (Stop loss)"]
+    assert acct["ledger"][-1]["bank"] == pytest.approx(995)
 
 
 def test_paper_limit_order_fills():
@@ -188,3 +193,58 @@ def test_github_backend_roundtrip():
     b2 = GitHubBackend("o/r", "tok", "dados", flush_seconds=999, session=fake)  # "reinício" do app
     assert b2.load("contas.json", None) == {"saldo": 123}
     assert b2.load("outro.json", []) == []
+
+
+def test_binance_liquidation_formula():
+    # Isolada, 10×, MMR 0,65% (faixa padrão 1): LP = entrada·(1 − 1/10)/(1 − 0,0065)
+    lp = leverage.liquidation_price(side="BUY", entry=100, qty=1, leverage=10, market="futures", symbol="X")
+    assert lp == pytest.approx(100 * 0.9 / (1 - 0.0065))
+    lp_s = leverage.liquidation_price(side="SELL", entry=100, qty=1, leverage=10, market="futures", symbol="X")
+    assert lp_s == pytest.approx(100 * 1.1 / (1 + 0.0065))
+    cross = leverage.liquidation_price(side="BUY", entry=100, qty=1, leverage=10, market="futures", symbol="X",
+                                       margin_mode="Cruzada", free_balance=50)
+    assert cross < lp  # margem cruzada: liquidação mais distante
+    assert leverage.liquidation_price(side="BUY", entry=100, qty=1, leverage=3, market="spot", symbol="X") == \
+        pytest.approx(1.1 * 100 * (2 / 3))
+
+
+def test_leverage_caps_notional():
+    assert leverage.max_leverage("X") == 75
+    assert leverage.max_notional("X", 75) == 50_000
+    calc = risk.calculate("BUY", 100, 99, 105, leverage=75, fee_pct=0.0, risk_usdt=10_000, symbol="X", market="futures")
+    assert calc.notional <= 50_000 and any("tabela da Binance" in w for w in calc.warnings)
+
+
+def test_shared_wallet_and_cash_movements():
+    paper.reset_account("w", 1000)
+    paper.place_order("w", symbol="X", market="futures", side="BUY", qty=1, price=100, leverage=10, fee_pct=0.0,
+                      bot="day", source="manual")
+    paper.place_order("w", symbol="Y", market="spot", side="BUY", qty=1, price=50, fee_pct=0.0, bot="swing", source="ia")
+    acct = paper.get_account("w")
+    assert paper.stats(acct, {}, bot="day")["open_positions"] == 1
+    assert paper.stats(acct, {})["open_positions"] == 2
+    paper.cash_movement("w", 500, "aporte")
+    paper.cash_movement("w", -200, "retirada")
+    s = paper.stats(paper.get_account("w"), {"X": 110, "Y": 50})
+    assert s["invested"] == 1300
+    assert s["total_pnl"] == pytest.approx(10)  # +10 na posição X
+    with pytest.raises(ValueError):
+        paper.cash_movement("w", -1e9)
+
+
+def test_funding_charged_every_8h():
+    paper.reset_account("f", 1000)
+    paper.place_order("f", symbol="X", market="futures", side="BUY", qty=1, price=100, leverage=5, fee_pct=0.0)
+
+    def age(data):
+        data["f"]["positions"][0]["last_funding"] = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=17)).isoformat()
+
+    paper.locked_update(paper.ACCOUNT_FILE, {}, age)
+    df = make_df(3)
+    df["time"] = pd.Timestamp.now(tz="UTC").floor("min")
+    df["low"], df["high"] = 99, 101
+    paper.sync("f", "X", df, 100, funding_rate_pct=0.01)
+    pos = paper.get_account("f")["positions"][0]
+    assert pos["funding_paid"] == pytest.approx(paper._funding_events(
+        pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=17), pd.Timestamp.now(tz="UTC")) * 0.01, abs=0.011)
+    assert pos["funding_paid"] > 0

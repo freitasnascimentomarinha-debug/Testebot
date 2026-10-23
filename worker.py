@@ -16,7 +16,7 @@ import time
 
 from core import engine
 from core.broker import get_broker
-from core.data import get_klines, get_ticker, last_closed_candle_time
+from core.data import get_funding_rate, get_klines, get_ticker, last_closed_candle_time
 from core.ai import get_api_key
 from core.profiles import PROFILES
 from core.settings import load_settings
@@ -30,7 +30,8 @@ def tick(bot: str, last_seen: dict) -> None:
     raw = get_klines(cfg["symbol"], cfg["interval"], int(cfg["candles"]), profile.market)
     price = get_ticker(cfg["symbol"], profile.market).last
     broker = get_broker(bot)
-    for ev in broker.sync(cfg["symbol"], raw, price):
+    funding = get_funding_rate(cfg["symbol"]) if profile.market == "futures" else None
+    for ev in broker.sync(cfg["symbol"], raw, price, funding):
         log.info("[%s] %s %s", bot, ev["type"], ev.get("trade", {}).get("pnl", ""))
     if not cfg["autopilot"]:
         return

@@ -27,7 +27,15 @@ pronta para receber a API de negociação da Binance numa segunda fase.
 * **Botão “Analisar mercado e programar ordem”**: as habilidades de programação calculam o cenário, o
   DeepSeek 4.1 Flash interpreta e devolve a ordem em JSON, e o gestor de risco aprova/bloqueia.
 * **Piloto automático** (a cada candle fechado) e execução automática opcional.
-* **Conta simulada** por bot: posições, ordens limitadas, histórico (exporta CSV), curva de patrimônio e
+* **Carteira simulada** (página 💰 Carteira): você define a banca inicial, faz aportes/retiradas e opera
+  junto com os bots na mesma banca (ou bancas separadas por bot). Tudo vira histórico, extrato (taxas,
+  resultados, funding), resultado diário, comparação “você × bots”, curva de banca com drawdown, valor em R$
+  e exportação para Excel.
+* **Alavancagem no padrão da Binance**: futuros com as faixas oficiais por par (ex.: BTC até 150×, com a
+  posição máxima diminuindo conforme a alavancagem), margem isolada/cruzada, fórmula oficial de liquidação e
+  funding a cada 8 h; no spot, Binance Margin (cruzada 3×, isolada 10×).
+* **Todos os pares em USDT** da Binance (≈900 perpétuos e ≈700 spot) com busca.
+* **Posições por bot**: posições, ordens limitadas, histórico (exporta CSV), curva de patrimônio e
   log de decisões.
 * **Configurações** (abaixo do gráfico): perda máxima por trade (USDT ou %), R:R mínimo, metas de
   operações/lucro/perda diária, máx. posições, alavancagem e modo de margem, todos os indicadores, modelo da
