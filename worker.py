@@ -14,7 +14,7 @@ import argparse
 import logging
 import time
 
-from core import engine, personalities
+from core import accounts, engine, personalities, storage
 from core.broker import get_broker
 from core.data import get_funding_rate, get_klines, get_ticker, last_closed_candle_time
 from core.ai import get_api_key
@@ -74,17 +74,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--bots", nargs="*", default=list(PROFILES), choices=list(PROFILES))
     parser.add_argument("--interval", type=int, default=15, help="segundos entre verificações")
+    parser.add_argument("--users", nargs="*", default=None, help="com contas ligadas: só estes usuários (padrão: todos)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if not get_api_key():
         log.warning("OPENROUTER_API_KEY não definida — usando somente as habilidades de programação.")
     last_seen: dict = {}
     while True:
-        for bot in args.bots:
-            try:
-                tick(bot, last_seen)
-            except Exception:  # noqa: BLE001
-                log.exception("[%s] erro no ciclo", bot)
+        # Com contas ligadas, percorre os usuários (cada um com a própria carteira e configuração).
+        users = (args.users or accounts.list_users()) if accounts.enabled() else [None]
+        for user in users:
+            storage.set_user(user)
+            for bot in args.bots:
+                try:
+                    tick(bot, last_seen.setdefault(user, {}))
+                except Exception:  # noqa: BLE001
+                    log.exception("[%s/%s] erro no ciclo", user or "-", bot)
         time.sleep(args.interval)
 
 

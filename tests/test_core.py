@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 
@@ -714,6 +715,111 @@ def test_bot_page_renders_with_analysis_and_advice():
     text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
     assert "Leitura do especialista" in text and "Melhor bot para este momento" in text and "Plano condicional" in text
     assert "deepseek" not in text.lower() and not any("Resposta bruta" in (e.label or "") for e in at.expander)
+
+
+def test_accounts_register_login_lockout_token(monkeypatch):
+    import time
+
+    from core import accounts, storage
+
+    monkeypatch.setenv("AUTH_MODE", "contas")
+    monkeypatch.setenv("SIGNUP_CODE", "convite")
+    assert accounts.enabled() and accounts.needs_code()
+    with pytest.raises(ValueError, match="convite"):
+        accounts.register("carla", "senha-forte-1", "errado")
+    user = accounts.register("Carla", "senha-forte-1", "convite")
+    assert user == "carla"
+    users = storage.load_json(storage.USERS_KEY, {})
+    assert "senha-forte-1" not in json.dumps(users) and users["carla"]["hash"].startswith("scrypt$")  # só o hash
+    for bad, msg in ((("carla", "outra-senha-9", "convite"), "já existe"), (("x", "senha-forte-1", "convite"), "Usuário:"),
+                     (("diego", "curta", "convite"), "8 caracteres"), (("diego", "aaaaaaaaaa", "convite"), "fraca")):
+        with pytest.raises(ValueError, match=msg):
+            accounts.register(*bad)
+    assert accounts.authenticate(" CARLA ", "senha-forte-1") == "carla"
+    # erro genérico (não revela se o usuário existe) e bloqueio após 5 tentativas
+    with pytest.raises(ValueError, match="incorretos"):
+        accounts.authenticate("ninguem", "qualquer-coisa-1")
+    for _ in range(5):
+        with pytest.raises(ValueError, match="incorretos"):
+            accounts.authenticate("carla", "errada-errada")
+    with pytest.raises(ValueError, match="bloqueada"):
+        accounts.authenticate("carla", "senha-forte-1")
+    users = storage.load_json(storage.USERS_KEY, {})
+    users["carla"]["locked_until"] = time.time() - 1
+    storage.save_json(storage.USERS_KEY, users)
+    assert accounts.authenticate("carla", "senha-forte-1") == "carla"
+    # link de "manter conectado": válido, adulterado e invalidado pela troca de senha
+    tok = accounts.make_token("carla")
+    assert accounts.verify_token(tok) == "carla" and accounts.verify_token(tok[:-2] + "xx") is None
+    accounts.change_password("carla", "senha-forte-1", "nova-senha-77")
+    assert accounts.verify_token(tok) is None and accounts.authenticate("carla", "nova-senha-77") == "carla"
+    with pytest.raises(ValueError):
+        accounts.change_password("carla", "errada-errada", "outra-nova-88")
+    monkeypatch.setenv("ALLOW_SIGNUP", "false")
+    with pytest.raises(ValueError, match="fechado"):
+        accounts.register("eva", "senha-forte-1", "convite")
+
+
+def test_user_data_isolation_legacy_owner_and_backup(monkeypatch):
+    from core import storage
+
+    storage.set_user(None)
+    storage.save_json("settings.json", {"day": {"max_loss_pct": 7}})          # dado de antes das contas
+    storage.set_user("ana")
+    assert storage.load_json("settings.json", "vazio") == "vazio"             # sem LEGACY_OWNER, ninguém herda
+    monkeypatch.setenv("LEGACY_OWNER", "bia")
+    storage.set_user("bia")
+    assert storage.load_json("settings.json") == {"day": {"max_loss_pct": 7}}  # o dono herda uma vez
+    storage.save_json("settings.json", {"day": {"max_loss_pct": 1}})
+    storage.set_user("ana")
+    storage.save_json("settings.json", {"day": {"max_loss_pct": 3}})
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 50)
+    storage.set_user("bia")
+    assert storage.load_json("settings.json") == {"day": {"max_loss_pct": 1}}
+    paper.reset_account(paper.SHARED_ACCOUNT, 80)
+    assert paper.get_account(paper.SHARED_ACCOUNT)["initial"] == 80
+    storage.set_user("ana")
+    assert storage.load_json("settings.json") == {"day": {"max_loss_pct": 3}}
+    assert paper.get_account(paper.SHARED_ACCOUNT)["initial"] == 50           # cada um com a sua carteira
+    # backup: só os dados do usuário atual, sem prefixo e nunca o cadastro de usuários
+    out = storage.export_all()
+    assert out["settings.json"] == {"day": {"max_loss_pct": 3}} and storage.USERS_KEY not in out
+    assert not any(k.startswith("u/") for k in out)
+    assert storage.import_all({"settings.json": {"x": 1}, storage.USERS_KEY: {"hacker": {}}, "u/bia/settings.json": {"x": 2}}) == 1
+    assert storage.load_json("settings.json") == {"x": 1} and "hacker" not in (storage.load_json(storage.USERS_KEY, {}) or {})
+    storage.set_user("bia")
+    assert storage.load_json("settings.json") == {"day": {"max_loss_pct": 1}}
+    storage.set_user(None)
+    paper.reset_account(paper.SHARED_ACCOUNT, 100)
+
+
+def test_accounts_work_on_postgres_and_table_is_private():
+    """Mesmo fluxo no Postgres (Supabase): usuários isolados e a tabela com RLS ligado e sem acesso para anon."""
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("sem Postgres de teste")
+    import psycopg
+
+    from core import storage
+    from core.storage import PostgresBackend
+
+    b = PostgresBackend(url)
+    b._connect()
+    with psycopg.connect(url, autocommit=True) as c:
+        assert c.execute("SELECT relrowsecurity FROM pg_class WHERE relname = %s", (storage.TABLE,)).fetchone()[0] is True
+    old = storage._backend
+    storage._backend = b
+    try:
+        storage.set_user("pg_ana")
+        storage.save_json("settings.json", {"a": 1})
+        storage.set_user("pg_bia")
+        assert storage.load_json("settings.json", "vazio") == "vazio"
+        storage.set_user("pg_ana")
+        assert storage.load_json("settings.json") == {"a": 1}
+    finally:
+        storage.set_user(None)
+        storage._backend = old
 
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine

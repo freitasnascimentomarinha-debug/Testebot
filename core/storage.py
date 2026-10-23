@@ -23,6 +23,7 @@ from __future__ import annotations
 import atexit
 import base64
 import contextlib
+import contextvars
 import json
 import logging
 import os
@@ -94,18 +95,23 @@ class FileBackend:
             fh.write(_dumps(data))
         os.replace(tmp, path)
 
-    def load(self, name: str, default: Any) -> Any:
+    def _path(self, name: str) -> Path:
         path = self.dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)  # "u/<usuario>/settings.json"
+        return path
+
+    def load(self, name: str, default: Any) -> Any:
+        path = self._path(name)
         with self._locked(path):
             return self._read(path, default)
 
     def save(self, name: str, data: Any) -> None:
-        path = self.dir / name
+        path = self._path(name)
         with self._locked(path):
             self._write(path, data)
 
     def update(self, name: str, default: Any, fn: Callable[[Any], Any]) -> Any:
-        path = self.dir / name
+        path = self._path(name)
         with self._locked(path):
             data = self._read(path, default)
             result = fn(data)
@@ -113,7 +119,7 @@ class FileBackend:
             return result
 
     def names(self) -> list[str]:
-        return sorted(p.name for p in self.dir.glob("*.json"))
+        return sorted(p.relative_to(self.dir).as_posix() for p in self.dir.rglob("*.json"))
 
 
 class PostgresBackend:
@@ -136,6 +142,14 @@ class PostgresBackend:
             self._conn.execute(
                 f"CREATE TABLE IF NOT EXISTS {TABLE} (name TEXT PRIMARY KEY, data JSONB NOT NULL, "
                 "updated_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+            # No Supabase, tabelas do schema public ficam acessíveis pela API REST com a chave pública (anon). Ligar o RLS sem
+            # nenhuma política bloqueia esse acesso; a conexão direta do app (dono da tabela) continua funcionando.
+            with contextlib.suppress(Exception):
+                self._conn.execute(f"ALTER TABLE {TABLE} ENABLE ROW LEVEL SECURITY")
+            with contextlib.suppress(Exception):
+                self._conn.execute(
+                    "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN "
+                    f"EXECUTE 'REVOKE ALL ON {TABLE} FROM anon, authenticated'; END IF; END $$")
         return self._conn
 
     def _run(self, fn: Callable):
@@ -317,27 +331,85 @@ def backend():
         return _backend
 
 
+# ---------------------------------------------------------------- dados por usuário
+# Com contas ligadas (AUTH_MODE=contas), cada pessoa tem a própria configuração, carteira, extrato, log e planos. As demais
+# chaves (estratégias da comunidade, resultados de pesquisa, cadastro de usuários) são compartilhadas.
+USER_SCOPED = ("settings.json", "paper_accounts.json", "wallet.json", "decisions.json", "armed_plans.json")
+USERS_KEY = "_users.json"  # cadastro de usuários (hash das senhas): nunca exportado
+_user_ctx: contextvars.ContextVar = contextvars.ContextVar("tradebot_user", default=None)
+_migrated: set[str] = set()
+
+
+def set_user(name: str | None) -> None:
+    """Define o usuário atual fora do Streamlit (ex.: worker.py). No app, vale ``st.session_state['_user']``."""
+    _user_ctx.set(name)
+
+
+def current_user() -> str | None:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        if get_script_run_ctx(suppress_warning=True) is not None:
+            import streamlit as st
+
+            return st.session_state.get("_user")
+    except Exception:  # noqa: BLE001
+        pass
+    return _user_ctx.get()
+
+
+def _key(name: str) -> str:
+    user = current_user()
+    if not user or name not in USER_SCOPED:
+        return name
+    key = f"u/{user}/{name}"
+    # Dados anteriores às contas (uma só pessoa): passam para o dono definido em LEGACY_OWNER, uma única vez.
+    if key not in _migrated and get_secret("LEGACY_OWNER") == user:
+        _migrated.add(key)
+        b = backend()
+        if b.load(key, None) is None:
+            legacy = b.load(name, None)
+            if legacy is not None:
+                b.save(key, legacy)
+    return key
+
+
 def load_json(name: str, default: Any = None) -> Any:
-    return backend().load(name, default)
+    return backend().load(_key(name), default)
 
 
 def save_json(name: str, data: Any) -> None:
-    backend().save(name, data)
+    backend().save(_key(name), data)
 
 
 def locked_update(name: str, default: Any, fn: Callable[[Any], Any]) -> Any:
     """Lê o valor, aplica ``fn`` (que altera e/ou devolve o objeto) e grava."""
-    return backend().update(name, default, fn)
+    return backend().update(_key(name), default, fn)
 
 
 def export_all() -> dict:
-    """Backup completo (todas as chaves) para download."""
+    """Backup para download: os dados do usuário atual (ou tudo, sem contas), nunca o cadastro de usuários."""
     b = backend()
-    return {name: b.load(name, None) for name in b.names()}
+    user = current_user()
+    out = {}
+    for name in b.names():
+        if name == USERS_KEY:
+            continue
+        if user:
+            prefix = f"u/{user}/"
+            if name.startswith(prefix):
+                out[name[len(prefix):]] = b.load(name, None)
+            elif not name.startswith("u/") and name not in USER_SCOPED:
+                out[name] = b.load(name, None)
+        elif not name.startswith("u/"):
+            out[name] = b.load(name, None)
+    return out
 
 
 def import_all(payload: dict) -> int:
+    n = 0
     for name, data in payload.items():
-        if name.endswith(".json") and data is not None:
+        if name.endswith(".json") and data is not None and name != USERS_KEY and not name.startswith("u/"):
             save_json(name, data)
-    return len(payload)
+            n += 1
+    return n

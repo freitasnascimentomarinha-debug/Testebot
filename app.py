@@ -43,7 +43,8 @@ if "core" in sys.modules and _disk_version and _loaded_version != _disk_version:
     st.cache_data.clear()
     st.cache_resource.clear()
 
-from core.auth import is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
+from core import accounts  # noqa: E402
+from core.auth import current_user, is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
 import core  # noqa: E402
 from core import APP_VERSION  # noqa: E402
 
@@ -61,7 +62,8 @@ pages = {
                     st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
                     st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
-                    st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")],
+                    st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")]
+    + ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else []),
     "Mercado Cripto": [
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
         st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),
@@ -78,6 +80,8 @@ with st.sidebar:
     if getattr(store, "last_error", None):  # só avisa quando uma gravação realmente falhou
         st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")
     st.caption(f"Versão {APP_VERSION}")
+    if current_user():
+        st.caption(f"👤 {current_user()}")
     if password_configured():
         if st.button("Sair", icon="🚪", width="stretch"):
             logout()

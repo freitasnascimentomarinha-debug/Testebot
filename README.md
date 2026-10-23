@@ -112,6 +112,8 @@ Testes: `python -m pytest -q tests`
    # DATABASE_URL = "postgresql://usuario:senha@host/neondb?sslmode=require"
    ```
 4. Recomendado: em **Share**, deixe o app privado (somente convidados) além da senha.
+5. Para **usuários e senhas** (cada pessoa com os próprios dados), use `AUTH_MODE = "contas"` com Supabase: veja
+   [docs/contas_e_supabase.md](docs/contas_e_supabase.md).
 
 Observações:
 * A barra lateral mostra onde os dados estão (GitHub, Postgres ou arquivos locais temporários).
