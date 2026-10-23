@@ -1,0 +1,145 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:02.380
+Quarta aula: os bots especialistas.
+
+2
+00:00:02.900 --> 00:00:08.786
+Aqui você aprende a escolher um bot e, principalmente, a desconfiar de resultados bonitos demais.
+
+3
+00:00:09.800 --> 00:00:14.421
+Na página Bots especialistas, cada cartão é um bot com uma especialidade.
+
+4
+00:00:15.000 --> 00:00:20.120
+Ele mostra o estilo, o tempo gráfico, o mercado e a relação entre risco e retorno.
+
+5
+00:00:20.700 --> 00:00:25.785
+Mostra também o resultado simulado por mês, a taxa de acerto e a pior queda que ele teve.
+
+6
+00:00:26.300 --> 00:00:33.138
+E um selo: aprovado, aprovado com ressalva ou fraco. Esse selo é o mais importante, e já vamos entender por quê.
+
+7
+00:00:34.200 --> 00:00:36.859
+Todo bot é uma personalidade: uma receita.
+
+8
+00:00:37.400 --> 00:00:40.802
+Ela escolhe as habilidades, as leituras do gráfico que votam.
+
+9
+00:00:41.400 --> 00:00:44.732
+Define os pesos, ou seja, quais votos contam mais.
+
+10
+00:00:45.300 --> 00:00:48.086
+O limiar, a força mínima do consenso para entrar.
+
+11
+00:00:48.600 --> 00:00:51.874
+A direção permitida, só compra, só venda ou as duas.
+
+12
+00:00:52.400 --> 00:00:54.803
+E os filtros e a saída, que veremos agora.
+
+13
+00:00:55.900 --> 00:01:00.126
+Bons bots sabem quando não operar. Os filtros bloqueiam entradas ruins.
+
+14
+00:01:00.700 --> 00:01:02.894
+O ADX exige força de tendência.
+
+15
+00:01:03.400 --> 00:01:06.140
+O volume relativo exige volume acima da média.
+
+16
+00:01:06.700 --> 00:01:08.790
+Outro filtro evita o mercado lateral.
+
+17
+00:01:09.300 --> 00:01:18.681
+O filtro de tendência do tempo maior só deixa o bot comprar quando o gráfico de quatro horas também está de alta, e no gráfico de cinco minutos exige também o de quinze.
+
+18
+00:01:19.200 --> 00:01:23.937
+E há os contextos favoráveis: o bot só opera nos climas de mercado em que ele foi bem.
+
+19
+00:01:25.000 --> 00:01:28.971
+Como cada bot foi testado? Com candles reais, descontando taxas.
+
+20
+00:01:29.500 --> 00:01:33.912
+O bot é ajustado em algumas moedas e depois provado em moedas que ele nunca viu.
+
+21
+00:01:34.500 --> 00:01:41.675
+E, nos estudos mais recentes, também em dois períodos diferentes: os quarenta dias recentes e os quarenta dias anteriores.
+
+22
+00:01:42.200 --> 00:01:47.761
+Isso importa porque o mercado muda de comportamento, e um bot pode brilhar numa fase e perder na outra.
+
+23
+00:01:48.800 --> 00:01:50.739
+Um exemplo real do próprio sistema.
+
+24
+00:01:51.300 --> 00:01:56.176
+Os bots de reversão de cinco minutos pareciam ótimos nos quarenta dias recentes.
+
+25
+00:01:56.700 --> 00:02:01.286
+Quando testamos os quarenta dias anteriores, eles perderam de três a sete por cento.
+
+26
+00:02:01.800 --> 00:02:07.570
+Por isso sete deles passaram a ser marcados como fracos. A moral é simples: um período bom não basta.
+
+27
+00:02:08.600 --> 00:02:16.646
+Na página Personalidades, o ranking pontua os bots pelo resultado médio em R e pela quantidade de operações, porque poucos trades enganam.
+
+28
+00:02:17.200 --> 00:02:22.993
+E o simulador deixa você escolher um bot, as moedas, o tempo gráfico, o período e a sua banca.
+
+29
+00:02:23.500 --> 00:02:28.086
+Ele refaz as operações com candles reais e mostra a curva da banca e cada trade.
+
+30
+00:02:29.100 --> 00:02:31.341
+Você também pode criar a sua estratégia.
+
+31
+00:02:31.900 --> 00:02:36.463
+Descreva em texto o que você faz, e o sistema preenche os campos, com ou sem IA.
+
+32
+00:02:37.000 --> 00:02:42.108
+Ajuste indicadores e pesos, e escolha a saída: alvo fixo ou surfar a tendência.
+
+33
+00:02:42.700 --> 00:02:46.055
+Depois salve, compartilhe e teste no simulador antes de usar.
+
+34
+00:02:47.100 --> 00:02:54.542
+Para confiar num resultado, procure muitas operações, lucro em moedas inéditas, lucro em mais de um período e custos incluídos.
+
+35
+00:02:55.100 --> 00:02:57.898
+E desconfie de qualquer curva perfeita demais.
+
+36
+00:02:58.400 --> 00:03:03.288
+Na última aula, vamos negociar de verdade, na simulação, com o piloto automático.

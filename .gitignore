@@ -6,3 +6,5 @@ venv/
 data/
 .streamlit/secrets.toml
 .env
+tools/aulas/voz/
+tools/aulas/_work/

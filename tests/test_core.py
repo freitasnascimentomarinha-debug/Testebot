@@ -500,6 +500,26 @@ def test_trailing_stop_in_paper_broker():
     assert ev and ev[0]["type"] == "Stop móvel"
     assert paper.get_account(paper.SHARED_ACCOUNT)["history"][-1]["pnl"] > 0  # saiu no lucro
 
+
+def test_learning_page_assets():
+    """Página Aprendendo: 5 aulas com vídeo, legenda, capítulos e perguntas."""
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    aulas = json.loads((root / "assets" / "aulas" / "aulas.json").read_text(encoding="utf-8"))
+    assert [a["id"] for a in aulas] == [f"aula{i}" for i in range(1, 6)]
+    for a in aulas:
+        assert (root / a["video"]).stat().st_size > 100_000
+        vtt = (root / a["legenda"]).read_text(encoding="utf-8")
+        assert vtt.startswith("WEBVTT") and "-->" in vtt
+        assert a["duracao_s"] > 120 and len(a["capitulos"]) >= 8
+        assert all(c["fala"] for c in a["capitulos"])
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(root / "views" / "learning.py"), default_timeout=60).run()
+    assert not at.exception and len(at.tabs) == 5 and len(at.radio) == 15
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

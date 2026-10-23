@@ -1,0 +1,137 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:01.521
+Bem-vindo à segunda aula.
+
+2
+00:00:02.100 --> 00:00:08.474
+Agora vamos olhar a tela de um bot por dentro, entender o gráfico e ver como a carteira simulada guarda cada operação.
+
+3
+00:00:09.500 --> 00:00:16.524
+Abra a página do Day Trade. No alto você escolhe o ativo, como BTCUSDT, ou qualquer outro par em USDT.
+
+4
+00:00:17.100 --> 00:00:23.938
+Depois o timeframe, que é o tempo de cada candle: cinco minutos, quinze minutos, uma hora e assim por diante.
+
+5
+00:00:24.500 --> 00:00:29.492
+Você também escolhe quantos candles mostrar e de quantos em quantos segundos a tela atualiza.
+
+6
+00:00:30.500 --> 00:00:32.961
+Logo abaixo ficam os números principais.
+
+7
+00:00:33.500 --> 00:00:36.507
+O preço do ativo e a variação em vinte e quatro horas.
+
+8
+00:00:37.100 --> 00:00:39.387
+A banca, que é o seu patrimônio simulado.
+
+9
+00:00:39.900 --> 00:00:43.418
+O resultado do dia e quantas operações o bot já fez.
+
+10
+00:00:44.000 --> 00:00:50.676
+O P&L aberto, que é o lucro ou prejuízo das posições ainda em andamento, já descontadas as taxas.
+
+11
+00:00:51.200 --> 00:00:55.031
+E a taxa de acerto, a proporção de operações que terminaram no lucro.
+
+12
+00:00:56.100 --> 00:01:02.961
+Aqui está o gráfico. Os candles chegam direto da corretora ao seu navegador, então o candle se forma diante dos seus olhos.
+
+13
+00:01:03.500 --> 00:01:10.663
+Existem três abas: tempo real, análise técnica e o TradingView, com ferramentas de desenho para traçar linhas e níveis.
+
+14
+00:01:11.200 --> 00:01:17.539
+Com uma posição aberta, o lucro ou prejuízo se atualiza a cada negociação, já descontadas as taxas.
+
+15
+00:01:18.600 --> 00:01:22.292
+Por padrão o gráfico vem enxuto: duas médias móveis e o volume.
+
+16
+00:01:22.800 --> 00:01:27.734
+As médias mostram a direção da tendência, e o volume mostra se o movimento tem força.
+
+17
+00:01:28.300 --> 00:01:38.377
+Se quiser, você soma outros indicadores, como RSI, MACD, bandas de Bollinger, VWAP, SuperTrend, Ichimoku e ADX.
+
+18
+00:01:38.900 --> 00:01:43.556
+Mas atenção: poluir o gráfico não deixa o bot melhor, só deixa você confuso.
+
+19
+00:01:44.600 --> 00:01:49.906
+Acima do gráfico, o sistema classifica o contexto atual, como se fosse o clima do mercado.
+
+20
+00:01:50.500 --> 00:01:52.590
+Pode ser tendência de alta ou de baixa.
+
+21
+00:01:53.100 --> 00:01:56.769
+Pode ser lateral, quando o preço anda de lado e não escolhe direção.
+
+22
+00:01:57.300 --> 00:02:00.353
+Rompimento, quando o preço sai de uma faixa com volume.
+
+23
+00:02:00.900 --> 00:02:03.489
+Pullback, que é um recuo dentro de uma tendência.
+
+24
+00:02:04.000 --> 00:02:11.245
+Ou reversão, quando o preço esticou demais. Cada bot funciona melhor em certos contextos, e veremos isso na aula quatro.
+
+25
+00:02:12.300 --> 00:02:18.407
+Agora a página Carteira. A banca inicial padrão é de cem USDT, mas você pode criar com outro valor.
+
+26
+00:02:19.000 --> 00:02:23.029
+Você pode fazer aportes e retiradas, e cada movimento fica registrado.
+
+27
+00:02:23.600 --> 00:02:29.591
+Há o extrato completo, o histórico de operações, a curva de patrimônio e até a exportação para o Excel.
+
+28
+00:02:30.600 --> 00:02:37.171
+Você escolhe entre carteira única, em que os três bots dividem a mesma banca, ou separada, para comparar um bot contra o outro.
+
+29
+00:02:37.700 --> 00:02:42.054
+Em ambos os casos, o extrato registra as taxas de abertura e de fechamento.
+
+30
+00:02:42.600 --> 00:02:48.010
+O financiamento dos futuros, chamado funding, é cobrado ou recebido a cada oito horas.
+
+31
+00:02:48.600 --> 00:02:54.266
+E, se o preço atingir o nível de liquidação, a posição é encerrada e isso também aparece no extrato.
+
+32
+00:02:54.800 --> 00:02:58.283
+O lucro líquido é sempre a variação do preço menos as taxas.
+
+33
+00:02:59.300 --> 00:03:09.227
+Em resumo: escolha o ativo e o timeframe, leia a banca e o resultado do dia, mantenha o gráfico simples, observe o contexto do mercado e confie no extrato da carteira.
+
+34
+00:03:09.800 --> 00:03:13.562
+Na próxima aula, o assunto mais importante de todos: o risco.

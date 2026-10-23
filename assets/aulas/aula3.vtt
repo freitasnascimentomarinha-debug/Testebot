@@ -1,0 +1,133 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:02.508
+Terceira aula, e talvez a mais importante.
+
+2
+00:00:03.100 --> 00:00:08.499
+Quem sobrevive no mercado não é quem acerta mais, é quem controla quanto pode perder em cada operação.
+
+3
+00:00:09.500 --> 00:00:12.913
+A regra de ouro do sistema: toda ordem precisa de um stop loss.
+
+4
+00:00:13.500 --> 00:00:17.122
+O stop é o preço em que a operação é encerrada para limitar o prejuízo.
+
+5
+00:00:17.700 --> 00:00:24.829
+Você define a perda máxima por operação. O padrão é dois por cento do saldo, ou seja, dois USDT numa banca de cem.
+
+6
+00:00:25.400 --> 00:00:32.563
+E o sistema calcula sozinho o tamanho da posição para que, se o stop for atingido, você perca esse valor, e não mais que ele.
+
+7
+00:00:33.600 --> 00:00:40.578
+Em Configurações do bot, aba Risco por trade, você escolhe a perda máxima em USDT ou em porcentagem do saldo.
+
+8
+00:00:41.100 --> 00:00:45.280
+Define a relação risco retorno mínima, que por padrão é 1,5.
+
+9
+00:00:45.800 --> 00:00:54.566
+E o stop e o alvo são medidos em múltiplos do ATR, que é a amplitude média dos últimos candles. Quanto mais o mercado balança, mais largo o stop.
+
+10
+00:00:55.600 --> 00:00:58.781
+Veja a ideia no desenho. A linha do meio é a entrada.
+
+11
+00:00:59.300 --> 00:01:05.256
+Abaixo dela, o stop. A distância até o stop é o seu risco, e chamamos essa distância de um R.
+
+12
+00:01:05.800 --> 00:01:11.779
+Acima, o alvo, o take profit. Se o alvo está a duas vezes o risco, ganhar equivale a dois R.
+
+13
+00:01:12.300 --> 00:01:20.183
+Pensar em R deixa tudo comparável: não importa se a banca é de cinquenta ou de dez mil, perder um R é sempre perder o que você decidiu arriscar.
+
+14
+00:01:21.200 --> 00:01:27.284
+Um exemplo calculado pelo próprio sistema. Compra de SOL a cem, stop em noventa e oito e alvo em cento e quatro.
+
+15
+00:01:27.800 --> 00:01:36.148
+Você aceita perder dois USDT. O sistema compra zero vírgula nove cinco duas unidades, uma posição de noventa e cinco USDT.
+
+16
+00:01:36.700 --> 00:01:41.031
+Com alavancagem cinco vezes, a margem travada é de dezenove USDT.
+
+17
+00:01:41.600 --> 00:01:49.971
+Se o stop for atingido, você perde cerca de dois. Se o alvo for atingido, ganha cerca de três vírgula sete, já descontadas as taxas.
+
+18
+00:01:50.500 --> 00:01:55.783
+A liquidação só aconteceria perto de oitenta, bem além do stop, e é assim que deve ser.
+
+19
+00:01:56.800 --> 00:02:04.544
+A alavancagem confunde muita gente. Ela não aumenta a sua perda por operação, porque o tamanho da posição já foi calculado a partir do stop.
+
+20
+00:02:05.100 --> 00:02:10.429
+O que ela muda é a margem usada: quanto maior a alavancagem, menos saldo fica travado.
+
+21
+00:02:11.000 --> 00:02:13.937
+Em troca, o preço de liquidação chega mais perto.
+
+22
+00:02:14.500 --> 00:02:20.630
+Por isso o sistema avisa quando o stop ficaria além da liquidação, e a Binance impõe um limite máximo por ativo.
+
+23
+00:02:21.200 --> 00:02:27.667
+A margem isolada protege o resto da banca. A cruzada usa o saldo todo como garantia, e é bem mais perigosa.
+
+24
+00:02:28.700 --> 00:02:35.678
+Outro ponto: custos. Cada operação paga taxa na entrada e na saída, e o sistema ainda simula uma pequena derrapagem.
+
+25
+00:02:36.200 --> 00:02:44.768
+Quando o stop é curto, como no gráfico de cinco minutos, essas taxas consomem uma parte enorme do risco, e é por isso que operar rápido é tão difícil.
+
+26
+00:02:45.300 --> 00:02:52.161
+Existe também o valor mínimo de uma ordem na Binance: cem USDT no Bitcoin, vinte no Ether e cinco nos demais.
+
+27
+00:02:52.700 --> 00:02:57.774
+Numa banca pequena, o sistema avisa quando a posição calculada ficaria abaixo do mínimo.
+
+28
+00:02:58.800 --> 00:03:01.923
+Por fim, as metas do dia, na aba Metas de operação.
+
+29
+00:03:02.500 --> 00:03:06.447
+Você limita o número de operações e de posições abertas ao mesmo tempo.
+
+30
+00:03:07.000 --> 00:03:13.560
+Define a meta de lucro do dia e o limite de perda do dia. Os padrões são mais dez e menos seis USDT.
+
+31
+00:03:14.100 --> 00:03:20.311
+Quando um limite é atingido, o bot para até o dia seguinte. Isso protege você de um dia ruim virar uma semana ruim.
+
+32
+00:03:21.400 --> 00:03:31.710
+Para guardar: stop em toda ordem, perda máxima pequena, começando com meio a um por cento do saldo, confira a liquidação, respeite o mínimo da corretora e use os limites do dia.
+
+33
+00:03:32.300 --> 00:03:35.748
+Na próxima aula, vamos conhecer os bots especialistas.

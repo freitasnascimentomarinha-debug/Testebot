@@ -1,0 +1,129 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:05.387
+Olá! Eu vou guiar você por cinco aulas curtas sobre o TradeBot, com calma, passo a passo.
+
+2
+00:00:05.900 --> 00:00:15.374
+Nesta primeira aula você entende o caminho completo de uma operação: de onde vêm os dados, quem decide, quem protege a sua banca e onde o dinheiro simulado fica guardado.
+
+3
+00:00:15.900 --> 00:00:22.262
+Um aviso importante: tudo aqui é educativo e simulado. Nada do que você vai ouvir é recomendação de investimento.
+
+4
+00:00:23.300 --> 00:00:25.181
+O TradeBot reúne três bots.
+
+5
+00:00:25.700 --> 00:00:32.016
+O Day Trade opera futuros perpétuos, comprado ou vendido, com alavancagem, em tempos gráficos curtos.
+
+6
+00:00:32.600 --> 00:00:37.929
+O Swing Trade e o Long Trade operam no mercado à vista, em tempos maiores, de horas até dias.
+
+7
+00:00:38.500 --> 00:00:45.176
+Os três usam cotações reais da Binance, com a OKX como reserva, mas as ordens são executadas numa carteira simulada.
+
+8
+00:00:45.700 --> 00:00:48.301
+Você treina de verdade, sem arriscar um centavo.
+
+9
+00:00:49.400 --> 00:00:51.768
+Esta é a tela inicial, o Painel.
+
+10
+00:00:52.300 --> 00:00:58.604
+Cada cartão é um bot, com a banca, o resultado do dia, as posições abertas e a taxa de acerto.
+
+11
+00:00:59.200 --> 00:01:04.355
+Repare na linha do piloto automático: ele começa sempre desligado, e só você decide ligar.
+
+12
+00:01:05.400 --> 00:01:07.652
+Toda operação percorre seis etapas.
+
+13
+00:01:08.200 --> 00:01:11.590
+Primeiro, os dados reais: candles e preço atualizados.
+
+14
+00:01:12.100 --> 00:01:20.064
+Segundo, as habilidades: quinze leituras do gráfico, como médias, volume e rompimentos, que votam entre comprar, vender ou esperar.
+
+15
+00:01:20.600 --> 00:01:27.067
+Terceiro, a personalidade do bot, que define quais votos pesam mais, a força mínima para entrar e os filtros.
+
+16
+00:01:27.600 --> 00:01:30.537
+Quarto, a inteligência artificial, que é opcional.
+
+17
+00:01:31.100 --> 00:01:34.386
+Quinto, o gestor de risco, que pode vetar qualquer ordem.
+
+18
+00:01:34.900 --> 00:01:38.209
+E por fim a carteira simulada, que executa e registra tudo.
+
+19
+00:01:39.300 --> 00:01:43.909
+Os candles são reais. Se a Binance não responder, o sistema usa a OKX.
+
+20
+00:01:44.500 --> 00:01:50.537
+Já as taxas, o financiamento dos futuros e até a liquidação são simulados com as regras da corretora.
+
+21
+00:01:51.100 --> 00:01:55.396
+E lembre sempre: um bom resultado no passado não garante resultado no futuro.
+
+22
+00:01:55.900 --> 00:02:01.450
+Executar em conta real é uma fase futura, e só depois de testar na conta de testes da Binance.
+
+23
+00:02:02.500 --> 00:02:05.774
+Você precisa de inteligência artificial para operar? Não.
+
+24
+00:02:06.300 --> 00:02:10.410
+As regras da personalidade decidem sozinhas, e isso não custa nada.
+
+25
+00:02:11.000 --> 00:02:16.956
+Se você colocar a chave da OpenRouter, a IA lê o cenário e confirma ou veta o sinal das regras.
+
+26
+00:02:17.500 --> 00:02:22.875
+Em qualquer caso, os limites de risco são seus, e o gestor de risco tem a última palavra.
+
+27
+00:02:23.900 --> 00:02:27.244
+No menu lateral ficam a chave da IA e o armazenamento.
+
+28
+00:02:27.800 --> 00:02:33.257
+Se o aviso disser arquivos locais, os dados somem quando o aplicativo reinicia no Streamlit Community.
+
+29
+00:02:33.800 --> 00:02:39.419
+Para guardar de forma permanente, configure um banco de dados ou um repositório do GitHub nos segredos.
+
+30
+00:02:40.000 --> 00:02:43.204
+E defina uma senha de acesso antes de publicar o endereço.
+
+31
+00:02:44.300 --> 00:02:52.531
+Nas próximas aulas, vamos ao gráfico e à carteira, depois ao risco, aos bots especialistas e, por fim, à operação com o piloto automático.
+
+32
+00:02:53.100 --> 00:02:53.831
+Até já!

@@ -1,0 +1,493 @@
+[
+ {
+  "id": "aula1",
+  "titulo": "Como o sistema funciona",
+  "resumo": "Do dado real à ordem na carteira simulada: quem decide, quem protege a banca e onde tudo fica guardado.",
+  "duracao_s": 175,
+  "video": "assets/aulas/aula1.mp4",
+  "legenda": "assets/aulas/aula1.vtt",
+  "capitulos": [
+   {
+    "t": 0,
+    "titulo": "Como o sistema funciona",
+    "fala": [
+     "Olá! Eu vou guiar você por cinco aulas curtas sobre o TradeBot, com calma, passo a passo.",
+     "Nesta primeira aula você entende o caminho completo de uma operação: de onde vêm os dados, quem decide, quem protege a sua banca e onde o dinheiro simulado fica guardado.",
+     "Um aviso importante: tudo aqui é educativo e simulado. Nada do que você vai ouvir é recomendação de investimento."
+    ]
+   },
+   {
+    "t": 23,
+    "titulo": "Três bots, um só sistema",
+    "fala": [
+     "O TradeBot reúne três bots.",
+     "O Day Trade opera futuros perpétuos, comprado ou vendido, com alavancagem, em tempos gráficos curtos.",
+     "O Swing Trade e o Long Trade operam no mercado à vista, em tempos maiores, de horas até dias.",
+     "Os três usam cotações reais da Binance, com a OKX como reserva, mas as ordens são executadas numa carteira simulada.",
+     "Você treina de verdade, sem arriscar um centavo."
+    ]
+   },
+   {
+    "t": 49,
+    "titulo": "O Painel: tudo num olhar",
+    "fala": [
+     "Esta é a tela inicial, o Painel.",
+     "Cada cartão é um bot, com a banca, o resultado do dia, as posições abertas e a taxa de acerto.",
+     "Repare na linha do piloto automático: ele começa sempre desligado, e só você decide ligar."
+    ]
+   },
+   {
+    "t": 65,
+    "titulo": "O caminho de uma operação",
+    "fala": [
+     "Toda operação percorre seis etapas.",
+     "Primeiro, os dados reais: candles e preço atualizados.",
+     "Segundo, as habilidades: quinze leituras do gráfico, como médias, volume e rompimentos, que votam entre comprar, vender ou esperar.",
+     "Terceiro, a personalidade do bot, que define quais votos pesam mais, a força mínima para entrar e os filtros.",
+     "Quarto, a inteligência artificial, que é opcional.",
+     "Quinto, o gestor de risco, que pode vetar qualquer ordem.",
+     "E por fim a carteira simulada, que executa e registra tudo."
+    ]
+   },
+   {
+    "t": 99,
+    "titulo": "Dados reais, dinheiro simulado",
+    "fala": [
+     "Os candles são reais. Se a Binance não responder, o sistema usa a OKX.",
+     "Já as taxas, o financiamento dos futuros e até a liquidação são simulados com as regras da corretora.",
+     "E lembre sempre: um bom resultado no passado não garante resultado no futuro.",
+     "Executar em conta real é uma fase futura, e só depois de testar na conta de testes da Binance."
+    ]
+   },
+   {
+    "t": 122,
+    "titulo": "Quem decide a operação?",
+    "fala": [
+     "Você precisa de inteligência artificial para operar? Não.",
+     "As regras da personalidade decidem sozinhas, e isso não custa nada.",
+     "Se você colocar a chave da OpenRouter, a IA lê o cenário e confirma ou veta o sinal das regras.",
+     "Em qualquer caso, os limites de risco são seus, e o gestor de risco tem a última palavra."
+    ]
+   },
+   {
+    "t": 144,
+    "titulo": "Onde ficam os seus dados",
+    "fala": [
+     "No menu lateral ficam a chave da IA e o armazenamento.",
+     "Se o aviso disser arquivos locais, os dados somem quando o aplicativo reinicia no Streamlit Community.",
+     "Para guardar de forma permanente, configure um banco de dados ou um repositório do GitHub nos segredos.",
+     "E defina uma senha de acesso antes de publicar o endereço."
+    ]
+   },
+   {
+    "t": 164,
+    "titulo": "Nas próximas aulas",
+    "fala": [
+     "Nas próximas aulas, vamos ao gráfico e à carteira, depois ao risco, aos bots especialistas e, por fim, à operação com o piloto automático.",
+     "Até já!"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "aula2",
+  "titulo": "O gráfico e a carteira simulada",
+  "resumo": "Como ler a tela do bot, os indicadores, o contexto do gráfico e como a banca simulada registra cada centavo.",
+  "duracao_s": 195,
+  "video": "assets/aulas/aula2.mp4",
+  "legenda": "assets/aulas/aula2.vtt",
+  "capitulos": [
+   {
+    "t": 0,
+    "titulo": "O gráfico e a carteira simulada",
+    "fala": [
+     "Bem-vindo à segunda aula.",
+     "Agora vamos olhar a tela de um bot por dentro, entender o gráfico e ver como a carteira simulada guarda cada operação."
+    ]
+   },
+   {
+    "t": 10,
+    "titulo": "Passo 1: escolha o que operar",
+    "fala": [
+     "Abra a página do Day Trade. No alto você escolhe o ativo, como BTCUSDT, ou qualquer outro par em USDT.",
+     "Depois o timeframe, que é o tempo de cada candle: cinco minutos, quinze minutos, uma hora e assim por diante.",
+     "Você também escolhe quantos candles mostrar e de quantos em quantos segundos a tela atualiza."
+    ]
+   },
+   {
+    "t": 30,
+    "titulo": "Passo 2: leia os números da banca",
+    "fala": [
+     "Logo abaixo ficam os números principais.",
+     "O preço do ativo e a variação em vinte e quatro horas.",
+     "A banca, que é o seu patrimônio simulado.",
+     "O resultado do dia e quantas operações o bot já fez.",
+     "O P&L aberto, que é o lucro ou prejuízo das posições ainda em andamento, já descontadas as taxas.",
+     "E a taxa de acerto, a proporção de operações que terminaram no lucro."
+    ]
+   },
+   {
+    "t": 56,
+    "titulo": "Passo 3: o gráfico em tempo real",
+    "fala": [
+     "Aqui está o gráfico. Os candles chegam direto da corretora ao seu navegador, então o candle se forma diante dos seus olhos.",
+     "Existem três abas: tempo real, análise técnica e o TradingView, com ferramentas de desenho para traçar linhas e níveis.",
+     "Com uma posição aberta, o lucro ou prejuízo se atualiza a cada negociação, já descontadas as taxas."
+    ]
+   },
+   {
+    "t": 79,
+    "titulo": "Indicadores: menos é mais",
+    "fala": [
+     "Por padrão o gráfico vem enxuto: duas médias móveis e o volume.",
+     "As médias mostram a direção da tendência, e o volume mostra se o movimento tem força.",
+     "Se quiser, você soma outros indicadores, como RSI, MACD, bandas de Bollinger, VWAP, SuperTrend, Ichimoku e ADX.",
+     "Mas atenção: poluir o gráfico não deixa o bot melhor, só deixa você confuso."
+    ]
+   },
+   {
+    "t": 105,
+    "titulo": "O contexto do gráfico agora",
+    "fala": [
+     "Acima do gráfico, o sistema classifica o contexto atual, como se fosse o clima do mercado.",
+     "Pode ser tendência de alta ou de baixa.",
+     "Pode ser lateral, quando o preço anda de lado e não escolhe direção.",
+     "Rompimento, quando o preço sai de uma faixa com volume.",
+     "Pullback, que é um recuo dentro de uma tendência.",
+     "Ou reversão, quando o preço esticou demais. Cada bot funciona melhor em certos contextos, e veremos isso na aula quatro."
+    ]
+   },
+   {
+    "t": 132,
+    "titulo": "A carteira simulada",
+    "fala": [
+     "Agora a página Carteira. A banca inicial padrão é de cem USDT, mas você pode criar com outro valor.",
+     "Você pode fazer aportes e retiradas, e cada movimento fica registrado.",
+     "Há o extrato completo, o histórico de operações, a curva de patrimônio e até a exportação para o Excel."
+    ]
+   },
+   {
+    "t": 151,
+    "titulo": "Tudo vira linha no extrato",
+    "fala": [
+     "Você escolhe entre carteira única, em que os três bots dividem a mesma banca, ou separada, para comparar um bot contra o outro.",
+     "Em ambos os casos, o extrato registra as taxas de abertura e de fechamento.",
+     "O financiamento dos futuros, chamado funding, é cobrado ou recebido a cada oito horas.",
+     "E, se o preço atingir o nível de liquidação, a posição é encerrada e isso também aparece no extrato.",
+     "O lucro líquido é sempre a variação do preço menos as taxas."
+    ]
+   },
+   {
+    "t": 179,
+    "titulo": "Resumo da aula 2",
+    "fala": [
+     "Em resumo: escolha o ativo e o timeframe, leia a banca e o resultado do dia, mantenha o gráfico simples, observe o contexto do mercado e confie no extrato da carteira.",
+     "Na próxima aula, o assunto mais importante de todos: o risco."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "aula3",
+  "titulo": "Risco: posição, stop e alavancagem",
+  "resumo": "Como o sistema calcula o tamanho da posição a partir da perda máxima, por que o stop é obrigatório e o que a alavancagem realmente muda.",
+  "duracao_s": 217,
+  "video": "assets/aulas/aula3.mp4",
+  "legenda": "assets/aulas/aula3.vtt",
+  "capitulos": [
+   {
+    "t": 0,
+    "titulo": "Risco: posição, stop e alavancagem",
+    "fala": [
+     "Terceira aula, e talvez a mais importante.",
+     "Quem sobrevive no mercado não é quem acerta mais, é quem controla quanto pode perder em cada operação."
+    ]
+   },
+   {
+    "t": 10,
+    "titulo": "A regra de ouro",
+    "fala": [
+     "A regra de ouro do sistema: toda ordem precisa de um stop loss.",
+     "O stop é o preço em que a operação é encerrada para limitar o prejuízo.",
+     "Você define a perda máxima por operação. O padrão é dois por cento do saldo, ou seja, dois USDT numa banca de cem.",
+     "E o sistema calcula sozinho o tamanho da posição para que, se o stop for atingido, você perca esse valor, e não mais que ele."
+    ]
+   },
+   {
+    "t": 34,
+    "titulo": "Onde configurar",
+    "fala": [
+     "Em Configurações do bot, aba Risco por trade, você escolhe a perda máxima em USDT ou em porcentagem do saldo.",
+     "Define a relação risco retorno mínima, que por padrão é 1,5.",
+     "E o stop e o alvo são medidos em múltiplos do ATR, que é a amplitude média dos últimos candles. Quanto mais o mercado balança, mais largo o stop."
+    ]
+   },
+   {
+    "t": 56,
+    "titulo": "Stop, entrada e alvo: o múltiplo R",
+    "fala": [
+     "Veja a ideia no desenho. A linha do meio é a entrada.",
+     "Abaixo dela, o stop. A distância até o stop é o seu risco, e chamamos essa distância de um R.",
+     "Acima, o alvo, o take profit. Se o alvo está a duas vezes o risco, ganhar equivale a dois R.",
+     "Pensar em R deixa tudo comparável: não importa se a banca é de cinquenta ou de dez mil, perder um R é sempre perder o que você decidiu arriscar."
+    ]
+   },
+   {
+    "t": 81,
+    "titulo": "Exemplo real, banca de 100 USDT",
+    "fala": [
+     "Um exemplo calculado pelo próprio sistema. Compra de SOL a cem, stop em noventa e oito e alvo em cento e quatro.",
+     "Você aceita perder dois USDT. O sistema compra zero vírgula nove cinco duas unidades, uma posição de noventa e cinco USDT.",
+     "Com alavancagem cinco vezes, a margem travada é de dezenove USDT.",
+     "Se o stop for atingido, você perde cerca de dois. Se o alvo for atingido, ganha cerca de três vírgula sete, já descontadas as taxas.",
+     "A liquidação só aconteceria perto de oitenta, bem além do stop, e é assim que deve ser."
+    ]
+   },
+   {
+    "t": 117,
+    "titulo": "O que a alavancagem muda",
+    "fala": [
+     "A alavancagem confunde muita gente. Ela não aumenta a sua perda por operação, porque o tamanho da posição já foi calculado a partir do stop.",
+     "O que ela muda é a margem usada: quanto maior a alavancagem, menos saldo fica travado.",
+     "Em troca, o preço de liquidação chega mais perto.",
+     "Por isso o sistema avisa quando o stop ficaria além da liquidação, e a Binance impõe um limite máximo por ativo.",
+     "A margem isolada protege o resto da banca. A cruzada usa o saldo todo como garantia, e é bem mais perigosa."
+    ]
+   },
+   {
+    "t": 149,
+    "titulo": "Os custos pesam",
+    "fala": [
+     "Outro ponto: custos. Cada operação paga taxa na entrada e na saída, e o sistema ainda simula uma pequena derrapagem.",
+     "Quando o stop é curto, como no gráfico de cinco minutos, essas taxas consomem uma parte enorme do risco, e é por isso que operar rápido é tão difícil.",
+     "Existe também o valor mínimo de uma ordem na Binance: cem USDT no Bitcoin, vinte no Ether e cinco nos demais.",
+     "Numa banca pequena, o sistema avisa quando a posição calculada ficaria abaixo do mínimo."
+    ]
+   },
+   {
+    "t": 179,
+    "titulo": "Metas e limites do dia",
+    "fala": [
+     "Por fim, as metas do dia, na aba Metas de operação.",
+     "Você limita o número de operações e de posições abertas ao mesmo tempo.",
+     "Define a meta de lucro do dia e o limite de perda do dia. Os padrões são mais dez e menos seis USDT.",
+     "Quando um limite é atingido, o bot para até o dia seguinte. Isso protege você de um dia ruim virar uma semana ruim."
+    ]
+   },
+   {
+    "t": 201,
+    "titulo": "Checklist da aula 3",
+    "fala": [
+     "Para guardar: stop em toda ordem, perda máxima pequena, começando com meio a um por cento do saldo, confira a liquidação, respeite o mínimo da corretora e use os limites do dia.",
+     "Na próxima aula, vamos conhecer os bots especialistas."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "aula4",
+  "titulo": "Bots especialistas e como ler os números",
+  "resumo": "A galeria de bots, o que é uma personalidade, como cada bot foi testado e como não se enganar com resultados bonitos.",
+  "duracao_s": 184,
+  "video": "assets/aulas/aula4.mp4",
+  "legenda": "assets/aulas/aula4.vtt",
+  "capitulos": [
+   {
+    "t": 0,
+    "titulo": "Bots especialistas e como ler os números",
+    "fala": [
+     "Quarta aula: os bots especialistas.",
+     "Aqui você aprende a escolher um bot e, principalmente, a desconfiar de resultados bonitos demais."
+    ]
+   },
+   {
+    "t": 10,
+    "titulo": "A galeria de bots",
+    "fala": [
+     "Na página Bots especialistas, cada cartão é um bot com uma especialidade.",
+     "Ele mostra o estilo, o tempo gráfico, o mercado e a relação entre risco e retorno.",
+     "Mostra também o resultado simulado por mês, a taxa de acerto e a pior queda que ele teve.",
+     "E um selo: aprovado, aprovado com ressalva ou fraco. Esse selo é o mais importante, e já vamos entender por quê."
+    ]
+   },
+   {
+    "t": 34,
+    "titulo": "O que é uma personalidade",
+    "fala": [
+     "Todo bot é uma personalidade: uma receita.",
+     "Ela escolhe as habilidades, as leituras do gráfico que votam.",
+     "Define os pesos, ou seja, quais votos contam mais.",
+     "O limiar, a força mínima do consenso para entrar.",
+     "A direção permitida, só compra, só venda ou as duas.",
+     "E os filtros e a saída, que veremos agora."
+    ]
+   },
+   {
+    "t": 56,
+    "titulo": "Filtros: quando NÃO operar",
+    "fala": [
+     "Bons bots sabem quando não operar. Os filtros bloqueiam entradas ruins.",
+     "O ADX exige força de tendência.",
+     "O volume relativo exige volume acima da média.",
+     "Outro filtro evita o mercado lateral.",
+     "O filtro de tendência do tempo maior só deixa o bot comprar quando o gráfico de quatro horas também está de alta, e no gráfico de cinco minutos exige também o de quinze.",
+     "E há os contextos favoráveis: o bot só opera nos climas de mercado em que ele foi bem."
+    ]
+   },
+   {
+    "t": 85,
+    "titulo": "Como cada bot foi testado",
+    "fala": [
+     "Como cada bot foi testado? Com candles reais, descontando taxas.",
+     "O bot é ajustado em algumas moedas e depois provado em moedas que ele nunca viu.",
+     "E, nos estudos mais recentes, também em dois períodos diferentes: os quarenta dias recentes e os quarenta dias anteriores.",
+     "Isso importa porque o mercado muda de comportamento, e um bot pode brilhar numa fase e perder na outra."
+    ]
+   },
+   {
+    "t": 109,
+    "titulo": "Um caso real de cautela",
+    "fala": [
+     "Um exemplo real do próprio sistema.",
+     "Os bots de reversão de cinco minutos pareciam ótimos nos quarenta dias recentes.",
+     "Quando testamos os quarenta dias anteriores, eles perderam de três a sete por cento.",
+     "Por isso sete deles passaram a ser marcados como fracos. A moral é simples: um período bom não basta."
+    ]
+   },
+   {
+    "t": 129,
+    "titulo": "Ranking e simulador",
+    "fala": [
+     "Na página Personalidades, o ranking pontua os bots pelo resultado médio em R e pela quantidade de operações, porque poucos trades enganam.",
+     "E o simulador deixa você escolher um bot, as moedas, o tempo gráfico, o período e a sua banca.",
+     "Ele refaz as operações com candles reais e mostra a curva da banca e cada trade."
+    ]
+   },
+   {
+    "t": 149,
+    "titulo": "Crie a sua estratégia",
+    "fala": [
+     "Você também pode criar a sua estratégia.",
+     "Descreva em texto o que você faz, e o sistema preenche os campos, com ou sem IA.",
+     "Ajuste indicadores e pesos, e escolha a saída: alvo fixo ou surfar a tendência.",
+     "Depois salve, compartilhe e teste no simulador antes de usar."
+    ]
+   },
+   {
+    "t": 167,
+    "titulo": "Como confiar num resultado",
+    "fala": [
+     "Para confiar num resultado, procure muitas operações, lucro em moedas inéditas, lucro em mais de um período e custos incluídos.",
+     "E desconfie de qualquer curva perfeita demais.",
+     "Na última aula, vamos negociar de verdade, na simulação, com o piloto automático."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "aula5",
+  "titulo": "Negociando com o bot",
+  "resumo": "Do primeiro teste ao piloto automático: como o bot abre e fecha ordens, o papel da IA, o alvo fixo contra o stop móvel e um roteiro seguro de uso.",
+  "duracao_s": 231,
+  "video": "assets/aulas/aula5.mp4",
+  "legenda": "assets/aulas/aula5.vtt",
+  "capitulos": [
+   {
+    "t": 0,
+    "titulo": "Negociando com o bot",
+    "fala": [
+     "Quinta e última aula.",
+     "Agora vamos colocar tudo em prática: como o bot abre e fecha ordens, qual é o papel da inteligência artificial e um roteiro seguro para começar."
+    ]
+   },
+   {
+    "t": 12,
+    "titulo": "O painel de controle do bot",
+    "fala": [
+     "No Controle do bot você escolhe a personalidade, a estratégia que o bot vai seguir.",
+     "O botão Analisar agora faz uma análise pontual: o bot lê o gráfico e propõe uma ordem já dimensionada pelo seu risco.",
+     "O botão Ligar bot ativa o piloto automático, que repete essa análise sozinho a cada candle fechado.",
+     "O quadro Cérebro mostra se o bot está usando só as regras ou também a inteligência artificial."
+    ]
+   },
+   {
+    "t": 36,
+    "titulo": "Uma análise, passo a passo",
+    "fala": [
+     "Veja o que acontece a cada candle fechado.",
+     "O candle fecha e chega um dado novo.",
+     "As regras da personalidade calculam o placar e aplicam os filtros.",
+     "Se a IA estiver ativa, ela confirma ou veta.",
+     "O gestor de risco confere stop, perda máxima, limites do dia e margem.",
+     "Se tudo for aprovado, a ordem é enviada à carteira simulada. Se não, o motivo fica registrado no log de decisões."
+    ]
+   },
+   {
+    "t": 62,
+    "titulo": "Quem abre e quem fecha",
+    "fala": [
+     "O sistema abre ordens sozinho quando o piloto está ligado e a ordem é aprovada pelo gestor de risco.",
+     "E fecha sozinho quando o preço toca o stop, o alvo, o stop móvel ou a liquidação, e isso não depende de inteligência artificial.",
+     "Com a IA ligada, ela também pode mandar encerrar uma posição quando o cenário inverte, mas só posições que o próprio bot abriu.",
+     "As suas ordens manuais nunca são tocadas.",
+     "Um detalhe técnico: o piloto roda enquanto a página está aberta. Para operar com a página fechada, é preciso rodar o arquivo worker num servidor."
+    ]
+   },
+   {
+    "t": 96,
+    "titulo": "Alvo fixo ou surfar a tendência?",
+    "fala": [
+     "Existem dois estilos de saída.",
+     "No alvo fixo, você sai com ganho limitado, por exemplo dois R, e pronto.",
+     "No modo surfar, não há alvo. Só existe o stop, e ele sobe junto com o preço, mantendo uma distância fixa.",
+     "Se o preço continua subindo, o stop sobe. Se o preço recua, o stop é atingido e você sai com o lucro acumulado.",
+     "Opcionalmente, o stop vai para o ponto de equilíbrio depois que o preço andou um certo múltiplo do risco.",
+     "Nos testes, o stop móvel melhorou as entradas de quinze minutos e uma hora, ganhando pouco muitas vezes e muito de vez em quando. Mas depende de haver tendência."
+    ]
+   },
+   {
+    "t": 135,
+    "titulo": "O papel da IA",
+    "fala": [
+     "E a inteligência artificial? No modo filtro, que é o padrão, ela só confirma ou veta o sinal das regras.",
+     "Ela usa o stop e o alvo já testados, não abre ordem sem sinal e não inverte a direção.",
+     "No modo livre, a IA decide sozinha, e nenhum teste histórico cobre isso.",
+     "Sem a chave, o sistema funciona só com as regras, com custo zero.",
+     "Importante: os números de desempenho que você viu nas aulas medem só as regras. O efeito da IA ainda não foi medido."
+    ]
+   },
+   {
+    "t": 165,
+    "titulo": "Roteiro seguro, passo a passo",
+    "fala": [
+     "Um roteiro seguro, passo a passo.",
+     "Primeiro, crie uma banca simulada de cinquenta a cem USDT.",
+     "Segundo, escolha um bot aprovado, de preferência de quinze minutos ou mais.",
+     "Terceiro, deixe a perda máxima por operação entre meio e um por cento.",
+     "Quarto, ligue o piloto automático e deixe rodar por semanas, não por horas.",
+     "Quinto, acompanhe o histórico, o log de decisões e o extrato.",
+     "E sexto, compare o que aconteceu com o que o simulador previa."
+    ]
+   },
+   {
+    "t": 194,
+    "titulo": "Cuidados finais",
+    "fala": [
+     "Para terminar, alguns cuidados.",
+     "Poucas semanas de teste não provam nada, e o mercado muda de fase: o que funcionou pode parar de funcionar.",
+     "Bots de cinco minutos sofrem muito com taxas, então exigem ainda mais prova.",
+     "E só pense em dinheiro real depois de muito teste, e com um valor que você aceite perder.",
+     "Lembre-se: nada disto é recomendação de investimento."
+    ]
+   },
+   {
+    "t": 218,
+    "titulo": "Bons estudos e bons testes!",
+    "fala": [
+     "Chegamos ao fim. Você já conhece o caminho: dados reais, regras, risco, carteira e, só depois, o piloto automático.",
+     "Volte quando quiser rever qualquer aula. Bons estudos e bons testes!"
+    ]
+   }
+  ]
+ }
+]
