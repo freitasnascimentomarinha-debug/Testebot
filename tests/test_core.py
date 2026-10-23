@@ -644,6 +644,36 @@ def test_ai_advice_is_validated(monkeypatch):
     res.decision.advice["fonte"] = "regras"
     assert not engine.auto_arm(PROFILES["day"], cfg, res, df)
 
+
+def test_ai_call_is_robust_to_bad_replies(monkeypatch):
+    """Resposta vazia/cortada, com texto ao redor ou raciocínio: tenta de novo e, se falhar, explica o motivo."""
+    import json
+
+    from core import ai
+
+    ok = json.dumps({"decision": "BUY", "confidence": 70, "stop_loss": 9.0, "take_profit": 12.0, "entry": 10.0})
+
+    class R:
+        status_code = 200
+
+        def __init__(self, content, finish="stop"):
+            self.content, self.finish = content, finish
+
+        def json(self):
+            return {"choices": [{"message": {"content": self.content}, "finish_reason": self.finish}], "model": "m", "usage": {}}
+
+    def run(*replies):
+        it = iter(replies)
+        monkeypatch.setattr(ai.requests, "post", lambda *a, **k: next(it))
+        return ai.ask_ai({}, api_key="k", model="m")
+
+    assert run(R("", "length"), R(ok)).decision == "BUY"                           # vazia na 1ª tentativa
+    assert run(R("Segue:\n```json\n" + ok + "\n```\nBoa sorte")).decision == "BUY"   # markdown e texto ao redor
+    assert run(R("<think>pensando { }</think>" + ok)).decision == "BUY"            # bloco de raciocínio
+    assert run(R([{"type": "text", "text": ok}])).decision == "BUY"                # conteúdo em blocos
+    with pytest.raises(RuntimeError, match="2 tentativas"):
+        run(R("", "length"), R("Não consigo.", "stop"))
+
 def test_ai_filter_mode(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm

@@ -134,14 +134,17 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
 
 
 def _extract_json(text: str) -> dict:
-    text = text.strip()
-    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S)
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
+    if not text:
+        raise ValueError("resposta vazia")
+    fence = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
     if fence:
         text = fence.group(1)
     else:
         start, end = text.find("{"), text.rfind("}")
-        if start >= 0 and end > start:
-            text = text[start: end + 1]
+        if start < 0 or end <= start:
+            raise ValueError("a resposta não contém um objeto JSON: " + text[:120].replace("\n", " "))
+        text = text[start: end + 1]
     return json.loads(text)
 
 
@@ -203,26 +206,47 @@ def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2,
         "HTTP-Referer": "https://github.com/freitasnascimentomarinha-debug/Testebot",
         "X-Title": "TradeBot Platform",
     }
-    body = {
-        "model": model,
-        "temperature": temperature,
-        "response_format": {"type": "json_object"},
-        "max_tokens": 2600,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": "Contexto do mercado e da conta (JSON):\n" + json.dumps(context, ensure_ascii=False, default=str)},
-        ],
-    }
-    resp = requests.post(OPENROUTER_URL, headers=headers, json=body, timeout=TIMEOUT)
-    if resp.status_code >= 400:
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "Contexto do mercado e da conta (JSON):\n" + json.dumps(context, ensure_ascii=False, default=str)},
+    ]
+    # Modelos que "raciocinam" gastam tokens antes de responder e podem devolver conteúdo vazio ou cortado. Por isso há uma
+    # segunda tentativa, sem o modo JSON forçado (que alguns provedores não suportam), com mais espaço e um lembrete do formato.
+    attempts = [
+        {"response_format": {"type": "json_object"}, "max_tokens": 4000, "messages": messages},
+        {"max_tokens": 8000, "messages": messages + [{"role": "user", "content":
+            "Responda AGORA somente com o objeto JSON do formato pedido (sem texto antes ou depois, sem markdown)."}]},
+    ]
+    payload, content, data, problems = {}, "", None, []
+    for extra in attempts:
+        body = {"model": model, "temperature": temperature, **extra}
+        resp = requests.post(OPENROUTER_URL, headers=headers, json=body, timeout=TIMEOUT)
+        if resp.status_code >= 400:
+            try:
+                msg = resp.json().get("error", {}).get("message", resp.text)
+            except ValueError:
+                msg = resp.text
+            if "response_format" in extra and resp.status_code in (400, 422):
+                problems.append(f"HTTP {resp.status_code}: {msg[:150]}")  # modelo/provedor sem modo JSON: tenta sem ele
+                continue
+            raise RuntimeError(f"OpenRouter HTTP {resp.status_code}: {msg}")
+        payload = resp.json()
+        if payload.get("error"):
+            problems.append(str(payload["error"].get("message", payload["error"]))[:150])
+            continue
+        choice = (payload.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        content = msg.get("content") or ""
+        if isinstance(content, list):  # alguns provedores devolvem blocos de texto
+            content = "".join(b.get("text", "") for b in content if isinstance(b, dict))
         try:
-            msg = resp.json().get("error", {}).get("message", resp.text)
-        except ValueError:
-            msg = resp.text
-        raise RuntimeError(f"OpenRouter HTTP {resp.status_code}: {msg}")
-    payload = resp.json()
-    content = payload["choices"][0]["message"].get("content") or ""
-    data = _extract_json(content)
+            data = _extract_json(content or msg.get("reasoning") or msg.get("reasoning_content") or "")
+            break
+        except (ValueError, json.JSONDecodeError) as exc:
+            problems.append(f"{exc} (fim: {choice.get('finish_reason') or '?'}, {len(content)} caracteres)")
+    if data is None:
+        raise RuntimeError("A IA não devolveu um JSON válido após 2 tentativas — " + " | ".join(problems)
+                           + ". Tente outro modelo na aba IA (ex.: um sem raciocínio longo).")
     decision = str(data.get("decision", "HOLD")).upper()
     if decision not in {"BUY", "SELL", "HOLD", "CLOSE"}:
         decision = "HOLD"
