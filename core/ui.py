@@ -135,34 +135,41 @@ def render_bot_page(bot: str) -> None:
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
     live_metrics(profile, cfg)
-    indicator_picker(bot, cfg)
-    tab_rt, tab_tv = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho"])
-    with tab_rt:
-        positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
-        height = chart_height(cfg)
-        components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
-                                            cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
-                                            height=height), height=height + 5)
-        st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
-                   "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
-                   "descontadas as taxas de entrada e saída).")
-    with tab_tv:
-        st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua de medição e as "
-                   "ferramentas **Posição comprada / vendida** (risco:retorno visual). Os desenhos ficam no navegador; "
-                   "níveis que a IA deve considerar podem ser cadastrados em *Níveis do usuário*, abaixo.")
-        components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
 
-    # Logo abaixo do gráfico: a boleta de entrada do bot no mercado (configurações) e a boleta manual
-    st.subheader("🧮 Boleta de entrada")
-    col_bot, col_ticket = st.columns([1, 1], gap="medium")
-    with col_bot:
-        entry_panel(profile, cfg)
-    with col_ticket:
-        trade_ticket(profile, cfg)
+    # Layout em L, como no terminal da Binance: gráfico no centro, painel de ordem na lateral direita e,
+    # embaixo, posições/histórico, controle do bot e configurações.
+    col_chart, col_side = st.columns([3.3, 1.2], gap="medium")
+    with col_chart:
+        indicator_picker(bot, cfg)
+        tab_rt, tab_tv = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho"])
+        with tab_rt:
+            positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
+            height = chart_height(cfg)
+            components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
+                                                cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
+                                                height=height), height=height + 5)
+            st.caption("Candles ao vivo direto da corretora para o seu navegador (WebSocket): cada negociação move o candle, "
+                       "os indicadores e o lucro/prejuízo das posições abertas (já descontadas as taxas).")
+        with tab_tv:
+            st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua e as ferramentas "
+                       "**Posição comprada / vendida**. Os desenhos ficam no navegador; níveis para a IA ficam em "
+                       "*Configurações → Níveis do usuário*.")
+            components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+    with col_side:
+        st.markdown("🟢 **Bot ligado**" if cfg.get("autopilot") else "⚪ **Bot desligado**")
+        t_order, t_bot = st.tabs(["✍️ Ordem", "🤖 Entrada do bot"])
+        with t_order:
+            trade_ticket(profile, cfg)
+        with t_bot:
+            entry_panel(profile, cfg)
 
-    ai_section(profile, cfg)
-    portfolio_section(profile, cfg)
-    settings_section(profile, cfg)
+    t_pos, t_ctl, t_cfg = st.tabs(["💼 Posições e histórico", "🤖 Bot e análise", "⚙️ Configurações"])
+    with t_pos:
+        portfolio_section(profile, cfg)
+    with t_ctl:
+        ai_section(profile, cfg)
+    with t_cfg:
+        settings_section(profile, cfg)
 
 
 def execution_banner() -> None:
@@ -382,7 +389,6 @@ def entry_panel(profile: BotProfile, cfg: dict) -> None:
     """Configurações com que o bot entra no mercado: tamanho pelo risco, stop/alvo, alavancagem e margem."""
     bot = profile.key
     k = lambda n: _k(bot, n)  # noqa: E731
-    st.markdown("**🤖 Entrada do bot no mercado**")
     c = st.columns([1.2, 1])
     c[0].radio("Perda máxima por trade", ["% do saldo", "USDT"], key=k("risk_mode"), horizontal=True,
                help="Quanto a banca perde se o stop for atingido. O tamanho da posição é calculado a partir dele (já com as taxas).")
@@ -394,9 +400,11 @@ def entry_panel(profile: BotProfile, cfg: dict) -> None:
     c[0].number_input("Stop = ATR ×", 0.5, 10.0, step=0.1, key=k("atr_sl_mult"),
                       help="Usado nas entradas sem stop próprio. Cada bot do ranking tem o seu stop/alvo testado; este vale para a boleta manual.")
     c[1].number_input("Alvo = ATR ×", 0.5, 30.0, step=0.5, key=k("atr_tp_mult"))
-    leverage_controls(profile, cfg)
-    st.toggle("Permitir operações vendidas (short)", key=k("allow_short"),
-              help="No spot, vender a descoberto exige margem (alavancagem ligada).")
+    if profile.market == "futures":
+        leverage_controls(profile, cfg)
+        st.toggle("Permitir operações vendidas (short)", key=k("allow_short"))
+    else:
+        st.caption("Spot: compra e venda à vista com o seu saldo, sem alavancagem, margem ou venda a descoberto.")
 
     cfg = {**cfg, **{n: st.session_state[k(n)] for n in ENTRY_KEYS}}
     price, atr_v = st.session_state.get(f"{bot}__last_price"), st.session_state.get(f"{bot}__atr")
@@ -423,10 +431,9 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
     broker = get_broker(bot)
     s = broker.stats({cfg["symbol"]: price})
 
-    st.markdown("**✍️ Sua ordem manual e calculadora**")
     cfg = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ENTRY_KEYS}}
     lev = risk.effective_leverage(cfg)
-    can_short = cfg["allow_short"] and (profile.market == "futures" or cfg["leverage_on"])
+    can_short = profile.market == "futures" and cfg["allow_short"]
     sides = ["Compra (long)", "Venda (short)"] if can_short else ["Compra (long)"]
     side_label = st.segmented_control("Lado", sides, default=sides[0], key=f"{bot}__t_side") or sides[0]
     side = "BUY" if side_label.startswith("Compra") else "SELL"
@@ -442,8 +449,8 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
     c1, c2 = st.columns(2)
     if use_atr:
         sl, tp = risk.round_price(sl_default, price), risk.round_price(tp_default, price)
-        c1.metric("Stop loss", fmt_price(sl))
-        c2.metric("Take profit", fmt_price(tp))
+        c1.markdown(f"Stop  \n**:red[{fmt_price(sl)}]**")
+        c2.markdown(f"Alvo  \n**:green[{fmt_price(tp)}]**")
     else:
         sl = c1.number_input("Stop loss", value=float(risk.round_price(sl_default, price)), format="%.6f", key=f"{bot}__t_sl")
         tp = c2.number_input("Take profit", value=float(risk.round_price(tp_default, price)), format="%.6f", key=f"{bot}__t_tp")
@@ -463,20 +470,13 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
                               margin_usdt=margin, available=s["available"], symbol=cfg["symbol"],
                               market=profile.market, margin_mode=cfg["margin_mode"])
 
-    st.markdown(
-        f"""
-| | |
-|---|---|
-| Quantidade | **{calc.qty:g}** |
-| Nocional | {fmt(calc.notional)} USDT |
-| Margem ({calc.leverage:g}×) | {fmt(calc.margin)} USDT |
-| Risco (stop) | <span style="color:#ef5350">−{fmt(calc.risk_usdt)} USDT</span> ({fmt(calc.stop_pct)}%) |
-| Retorno (alvo) | <span style="color:#26a69a">+{fmt(calc.reward_usdt)} USDT</span> ({fmt(calc.tp_pct)}%) |
-| Risco:retorno | **{fmt(calc.rr) if calc.rr else '—'}** |
-| Taxas (ida+volta) | {fmt(calc.fees_usdt)} USDT |
-| Break-even | {fmt_price(calc.breakeven)} |
-| Liquidação est. | {fmt_price(calc.liquidation)} |
-""", unsafe_allow_html=True)
+    m1, m2 = st.columns(2)
+    m1.markdown(f"Quantidade  \n**{calc.qty:g}**")
+    m2.markdown(f"Nocional  \n**{fmt(calc.notional)}** USDT")
+    m1.markdown(f"Risco (stop)  \n**:red[−{fmt(calc.risk_usdt)}]** USDT ({fmt(calc.stop_pct)}%)")
+    m2.markdown(f"Retorno (alvo)  \n**:green[+{fmt(calc.reward_usdt)}]** USDT ({fmt(calc.tp_pct)}%)")
+    st.caption(f"R:R {fmt(calc.rr) if calc.rr else '—'} · margem {fmt(calc.margin)} USDT ({calc.leverage:g}×) · taxas {fmt(calc.fees_usdt)} · "
+               f"break-even {fmt_price(calc.breakeven)}" + (f" · liquidação {fmt_price(calc.liquidation)}" if calc.liquidation else ""))
     for w in calc.warnings:
         st.warning(w)
 
@@ -510,8 +510,7 @@ def leverage_controls(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     futures = profile.market == "futures"
     c1, c2 = st.columns([1, 1.2])
-    c1.toggle("Alavancado", key=_k(bot, "leverage_on"),
-              help="Futuros: alavancagem do contrato perpétuo. Spot: conta de Margem da Binance.")
+    c1.toggle("Alavancado", key=_k(bot, "leverage_on"), help="Alavancagem do contrato perpétuo.")
     c2.radio("Margem", ["Isolada", "Cruzada"], key=_k(bot, "margin_mode"), horizontal=True,
              help="Isolada: o risco fica limitado à margem da posição. Cruzada: todo o saldo livre "
                   "sustenta a posição (liquidação mais distante, mas pode perder mais).")
@@ -534,8 +533,6 @@ def leverage_controls(profile: BotProfile, cfg: dict) -> None:
 # ------------------------------------------------------------------- IA
 def ai_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
-    st.divider()
-    st.subheader("🤖 Controle do bot")
     key = api_key()
     on = bool(cfg.get("autopilot"))
     allowed = personalities.allowed(profile.market, cfg["interval"])
@@ -859,8 +856,6 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
     broker = get_broker(bot)
     acct = broker.account()
     price = st.session_state.get(f"{bot}__last_price", 0)
-    st.divider()
-    st.subheader("💼 Carteira simulada — operações")
     t1, t2, t3, t4, t5 = st.tabs(["Posições abertas", "Ordens pendentes", "Histórico", "Curva de patrimônio", "Log de decisões"])
     with t1:
         open_positions(profile, cfg)
@@ -963,14 +958,14 @@ def _safe_price(symbol: str, market: str) -> float | None:
 def settings_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     k = lambda n: _k(bot, n)  # noqa: E731
-    st.divider()
-    st.subheader("⚙️ Configurações do bot")
-    t_lev, t_ind, t_ai, t_lv, t_acct = st.tabs(["Alavancagem", "Indicadores", "IA", "Níveis do usuário", "Conta"])
+    futures = profile.market == "futures"
+    labels = (["Alavancagem"] if futures else []) + ["Indicadores", "IA", "Níveis do usuário", "Conta"]
+    tabs = dict(zip(labels, st.tabs(labels)))
+    t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[-4:])
 
-    with t_lev:
-        futures = profile.market == "futures"
-        st.caption("Liga/desliga, modo de margem e nível de alavancagem ficam na **boleta de entrada**, logo abaixo do gráfico.")
-        if futures:
+    if futures:
+        with tabs["Alavancagem"]:
+            st.caption("Liga/desliga, modo de margem e nível de alavancagem ficam na aba **Entrada do bot**, ao lado do gráfico.")
             tiers, source = cached_brackets(cfg["symbol"])
             st.markdown(f"**Faixas de alavancagem de {cfg['symbol']}** (fonte: {source}) — quanto maior a posição, "
                         "menor a alavancagem máxima e maior a margem de manutenção:")
@@ -984,14 +979,6 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                 st.caption(f"Com {cfg['leverage']}× (isolada) uma posição comprada pequena é liquidada com queda de "
                            f"≈{100 - (liq or 0):.2f}%. A conta simulada usa a fórmula oficial da Binance e cobra o "
                            "financiamento (funding) a cada 8 h.")
-        else:
-            st.markdown("**Margem no spot (Binance Margin):** Cruzada até **3×** e Isolada até **10×**. A liquidação "
-                        "ocorre quando o nível de margem (ativos ÷ dívida) chega a **1,1**.")
-            if cfg["leverage_on"]:
-                liq = lev_rules.liquidation_price(side="BUY", entry=100.0, qty=1.0, leverage=cfg["leverage"],
-                                                  market="spot", symbol=cfg["symbol"])
-                st.caption(f"Com {cfg['leverage']}× uma compra é liquidada com queda de ≈{100 - (liq or 0):.1f}%. "
-                           "Os juros do empréstimo de margem ainda não são simulados.")
 
     with t_ind:
         st.caption("Ligue/desligue a exibição no gráfico. As habilidades da IA usam todos os indicadores calculados.")
