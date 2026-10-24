@@ -707,14 +707,14 @@ def test_bot_page_layout_and_analysis_with_advice(monkeypatch):
     assert not at.exception, [e.value for e in at.exception]
     labels = [t.label for t in at.tabs]
     assert "⚡ Tempo real" in labels and any("TradingView" in l for l in labels) and not any("Análise técnica" in l for l in labels)
-    heads = [h.value for h in at.subheader]
-    assert "🧮 Boleta de entrada" in heads and heads.index("🧮 Boleta de entrada") < heads.index("🤖 Controle do bot")
-    text = " ".join(m.value for m in at.markdown)
-    assert "Entrada do bot no mercado" in text and "Sua ordem manual" in text
+    # layout em L: painel de ordem ao lado do gráfico e painéis embaixo
+    for want in ("✍️ Ordem", "🤖 Entrada do bot", "💼 Posições e histórico", "🤖 Bot e análise", "⚙️ Configurações"):
+        assert want in labels, want
+    assert labels.index("✍️ Ordem") < labels.index("💼 Posições e histórico")
     widget_labels = " ".join(str(getattr(w, "label", "")) for w in list(at.number_input) + list(at.radio) + list(at.toggle) + list(at.selectbox))
     for gone in ("Meta de operações", "Limite de perda diária", "Máx. posições", "Risco:retorno mínimo", "Confiança mínima"):
         assert gone not in widget_labels
-    assert "Bot automático" in widget_labels and "Perda máxima por trade" in widget_labels
+    assert "Bot automático" in widget_labels and "Perda máxima por trade" in widget_labels and "Alavancado" in widget_labels
     btn = next(b for b in at.button if "Analisar agora" in b.label)
     btn.click()
     at = at.run()
@@ -1206,3 +1206,31 @@ def test_style_by_interval_and_account_page_saves_mode(monkeypatch):
     finally:
         execution.set_mode("simulada")
         storage.set_user(None)
+
+
+def test_spot_page_has_no_leverage_or_short(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from core.settings import load_settings, save_settings
+
+    _offline_market(monkeypatch)
+    paper.set_wallet_mode("única")
+    cfg = load_settings("swing")
+    save_settings("swing", {**cfg, "leverage_on": True, "leverage": 5, "allow_short": True})  # configuração antiga com margem
+    assert load_settings("swing")["leverage_on"] is False and load_settings("swing")["allow_short"] is False
+
+    def page():
+        import streamlit as st
+
+        st.page_link = lambda *a, **k: None
+        from core.ui import render_bot_page
+
+        render_bot_page("swing")
+
+    at = AppTest.from_function(page, default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = " ".join(str(getattr(w, "label", "")) for w in list(at.toggle) + list(at.radio) + list(at.slider) + list(at.segmented_control))
+    assert "Alavancado" not in text and "Alavancagem" not in text and "Venda" not in text and "short" not in text.lower()
+    assert "Alavancagem" not in [t.label for t in at.tabs]
+    assert "Spot: compra e venda à vista" in " ".join(c.value for c in at.caption)
+    assert 1 == load_settings("swing")["leverage"] and PROFILES["swing"].max_leverage == 1

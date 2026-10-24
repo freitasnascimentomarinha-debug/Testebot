@@ -86,7 +86,10 @@ def load_settings(bot: str) -> dict:
     stored = (load_json(SETTINGS_FILE, {}) or {}).get(bot, {})
     if stored and "ema_trend_on" not in stored:  # configuração anterior ao padrão enxuto
         stored = {k: v for k, v in stored.items() if k not in INDICATOR_KEYS}
-    return {**defaults, **{k: v for k, v in stored.items() if k in defaults}}
+    cfg = {**defaults, **{k: v for k, v in stored.items() if k in defaults}}
+    if PROFILES[bot].market == "spot":  # spot não tem alavancagem, margem nem venda a descoberto
+        cfg.update(leverage_on=False, leverage=1, margin_mode="Isolada", allow_short=False)
+    return cfg
 
 
 def save_settings(bot: str, cfg: dict) -> None:
