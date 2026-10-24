@@ -10,7 +10,6 @@ import math
 from dataclasses import asdict, dataclass, field
 
 from core import leverage as lev_rules
-from core import markets
 
 MAINT_MARGIN_RATE = 0.004  # taxa de manutenção típica dos perpétuos (faixa inicial)
 
@@ -34,7 +33,7 @@ class TradeCalc:
     stop_pct: float | None
     tp_pct: float | None
     warnings: list[str] = field(default_factory=list)
-    fx: float = 1.0           # dólares por unidade da moeda de cotação (1 na cripto)
+    fx: float = 1.0           # conversão da moeda de cotação (sempre 1: tudo em USDT)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -90,14 +89,7 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
     exige stop) → ``margin_usdt`` (valor a alocar).
     """
     warnings: list[str] = []
-    if markets.is_crypto(market) or not symbol:
-        fx = 1.0
-    elif fx is None:
-        try:
-            fx = markets.fx_for(market, symbol)
-        except Exception as exc:  # noqa: BLE001
-            fx = 1.0
-            warnings.append(f"Sem cotação para converter a moeda do ativo em dólar ({exc}); valores sem conversão.")
+    fx = 1.0
     fee = fee_pct / 100
     sign = 1 if side == "BUY" else -1
     lev = max(1.0, float(leverage))
@@ -127,7 +119,7 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
             warnings.append(f"Pela tabela da Binance, com {lev:g}× a posição máxima em {symbol} é "
                             f"{cap:,.0f} USDT — quantidade reduzida.")
             qty = cap / entry
-    qty = round_qty(qty, entry) if markets.is_crypto(market) else markets.round_qty(market, qty)
+    qty = round_qty(qty, entry)
 
     notional = qty * entry * fx
     margin = notional / lev
@@ -149,9 +141,7 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
         warnings.append(f"Posição de {qty * entry:,.2f} USDT abaixo do mínimo da Binance para {symbol} "
                         f"({MIN_NOTIONAL.get(symbol, 5.0):g} USDT): aumente o risco por trade ou a banca.")
     if qty <= 0:
-        step = markets.MARKETS[market].qty_step if market in markets.MARKETS else None
-        warnings.append("Quantidade resultante igual a zero — ajuste risco, stop ou saldo."
-                        + (f" Neste mercado a menor quantidade é {step:g}." if step else ""))
+        warnings.append("Quantidade resultante igual a zero — ajuste risco, stop ou saldo.")
 
     return TradeCalc(
         side=side, entry=entry, stop=stop, take_profit=take_profit, qty=qty, notional=notional,
@@ -163,71 +153,34 @@ def calculate(side: str, entry: float, stop: float | None, take_profit: float | 
     )
 
 
-# O que conta nos limites (configurável por bot em "Metas de operação")
-TRADES_SCOPES = {
-    "bot": "Só as operações do bot",
-    "pagina": "Bot + minhas ordens nesta página",
-}
-PNL_SCOPES = {
-    "bot": "Só as operações do bot",
-    "pagina": "Bot + minhas ordens nesta página",
-    "carteira": "Carteira inteira — todos os bots + minhas ordens",
-}
-MANUAL_MODES = {
-    "livre": "Livres — os limites só geram aviso",
-    "pnl": "Respeitam a meta de lucro e o limite de perda do dia",
-    "todos": "Respeitam todos os limites (como o bot)",
-}
-# Categorias de bloqueio que valem para as ordens manuais em cada modo
-MANUAL_BLOCKS = {"livre": {"regra"}, "pnl": {"regra", "pnl"}, "todos": {"regra", "pnl", "operacoes", "rr"}}
-
-
 @dataclass
 class RiskCheck:
+    """Validação da ordem. A plataforma NÃO bloqueia operações por metas, limites diários ou risco:retorno mínimo:
+    só impede o que é impossível de enviar (sem stop para dimensionar, venda a descoberto sem margem, alavancagem
+    acima do máximo da Binance ou quantidade zero). Avisos informativos ficam em ``notes``."""
     allowed: bool
     reasons: list[str]
     calc: TradeCalc | None = None
-    kinds: list[str] = field(default_factory=list)  # categoria de cada motivo
+    notes: list[str] = field(default_factory=list)
 
-    def add(self, kind: str, reason: str) -> None:
+    def add(self, reason: str) -> None:
         self.reasons.append(reason)
-        self.kinds.append(kind)
         self.allowed = False
-
-    def blocking(self, kinds: set[str]) -> list[str]:
-        return [r for r, k in zip(self.reasons, self.kinds) if k in kinds]
-
-    def warnings(self, kinds: set[str]) -> list[str]:
-        return [r for r, k in zip(self.reasons, self.kinds) if k not in kinds]
 
 
 def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: float | None,
                 take_profit: float | None, market: str, trailing: bool = False) -> RiskCheck:
-    """Aplica todas as regras do usuário antes de enviar uma ordem.
-
-    Categorias dos motivos: ``regra`` (stop ausente, short não permitido,
-    alavancagem/liquidação), ``operacoes`` (meta de operações e posições
-    simultâneas), ``pnl`` (meta de lucro e limite de perda do dia) e ``rr``."""
+    """Dimensiona a ordem pela perda máxima por trade e valida só o que é tecnicamente impossível."""
     chk = RiskCheck(allowed=True, reasons=[])
     lev = effective_leverage(cfg)
     s = account_stats
 
     if side == "SELL" and market == "spot" and not cfg.get("leverage_on"):
-        chk.add("regra", "Venda a descoberto no spot exige a opção de alavancagem/margem ligada.")
+        chk.add("Venda a descoberto no spot exige a opção de alavancagem/margem ligada.")
     if side == "SELL" and not cfg.get("allow_short", True):
-        chk.add("regra", "Operações vendidas (short) estão desativadas nas configurações.")
+        chk.add("Operações vendidas (short) estão desativadas nas configurações.")
     if not stop:
-        chk.add("regra", "Toda ordem precisa de stop loss para respeitar a perda máxima por trade.")
-    scope = s.get("scope_trades", "")
-    if s["trades_today"] >= int(cfg["max_trades_day"]):
-        chk.add("operacoes", f"Meta de operações do dia atingida ({s['trades_today']}/{cfg['max_trades_day']}{scope}).")
-    if s["open_positions"] >= int(cfg["max_open_positions"]):
-        chk.add("operacoes", f"Número máximo de posições abertas atingido ({cfg['max_open_positions']}{scope}).")
-    scope = s.get("scope_pnl", "")
-    if s["pnl_today"] >= float(cfg["daily_profit_target"]) > 0:
-        chk.add("pnl", f"Meta de lucro diária atingida ({s['pnl_today']:,.2f} USDT{scope}). Pausado até amanhã (UTC).")
-    if -s["pnl_today"] >= float(cfg["daily_max_loss"]) > 0:
-        chk.add("pnl", f"Limite de perda diária atingido ({s['pnl_today']:,.2f} USDT{scope}). Pausado até amanhã (UTC).")
+        chk.add("A ordem precisa de stop loss para o tamanho da posição ser calculado pela perda máxima por trade.")
 
     budget = risk_budget(cfg, s["equity"])
     calc = calculate(side, entry, stop, take_profit, leverage=lev, fee_pct=float(cfg["fee_pct"]),
@@ -235,14 +188,14 @@ def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: f
                      margin_mode=cfg["margin_mode"]) if stop else None
     chk.calc = calc
     if calc:
-        if calc.rr is not None and calc.rr < float(cfg["min_rr"]):
-            chk.add("rr", f"Relação risco:retorno {calc.rr:.2f} abaixo do mínimo configurado ({cfg['min_rr']}).")
-        if take_profit is None and not trailing:
-            chk.add("rr", "Defina um alvo (take profit) para validar a relação risco:retorno.")
+        if calc.qty <= 0:
+            chk.add("Quantidade resultante igual a zero — ajuste a perda máxima, o stop ou o saldo.")
         for w in calc.warnings:
-            if "reduzida" not in w:
-                chk.add("regra", w)
+            if "reduzida" in w or "Quantidade resultante" in w:
+                chk.notes.append(w)
+            else:
+                chk.add(w)
     max_lev = lev_rules.max_leverage(cfg["symbol"], market, cfg["margin_mode"])
     if lev > max_lev:
-        chk.add("regra", f"Alavancagem {lev:g}× acima do máximo permitido pela Binance para {cfg['symbol']} ({max_lev}×).")
+        chk.add(f"Alavancagem {lev:g}× acima do máximo permitido pela Binance para {cfg['symbol']} ({max_lev}×).")
     return chk

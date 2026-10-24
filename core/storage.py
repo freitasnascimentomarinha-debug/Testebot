@@ -357,7 +357,7 @@ def backend():
 # Com contas ligadas (AUTH_MODE=contas), cada pessoa tem a própria configuração, carteira, extrato, log e planos. As demais
 # chaves (estratégias da comunidade, resultados de pesquisa, cadastro de usuários) são compartilhadas.
 USER_SCOPED = ("settings.json", "paper_accounts.json", "wallet.json", "decisions.json", "armed_plans.json", "credentials.json",
-               "ai_usage.json")
+               "ai_usage.json", "account_mode.json")
 NEVER_EXPORT = ("credentials.json",)  # chaves de API nunca entram em backup/exportação
 USERS_KEY = "_users.json"  # cadastro de usuários (hash das senhas): nunca exportado
 _user_ctx: contextvars.ContextVar = contextvars.ContextVar("tradebot_user", default=None)

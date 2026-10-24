@@ -31,8 +31,7 @@ for key, p in PROFILES.items():
     c = load_settings(key)
     risk = f"{c['max_loss_pct']:g}% do saldo" if c["risk_mode"] == "% do saldo" else f"{c['max_loss_usdt']:g} USDT"
     rows.append({"Bot": p.name, "Ativo": c["symbol"], "Tempo gráfico": c["interval"], "Perda máxima por trade": risk,
-                 "Meta de lucro/dia": c["daily_profit_target"], "Limite de perda/dia": c["daily_max_loss"],
-                 "Alavancagem": f"{c['leverage']:g}×" if c["leverage_on"] else "sem", "Personalidade": (personalities.get(c["personality"]) or {}).get("name", c["personality"]),
+                 "Alavancagem": f"{c['leverage']:g}×" if c["leverage_on"] else "sem", "Personalidade": "automática (ranking)" if c.get("auto_bot", True) else (personalities.get(c["personality"]) or {}).get("name", c["personality"]),
                  "Piloto automático": "ligado" if c["autopilot"] else "desligado"})
 st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 

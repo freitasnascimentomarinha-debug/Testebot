@@ -336,10 +336,6 @@ PER_DAY = {"1m": 1440, "3m": 480, "5m": 288, "15m": 96, "30m": 48, "1h": 24, "2h
 
 def bot_for(market: str, interval: str) -> str:
     """Configuração-base usada nos testes: futuros → Day Trade; spot diário → Long; demais spot → Swing."""
-    from core.profiles import PROFILES
-
-    if market in PROFILES:  # forex, commodities, índices e ações têm perfil próprio
-        return market
     return "day" if market == "futures" else ("long" if interval in ("1d", "3d", "1w") else "swing")
 
 

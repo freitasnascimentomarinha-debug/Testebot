@@ -1,4 +1,5 @@
 import json
+import sys
 import os
 import tempfile
 
@@ -60,11 +61,14 @@ def test_wrong_side_stop_warns():
     assert any("stop" in w for w in calc.warnings)
 
 
-def test_check_trade_blocks_daily_goal():
+def test_check_trade_never_blocks_by_goals_or_limits():
+    """Sem metas diárias, limites de perda, posições simultâneas ou R:R mínimo: o gestor só impede o que é impossível."""
     cfg = default_settings(PROFILES["day"])
-    stats = {"trades_today": cfg["max_trades_day"], "pnl_today": 0, "open_positions": 0, "equity": 10000, "available": 10000}
-    chk = risk.check_trade(cfg, stats, "BUY", 100, 97, 110, "futures")
-    assert not chk.allowed and any("Meta" in r for r in chk.reasons)
+    assert not {"max_trades_day", "daily_max_loss", "daily_profit_target", "max_open_positions", "min_rr", "ai_min_confidence"} & set(cfg)
+    stats = {"trades_today": 999, "pnl_today": -10_000, "open_positions": 50, "equity": 10000, "available": 10000}
+    chk = risk.check_trade(cfg, stats, "BUY", 100, 97, 100.5, "futures")  # R:R ruim, dia péssimo, muitas posições
+    assert chk.allowed and not chk.reasons and chk.calc.qty > 0
+    assert not risk.check_trade(cfg, stats, "BUY", 100, None, 110, "futures").allowed        # sem stop não há como dimensionar
 
 
 def test_spot_short_requires_margin():
@@ -266,38 +270,6 @@ def test_ai_close_keeps_manual_positions():
     engine.execute(PROFILES["day"], default_settings(PROFILES["day"]), res, 101)
     left = b.account()["positions"]
     assert len(left) == 1 and left[0]["source"] == "manual"
-
-
-def test_limit_scopes_you_vs_bot():
-    from core.broker import get_broker
-
-    paper.set_wallet_mode("única")
-    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
-    day, swing = get_broker("day"), get_broker("swing")
-    # 2 ordens suas e 1 do bot no Day Trade; 1 do bot no Swing com prejuízo realizado
-    for src in ("manual", "manual", "ia"):
-        day.place_order(symbol="X", market="futures", side="BUY", qty=1, price=100, leverage=5, fee_pct=0.0, source=src)
-    pos = swing.place_order(symbol="Y", market="spot", side="BUY", qty=1, price=100, fee_pct=0.0, source="ia")["position"]
-    swing.close_position(pos["id"], 50)  # −50 na carteira
-
-    cfg = default_settings(PROFILES["day"])
-    cfg.update(limits_trades_scope="bot", limits_pnl_scope="bot")
-    s = day.limit_stats(cfg, {"X": 100})
-    assert (s["trades_today"], s["open_positions"], s["pnl_today"]) == (1, 1, 0)
-    cfg.update(limits_trades_scope="pagina", limits_pnl_scope="carteira")
-    s = day.limit_stats(cfg, {"X": 100})
-    assert (s["trades_today"], s["open_positions"]) == (3, 3) and s["pnl_today"] == pytest.approx(-50)
-
-    # Ordens manuais: contam as operações da página; o escopo "bot" de resultado vira "página"
-    cfg.update(limits_trades_scope="bot", limits_pnl_scope="bot", max_trades_day=3, daily_max_loss=40)
-    manual = day.limit_stats(cfg, {"X": 100}, manual=True)
-    chk = risk.check_trade(cfg, manual, "BUY", 100, 97, 110, "futures")
-    assert "operacoes" in chk.kinds and "pnl" not in chk.kinds
-    assert chk.blocking(risk.MANUAL_BLOCKS["livre"]) == []
-    assert chk.blocking(risk.MANUAL_BLOCKS["todos"])
-    cfg["limits_pnl_scope"] = "carteira"
-    chk = risk.check_trade(cfg, day.limit_stats(cfg, {"X": 100}, manual=True), "BUY", 100, 97, 110, "futures")
-    assert chk.blocking(risk.MANUAL_BLOCKS["pnl"])  # perda de −50 na carteira ≥ limite de 40
 
 
 def test_personalities_rules_and_direction():
@@ -524,7 +496,7 @@ def test_learning_page_assets():
 
 
 def _adv_setup(n=400, seed=3):
-    cfg = {**default_settings(PROFILES["day"]), "symbol": "SOLUSDT", "interval": "15m", "ai_min_confidence": 0}
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "SOLUSDT", "interval": "15m", "auto_bot": False}
     raw = make_df(n, trend=0.02, seed=seed)
     raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("15min") - pd.Timedelta(minutes=15), periods=n, freq="15min")
     return cfg, ind.compute(raw, cfg)
@@ -608,7 +580,7 @@ def test_ai_advice_is_validated(monkeypatch):
     from core import personalities as Pm
 
     cfg, df = _adv_setup()
-    cfg["ai_mode"] = "filtro"
+    cfg["ai_intervene"] = True
     monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
     sc = advisor.scenario(df, cfg)
     price, atr = sc["preco"], sc["atr"]
@@ -695,9 +667,33 @@ def test_personality_only_where_trained():
         assert Pm.is_allowed(pid, PROFILES[bot].market, PROFILES[bot].default_interval)
 
 
-def test_bot_page_renders_with_analysis_and_advice():
-    """Renderiza a página inteira do bot, clica em Analisar e exige leitura do especialista, sem citar o modelo nem resposta bruta."""
+def _offline_market(monkeypatch):
+    """Dados de mercado sintéticos: o teste da página não depende da rede."""
+    from core import data, leverage
+
+    def klines(symbol, interval, limit=500, market="spot"):
+        raw = make_df(max(limit, 300), trend=0.05, seed=5)
+        raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("15min") - pd.Timedelta(minutes=15), periods=len(raw), freq="15min")
+        raw.attrs["source"] = "teste"
+        return raw.tail(limit).reset_index(drop=True)
+
+    monkeypatch.setattr(data, "get_klines", klines)
+    monkeypatch.setattr(data, "get_ticker", lambda s, m="spot": data.Ticker(s, 100.0, 1.0, 101.0, 99.0, 1e6, "teste"))
+    monkeypatch.setattr(data, "get_funding_rate", lambda s: None)
+    monkeypatch.setattr(data, "list_symbols", lambda m: ["BTCUSDT", "ETHUSDT"])
+    monkeypatch.setattr(leverage, "brackets", lambda s: (leverage.DEFAULT_BRACKETS, "teste"))
+    for name in [n for n in sys.modules if n == "core.ui"]:  # módulo já carregado por outro teste: refaz as ligações
+        del sys.modules[name]
+
+
+def test_bot_page_layout_and_analysis_with_advice(monkeypatch):
+    """Página inteira do bot: só dois gráficos (tempo real e TradingView), boleta de entrada logo abaixo e, ao clicar em Analisar,
+    a leitura do especialista — sem metas/limites que bloqueiam e sem citar o modelo nem resposta bruta."""
     from streamlit.testing.v1 import AppTest
+
+    _offline_market(monkeypatch)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
 
     def page():
         import streamlit as st
@@ -709,6 +705,16 @@ def test_bot_page_renders_with_analysis_and_advice():
 
     at = AppTest.from_function(page, default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
+    labels = [t.label for t in at.tabs]
+    assert "⚡ Tempo real" in labels and any("TradingView" in l for l in labels) and not any("Análise técnica" in l for l in labels)
+    heads = [h.value for h in at.subheader]
+    assert "🧮 Boleta de entrada" in heads and heads.index("🧮 Boleta de entrada") < heads.index("🤖 Controle do bot")
+    text = " ".join(m.value for m in at.markdown)
+    assert "Entrada do bot no mercado" in text and "Sua ordem manual" in text
+    widget_labels = " ".join(str(getattr(w, "label", "")) for w in list(at.number_input) + list(at.radio) + list(at.toggle) + list(at.selectbox))
+    for gone in ("Meta de operações", "Limite de perda diária", "Máx. posições", "Risco:retorno mínimo", "Confiança mínima"):
+        assert gone not in widget_labels
+    assert "Bot automático" in widget_labels and "Perda máxima por trade" in widget_labels
     btn = next(b for b in at.button if "Analisar agora" in b.label)
     btn.click()
     at = at.run()
@@ -716,6 +722,7 @@ def test_bot_page_renders_with_analysis_and_advice():
     text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
     assert "Leitura do especialista" in text and "Melhor bot para este momento" in text and "Plano condicional" in text
     assert "deepseek" not in text.lower() and not any("Resposta bruta" in (e.label or "") for e in at.expander)
+    assert "Gestor de risco" not in text and "BLOQUEADA" not in text
 
 
 def test_accounts_signup_requires_admin_approval(monkeypatch):
@@ -1015,196 +1022,157 @@ def test_ai_daily_quota_applies_to_platform_key_only(monkeypatch):
     storage.set_user(None)
 
 
-def _yahoo_json(n=60, start=1.10, step=300, last_offset=0, symbol="EURUSD=X", volume=0):
-    import time
-
-    now = int(time.time()) - last_offset
-    ts = [now - (n - 1 - i) * step - (now % step) for i in range(n)]
-    ts[-1] = now  # o candle em formação vem com o horário do último negócio
-    close = [start + 0.0001 * i for i in range(n)]
-    q = {"open": [c - 0.00005 for c in close], "high": [c + 0.0002 for c in close], "low": [c - 0.0002 for c in close], "close": close,
-         "volume": [volume] * n}
-    meta = {"symbol": symbol, "currency": "USD", "regularMarketPrice": close[-1], "chartPreviousClose": start, "regularMarketDayHigh": close[-1] + 0.001,
-            "regularMarketDayLow": start - 0.001, "regularMarketVolume": 0, "regularMarketTime": now}
-    return {"chart": {"result": [{"meta": meta, "timestamp": ts, "indicators": {"quote": [q]}}], "error": None}}
-
-
-def test_yahoo_provider_parsing_and_markets(monkeypatch):
-    from core import data, markets, yahoo
-
-    calls = []
-
-    def fake(path, params):
-        calls.append((path, params))
-        return _yahoo_json(80)
-
-    monkeypatch.setattr(yahoo, "_fetch", fake)
-    yahoo._cache.clear()
-    df = data.get_klines("EURUSD", "5m", 50, "forex")
-    assert len(df) == 50 and df.time.is_monotonic_increasing and df.time.is_unique
-    assert df["time"].iloc[-1].minute % 5 == 0 and df["time"].iloc[-1].second == 0       # candle em formação alinhado ao período
-    assert df.attrs["no_volume"] and (df["volume"] == 1.0).all()                         # forex não tem volume
-    assert "EURUSD%3DX" in calls[0][0] and calls[0][1]["interval"] == "5m"
-    tk = data.get_ticker("EURUSD", "forex")
-    assert tk.source == "Yahoo Finance" and tk.market_time and markets.is_open(tk.market_time)
-    assert not markets.is_open(tk.market_time - 3 * 3600)                                # sem negócio há horas: mercado fechado
-    with pytest.raises(data.MarketDataError, match="catálogo"):
-        data.get_klines("XXXX", "1h", 10, "forex")
-    assert "PETR4" in data.list_symbols("stocks") and len(data.list_symbols("commodities")) >= 20
-    # catálogo coerente
-    for key, m in markets.MARKETS.items():
-        assert m.default_symbol in markets.symbols(key) and m.default_interval in m.intervals
-        assert len({i.code for i in m.instruments}) == len(m.instruments)
-        assert all(i.yahoo and i.tv and i.quote for i in m.instruments)
-    assert markets.round_qty("stocks", 9.7) == 9 and markets.round_qty("forex", 1234.5) == 1200 and markets.round_qty("indices", 0.0129) == 0.012
-
-
-def test_other_markets_risk_wallet_and_fx(monkeypatch):
-    from core import markets, risk
-
-    rates = {"BRL": 0.20, "JPY": 0.0065, "EUR": 1.12, "USD": 1.0}
-    monkeypatch.setattr(markets, "fx_usd", lambda q: rates[q.upper()])
-    # ação da B3 (BRL): risco de 2 USD com stop de R$ 1 → qty = 2 / (1 × 0,20) = 10 ações; margem = valor da posição (sem alavancagem)
-    c = risk.calculate("BUY", 50.0, 49.0, 53.0, leverage=1, fee_pct=0.05, risk_usdt=2.0, available=100.0, symbol="PETR4", market="stocks")
-    assert c.fx == 0.20 and c.qty == 9 and c.qty == int(c.qty)                       # ações inteiras; 9 porque as taxas entram no risco
-    assert c.notional == pytest.approx(9 * 50 * 0.20) and c.margin == pytest.approx(c.notional) and c.risk_usdt <= 2.0 + 1e-9
-    assert c.liquidation is None                                                      # compra sem alavancagem não liquida
-    # forex com alavancagem: EURJPY, preço em JPY convertido pela cotação do iene; quantidade em múltiplos de 100 unidades
-    c = risk.calculate("SELL", 160.0, 160.5, 158.5, leverage=20, fee_pct=0.01, risk_usdt=2.0, available=100.0, symbol="EURJPY", market="forex")
-    assert c.fx == 0.0065 and c.qty % 100 == 0 and 0 < c.risk_usdt <= 2.0 + 1e-9 and c.margin == pytest.approx(c.notional / 20)
-    assert c.liquidation and c.liquidation > 160.0                                    # venda: liquida acima da entrada
-    # carteira: P&L convertido para dólar e taxa sobre o valor em dólar
-    paper.set_wallet_mode("única")
-    paper.reset_account(paper.SHARED_ACCOUNT, 100)
-    out = paper.place_order(paper.SHARED_ACCOUNT, symbol="PETR4", market="stocks", side="BUY", qty=9, price=50.0, stop_loss=49.0, leverage=1,
-                            fee_pct=0.05, fx=0.20)
-    pos = out["position"]
-    assert pos["fx"] == 0.20 and pos["margin"] == pytest.approx(9 * 50 * 0.20) and pos["fees_paid"] == pytest.approx(9 * 50 * 0.20 * 0.0005)
-    assert paper.pnl_of(pos, 52.0) == pytest.approx(9 * 2 * 0.20)                     # +R$ 18 = +US$ 3,60
-    ev = paper.sync(paper.SHARED_ACCOUNT, "PETR4", pd.DataFrame({"time": [pd.Timestamp.now(tz="UTC").floor("min")], "open": [50.0], "high": [50.5],
-                                                                 "low": [48.5], "close": [49.0], "volume": [1.0]}), 49.0)
-    assert ev and ev[0]["type"] == "Stop loss"
-    trade = paper.get_account(paper.SHARED_ACCOUNT)["history"][-1]
-    assert trade["gross_pnl"] == pytest.approx(-9 * 1.0 * 0.20) and trade["pnl"] < trade["gross_pnl"]  # perda de R$ 9 = US$ 1,80 mais taxas
-    paper.reset_account(paper.SHARED_ACCOUNT, 100)
-
-
-def test_other_markets_profiles_nav_and_closed_market(monkeypatch):
-    import ast
-    from pathlib import Path
-
-    from core import data, engine, markets
-    from core.profiles import PROFILES
-
-    for key in ("forex", "commodities", "indices", "stocks"):
-        pr = PROFILES[key]
-        cfg = default_settings(pr)
-        assert not pr.is_crypto and cfg["symbol"] == markets.MARKETS[key].default_symbol and cfg["interval"] in pr.intervals
-        assert cfg["allow_short"] == markets.MARKETS[key].allow_short and cfg["fee_pct"] == markets.MARKETS[key].fee_pct
-    assert default_settings(PROFILES["stocks"])["leverage_on"] is False and PROFILES["stocks"].max_leverage == 1
-    # menu: conta e administração primeiro, depois visão geral, cripto e demais mercados
-    src = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
-    tree = ast.parse(src)
-    keys = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "pages" for t in node.targets) and isinstance(node.value, ast.Dict):
-            keys = [k.value if isinstance(k, ast.Constant) else "**" for k in node.value.keys]
-    assert keys == ["**", "Visão geral", "Mercado Cripto", "Outros mercados"]          # "**" = grupo Conta (só com contas ligadas)
-    for page in ("forex", "commodities", "indices", "acoes"):
-        assert (Path(src and __file__).resolve().parent.parent / "views" / f"{page}.py").exists()
-    # mercado fechado: a análise nunca abre ordem a mercado
-    monkeypatch.setattr(data, "get_ticker", lambda s, m: data.Ticker(s, 1.1, 0.0, 1.2, 1.0, 0.0, "Yahoo Finance", 1.0))  # último negócio em 1970
-    cfg = {**default_settings(PROFILES["forex"]), "symbol": "EURUSD", "interval": "1h"}
-    assert engine.market_closed(PROFILES["forex"], cfg) and not engine.market_closed(PROFILES["day"], default_settings(PROFILES["day"]))
-
-
-def test_other_markets_have_validated_bots():
-    """Forex, commodities, índices e ações: só há bots que passaram na prova (instrumentos inéditos nas duas metades do período)."""
-    from core import markets
-    from core import personalities as Pm
-
-    for mk, info in markets.MARKETS.items():
-        assert Pm.trained_intervals(mk), mk
-        assert Pm.allowed(mk, info.default_interval), (mk, info.default_interval)   # a página abre já com bots disponíveis
-        assert Pm.DEFAULT_BY_BOT[mk] and Pm.get(Pm.DEFAULT_BY_BOT[mk])["research"]["status"] == "aprovado"
-    novos = [p for p in Pm.BUILTINS if p["id"].startswith("mk_")]
-    assert len(novos) >= 20
-    for p in novos:
-        rs = p["research"]
-        a, b = rs["unseen_halves"]["1a"], rs["unseen_halves"]["2a"]
-        assert a[0] > 0 and b[0] > 0 and rs["market"] == p["bot"] == p["markets"][0] and rs["interval"] == p["tested_interval"]
-        if rs["status"] == "aprovado":
-            assert min(a[0], b[0]) >= 0.05 and rs["ret_seen"] > 0 and rs["ret_new"] > 0 and rs["prev_ret_pct"] > 0 and rs["recent_ret_pct"] > 0
-        assert rs["prev_label"] and rs["contexts"] and "tendencia_alta" in rs["contexts"]
-    assert not Pm.allowed("forex", "1h") and not Pm.allowed("stocks", "5m")           # sem prova nesse tempo gráfico: bloqueado
-
-
-def test_realtime_chart_for_yahoo_markets_and_stream_decoder():
-    """Gráfico ao vivo dos novos mercados: histórico embutido + streaming do Yahoo; o decodificador roda o JS real da página."""
-    import base64
-    import json as _json
-    import re
-    import shutil
-    import struct
-    import subprocess
-
-    from core import realtime
-
-    cfg = default_settings(PROFILES["forex"])
-    hist = pd.DataFrame({"time": pd.date_range("2026-10-23 10:00", periods=5, freq="1h", tz="UTC"), "open": [1.1] * 5, "high": [1.2] * 5,
-                         "low": [1.0] * 5, "close": [1.15] * 5, "volume": [1.0] * 5})
-    hist.attrs["no_volume"] = True
-    html = realtime.realtime_chart_html(symbol="EURUSD", interval="1h", market="forex", cfg=cfg, lines=[], positions=[{"side": "BUY", "qty": 1000, "entry": 1.1,
-                                        "fee_pct": 0.01, "fees_paid": 0.1, "margin": 50, "fx": 1.0}], height=640, history=hist, prev_close=1.12)
-    conf = _json.loads(re.search(r"const C = (\{.*?\}), I = C\.ind", html, re.S).group(1))
-    assert conf["yahoo"] == "EURUSD=X" and len(conf["history"]) == 5 and conf["prev_close"] == 1.12 and conf["label"] == "Forex" and conf["no_volume"]
-    assert conf["positions"][0]["fx"] == 1.0 and "streamer.finance.yahoo.com" in html and "yahooStream" in html
-    crypto = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="futures", cfg=default_settings(PROFILES["day"]), lines=[], positions=[], height=640)
-    assert "yahoo" not in _json.loads(re.search(r"const C = (\{.*?\}), I = C\.ind", crypto, re.S).group(1))   # cripto não muda
-    if not shutil.which("node"):
-        pytest.skip("sem Node para testar o decodificador")
-
-    def varint(n):
-        out = b""
-        while True:
-            b = n & 0x7F
-            n >>= 7
-            out += bytes([b | (0x80 if n else 0)])
-            if not n:
-                return out
-    zz = lambda n: (n << 1) if n >= 0 else ((-n << 1) - 1)
-    msg = (b"\x0a" + varint(8) + b"EURUSD=X" + b"\x15" + struct.pack("<f", 1.11948) + b"\x18" + varint(zz(1792784390000))
-           + b"\x48" + varint(zz(49854200)) + varint(22 << 3) + varint(zz(100)))
-    fn = re.search(r"function pbParse\(buf\) \{.*?\n\}\n", html, re.S).group(0)
-    js = fn + "const d = pbParse(Uint8Array.from(Buffer.from(process.argv[1], 'base64'))); console.log(JSON.stringify({p: d[2], t: d[3], v: d[9], s: d[22], len: d[1].length}));"
-    out = subprocess.run(["node", "-e", js, base64.b64encode(msg).decode()], capture_output=True, text=True, check=True).stdout
-    got = _json.loads(out)
-    assert got["p"] == pytest.approx(1.11948, abs=1e-6) and got["t"] == 1792784390000 and got["v"] == 49854200 and got["s"] == 100 and got["len"] == 8
-
-def test_ai_filter_mode(monkeypatch):
+def test_ai_role_explains_or_intervenes(monkeypatch):
     from core import ai, engine
     from core import personalities as Pm
 
     monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
     paper.set_wallet_mode("única")
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
-    cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "personality": "esp_15m_ema_3x1", "ai_min_confidence": 0}
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "personality": "esp_15m_ema_3x1", "auto_bot": False}
+    assert cfg["ai_intervene"] is False and cfg["ai_persona"] in ai.AI_PERSONAS            # padrão: a IA só explica
     df = ind.compute(make_df(400, trend=0.4, seed=21), cfg)
     plan = analyze(df, cfg, PROFILES["day"], Pm.get("esp_15m_ema_3x1"))
+    price = float(df.close.iloc[-1])
 
     def fake(decision):
         return lambda ctx, **kw: ai.AIDecision(decision=decision, entry=1.0, stop_loss=0.5, take_profit=9.0,
-                                                confidence=90, reasoning="teste", source="ia")
+                                                confidence=90, reasoning="teste", source="ia", model="m")
 
     other = "SELL" if plan.direction == "BUY" else "BUY"
+    # só explica: a decisão é a das regras, qualquer que seja a opinião da IA
     monkeypatch.setattr(ai, "ask_ai", fake(other))
-    r = engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), "chave")
-    assert r.decision.decision == "HOLD"  # IA contra as regras (ou sem sinal delas): vetado
+    r = engine.run_analysis(PROFILES["day"], cfg, df, price, "chave")
+    assert r.decision.decision == plan.direction and "teste" in r.decision.reasoning
+    # interfere: confirmar o sinal passa (com o stop validado das regras); discordar ou agir sem sinal veta
+    on = {**cfg, "ai_intervene": True}
+    assert engine.run_analysis(PROFILES["day"], on, df, price, "chave").decision.decision == "HOLD"
     if plan.direction in ("BUY", "SELL"):
         monkeypatch.setattr(ai, "ask_ai", fake(plan.direction))
-        r = engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), "chave")
+        r = engine.run_analysis(PROFILES["day"], on, df, price, "chave")
         assert r.decision.decision == plan.direction
-        assert r.decision.stop_loss == pytest.approx(plan.stop_loss)  # usa o stop validado das regras
-    monkeypatch.setattr(ai, "ask_ai", fake(other))
-    r = engine.run_analysis(PROFILES["day"], {**cfg, "ai_mode": "livre"}, df, float(df.close.iloc[-1]), "chave")
-    assert r.decision.decision == other  # modo livre: a IA decide
+        assert r.decision.stop_loss == pytest.approx(plan.stop_loss)
+    # o tom escolhido chega ao prompt da IA
+    assert "Gestor cauteloso" in ai.persona_text("cauteloso") and "Professor" in ai.persona_text("inexistente")
+
+
+def test_auto_bot_picks_best_for_context_and_waits_without_edge(monkeypatch):
+    from core import engine
+    from core import personalities as Pm
+
+    monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    cfg, df = _adv_setup()
+    cfg.update(auto_bot=True)
+    best, info = engine.pick_bot(PROFILES["day"], cfg, df)
+    allowed = {p["id"] for p in Pm.allowed("futures", "15m")}
+    if best:  # só bots treinados neste tempo gráfico, com vantagem comprovada no contexto
+        assert best["id"] in allowed and best["research"]["interval"] == "15m"
+    # sem nenhum bot com vantagem no contexto: aguarda, mesmo com sinal das regras
+    monkeypatch.setattr(engine, "pick_bot", lambda *a, **k: (None, {"contexto_nome": "Lateralidade"}))
+    r = engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), None)
+    assert r.decision.decision == "HOLD" and (r.check is None)
+    monkeypatch.setattr(engine, "pick_bot", lambda *a, **k: (Pm.get("esp_15m_ema_3x1"), {}))
+    r = engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), None)
+    assert r.personality["id"] == "esp_15m_ema_3x1"
+    assert engine.needs_htf(cfg) and not engine.needs_htf({**cfg, "auto_bot": False, "personality": "tendencia"})
+
+
+def test_weekly_ranking_refresh_and_overlay(monkeypatch):
+    from core import ranking
+    from core import personalities as Pm
+
+    pid = Pm.DEFAULT_BY_BOT["day"]
+    base = next(b for b in Pm.BUILTINS if b["id"] == pid)
+    market, itv = base["research"]["market"], base["research"]["interval"]
+    ranking._failed_at.clear()
+    assert ranking.is_stale(market, itv) and ranking.age_days(market, itv) is None
+    n = 1200
+    calls = []
+
+    def getter(symbol, interval, limit, mkt):
+        calls.append((symbol, interval))
+        raw = make_df(limit, trend=0.05, seed=hash(symbol) % 50)
+        raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("min"), periods=limit, freq=pd.Timedelta(seconds=ranking.htf.SECONDS[interval]))
+        return raw
+
+    rec = ranking.refresh(market, itv, getter)
+    assert not ranking.is_stale(market, itv) and ranking.age_days(market, itv) < 0.01 and calls
+    assert pid in rec["results"] and rec["order"] == sorted(rec["order"], key=lambda i: -rec["results"][i]["monthly_pct"])
+    assert ranking.leaderboard(market, itv, top=3)
+    # uma semana depois o ranking é refeito sozinho; antes disso, não
+    from datetime import datetime, timedelta, timezone
+    assert not ranking.is_stale(market, itv, datetime.now(timezone.utc) + timedelta(days=6))
+    assert ranking.is_stale(market, itv, datetime.now(timezone.utc) + timedelta(days=8))
+    assert ranking.refresh_if_stale(market, itv, getter) is False
+    # o resultado semanal substitui a pesquisa só com amostra suficiente; com pouca, vale o selo original
+    res = {**rec["results"][pid], "trades": ranking.MIN_TRADES, "ret_pct": -3.0, "monthly_pct": -3.0, "status": "fraco"}
+    few = {**res, "trades": ranking.MIN_TRADES - 1}
+    key = f"{market}|{itv}"
+    fresh = Pm.get(pid) if False else ranking.overlay(base, {key: {**rec, "results": {pid: res}}})
+    assert fresh["research"]["status"] == "fraco" and fresh["research"]["weekly"] and fresh["research"]["interval"] == itv
+    assert ranking.overlay(base, {key: {**rec, "results": {pid: few}}}) is base
+    assert ranking.status_of({"trades": 3, "ret_pct": -9, "positive": 0, "symbols": 5}, "aprovado") == "aprovado"
+    assert ranking.status_of({"trades": 50, "ret_pct": 4, "positive": 4, "symbols": 5}, "fraco") == "aprovado"
+    assert ranking.status_of({"trades": 50, "ret_pct": 4, "positive": 1, "symbols": 5}, "aprovado") == "ressalva"
+    assert ranking.status_of({"trades": 50, "ret_pct": -4, "positive": 1, "symbols": 5}, "aprovado") == "fraco"
+
+
+def test_account_mode_selector_and_exchange_gate(monkeypatch):
+    from core import credentials, execution, storage
+
+    storage.set_user("conta_modo")
+    try:
+        assert execution.get_mode() == "simulada" and execution.orders_enabled()
+        assert set(execution.MODES) == {"simulada", "demo", "real"}
+        execution.set_mode("demo")
+        assert execution.get_mode() == "demo"
+        with pytest.raises(ValueError):
+            execution.set_mode("inexistente")
+        assert "chave" in execution.orders_problem("demo").lower() and not execution.orders_enabled()
+        monkeypatch.setattr(credentials, "status", lambda u: {"last4": "abcd", "testnet": True, "validated": True, "perms": {}, "saved_at": "x"})
+        assert execution.key_problem("demo") is None and "conta de testes" in execution.key_problem("real")
+        assert "ainda não está ativo" in execution.orders_problem("demo") and not execution.orders_enabled()  # nada de fingir que operou
+        monkeypatch.setattr(credentials, "status", lambda u: {"last4": "abcd", "testnet": False, "validated": False, "perms": {}, "saved_at": "x"})
+        assert "recusada" in execution.key_problem("real") and "conta real" in execution.key_problem("demo")
+        execution.set_mode("simulada")
+        assert execution.orders_enabled()
+    finally:
+        storage.set_user(None)
+
+
+def test_share_custom_bots_with_community_or_selected_users(monkeypatch):
+    from core import personalities as Pm
+    from core import storage
+
+    base = {"name": "Meu bot", "author": "ana", "direction": "misto", "skills": {"tendencia": 1.0}, "threshold": 30, "sl_atr": 1.5,
+            "tp_atr": 3.0, "filters": {}, "markets": ["futures"]}
+    ids = {}
+    storage.set_user("ana")
+    try:
+        for vis, shared in (("privado", []), ("usuarios", ["bia", "ana"]), ("comunidade", [])):
+            ids[vis] = Pm.save_custom({**base, "name": f"Bot {vis}", "visibility": vis, "shared_with": shared})["id"]
+        rec = Pm.get(ids["usuarios"])
+        assert rec["owner"] == "ana" and rec["shared_with"] == ["bia"]                     # o dono não entra na lista de convidados
+        assert Pm.save_custom({**base, "name": "x", "visibility": "invalida"})["visibility"] == "comunidade"
+        seen = lambda: {p["id"] for p in Pm.list_all()}  # noqa: E731
+        assert set(ids.values()) <= seen()                                                  # dona vê tudo o que criou
+        storage.set_user("bia")
+        assert ids["usuarios"] in seen() and ids["comunidade"] in seen() and ids["privado"] not in seen()
+        storage.set_user("caio")
+        assert ids["comunidade"] in seen() and ids["usuarios"] not in seen() and ids["privado"] not in seen()
+        assert Pm.get(ids["privado"])                                                       # quem usava continua resolvendo o id
+        with pytest.raises(PermissionError):
+            Pm.delete_custom(ids["comunidade"])                                             # só o dono exclui
+        with pytest.raises(PermissionError):
+            Pm.save_custom({**Pm.get(ids["comunidade"]), "name": "sequestro"})
+        assert not Pm.can_edit(Pm.get(ids["comunidade"]), "caio") and Pm.can_edit(Pm.get(ids["comunidade"]), "ana")
+        legacy = {"id": "velha", "name": "Velha", "builtin": False}                          # criada antes do compartilhamento
+        assert Pm.can_see(legacy, "caio") and Pm.can_edit(legacy, "caio")
+        assert Pm.allowed("futures", "15m") is not None
+        storage.set_user("ana")
+        for pid in ids.values():
+            Pm.delete_custom(pid)
+    finally:
+        storage.set_user(None)

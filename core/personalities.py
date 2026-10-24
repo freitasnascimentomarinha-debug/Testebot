@@ -6,8 +6,8 @@ compra, só venda ou misto), filtros, stop/alvo por ATR e um texto descritivo
 que vai para a IA como a "persona" da estratégia.
 
 * **Prontas** — estratégias clássicas, somente leitura (podem ser duplicadas).
-* **Da comunidade** — criadas por qualquer usuário na página Personalidades,
-  com nome e autor, visíveis e utilizáveis por todos.
+* **Criadas por usuários** — criadas na página Personalidades, com nome e autor. Quem cria escolhe com quem compartilhar:
+  só consigo (``privado``), com um ou mais usuários (``usuarios``) ou com toda a comunidade (``comunidade``).
 
 O **ranking** combina o desempenho real (operações dos bots na carteira
 simulada, medido em R = resultado ÷ risco planejado, o que permite comparar
@@ -22,7 +22,6 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core import markets
 from core.storage import load_json, locked_update
 
 CUSTOM_FILE = "personalities.json"
@@ -169,14 +168,6 @@ for _p in BUILTINS:
 # Padrões: especialistas aprovados na prova final (moedas inéditas) da pesquisa de out/2026
 DEFAULT_BY_BOT = {"day": "esp_15m_ema_3x1", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
 
-# Demais mercados: padrão = o aprovado com melhor retorno mensal simulado no tempo gráfico padrão do mercado (se houver)
-for _mk, _info in markets.MARKETS.items():
-    _rows = [b for b in BUILTINS if (b.get("research") or {}).get("market") == _mk and b["research"].get("interval") == _info.default_interval
-             and b["research"].get("status") == "aprovado"]
-    if _rows:
-        DEFAULT_BY_BOT[_mk] = max(_rows, key=lambda b: b["research"].get("monthly_pct") or 0)["id"]
-
-
 _STATUS_ORDER = {"aprovado": 0, "ressalva": 1}
 
 
@@ -221,15 +212,41 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def list_all() -> list[dict]:
+VISIBILITY = {"privado": "🔒 Só eu", "usuarios": "👥 Só os usuários que eu escolher", "comunidade": "🌐 Toda a comunidade"}
+
+
+def can_see(p: dict, user: str | None) -> bool:
+    """Prontas e da comunidade: todos. Privadas e de usuários específicos: só o dono e quem recebeu. Sem contas ligadas
+    (uso individual) tudo é visível. Estratégias criadas antes do compartilhamento continuam da comunidade."""
+    if p.get("builtin") or not user:
+        return True
+    vis = p.get("visibility") or "comunidade"
+    return vis == "comunidade" or user == p.get("owner") or user in (p.get("shared_with") or [])
+
+
+def can_edit(p: dict, user: str | None) -> bool:
+    """Só o dono (ou qualquer um quando não há contas, ou o dono é desconhecido) altera ou exclui uma estratégia criada."""
+    if p.get("builtin"):
+        return False
+    return not user or not p.get("owner") or user == p.get("owner")
+
+
+def list_all(*, visible_only: bool = True) -> list[dict]:
+    """Prontas (com o ranking semanal por cima) + criadas pelos usuários que o usuário atual pode ver."""
+    from core import ranking
+    from core.storage import current_user
+
+    rank = ranking.load()
     custom = load_json(CUSTOM_FILE, {}) or {}
-    return BUILTINS + sorted(custom.values(), key=lambda p: p.get("created", ""))
+    user = current_user()
+    mine = [p for p in sorted(custom.values(), key=lambda p: p.get("created", "")) if not visible_only or can_see(p, user)]
+    return [ranking.overlay(b, rank) for b in BUILTINS] + mine
 
 
 def get(pid: str | None) -> dict | None:
     if not pid:
         return None
-    return next((p for p in list_all() if p["id"] == pid), None)
+    return next((p for p in list_all(visible_only=False) if p["id"] == pid), None)
 
 
 def slug(name: str) -> str:
@@ -238,14 +255,23 @@ def slug(name: str) -> str:
 
 
 def save_custom(p: dict) -> dict:
-    """Cria ou atualiza uma personalidade da comunidade."""
+    """Cria ou atualiza uma estratégia criada por usuário (dono, visibilidade e usuários com acesso ficam no registro)."""
+    from core.storage import current_user
+
     p = {**p, "builtin": False, "updated": _now()}
+    p.setdefault("owner", current_user())
+    if p.get("visibility") not in VISIBILITY:
+        p["visibility"] = "comunidade"
+    p["shared_with"] = sorted({u for u in (p.get("shared_with") or []) if u and u != p.get("owner")}) if p["visibility"] == "usuarios" else []
     p.setdefault("id", slug(p["name"]))
     p.setdefault("created", _now())
     if any(b["id"] == p["id"] for b in BUILTINS):
         raise ValueError("Personalidades prontas não podem ser alteradas — duplique-a para personalizar.")
 
     def _apply(data):
+        old = data.get(p["id"])
+        if old and not can_edit(old, current_user()):
+            raise PermissionError("Só quem criou a estratégia pode alterá-la.")
         data[p["id"]] = p
 
     locked_update(CUSTOM_FILE, {}, _apply)
@@ -253,7 +279,12 @@ def save_custom(p: dict) -> dict:
 
 
 def delete_custom(pid: str) -> None:
+    from core.storage import current_user
+
     def _apply(data):
+        old = data.get(pid)
+        if old and not can_edit(old, current_user()):
+            raise PermissionError("Só quem criou a estratégia pode excluí-la.")
         data.pop(pid, None)
 
     locked_update(CUSTOM_FILE, {}, _apply)

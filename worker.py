@@ -1,8 +1,7 @@
 """Executor 24/7 sem navegador (piloto automático em segundo plano).
 
 Usa exatamente as configurações salvas na interface. Analisa cada bot com
-``autopilot`` ligado sempre que um novo candle fecha e executa as ordens
-aprovadas pelo gestor de risco. Também monitora stops/alvos continuamente.
+``autopilot`` ligado sempre que um novo candle fecha, usa o bot mais recomendado do ranking para o contexto e executa a ordem. Também monitora stops/alvos continuamente.
 
     export OPENROUTER_API_KEY=sk-or-...
     python worker.py              # todos os bots com piloto automático ligado
@@ -14,7 +13,7 @@ import argparse
 import logging
 import time
 
-from core import accounts, engine, personalities, storage
+from core import accounts, engine, execution, personalities, storage
 from core.broker import get_broker
 from core.data import get_funding_rate, get_klines, get_ticker, last_closed_candle_time
 from core.ai import get_api_key
@@ -35,14 +34,18 @@ def tick(bot: str, last_seen: dict) -> None:
         log.info("[%s] %s %s", bot, ev["type"], ev.get("trade", {}).get("pnl", ""))
     if not cfg["autopilot"]:
         return
-    if not personalities.is_allowed(cfg.get("personality"), profile.market, cfg["interval"]):
-        log.warning("[%s] personalidade %s não foi treinada/testada em %s %s: análise ignorada", bot, cfg.get("personality"),
-                    profile.market, cfg["interval"])
+    if (why := execution.orders_problem()):
+        log.info("[%s] em espera: %s", bot, why)
+        return
+    if not personalities.allowed(profile.market, cfg["interval"]):
+        log.warning("[%s] nenhum bot foi treinado/testado em %s %s: análise ignorada", bot, profile.market, cfg["interval"])
         return
     marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(raw, cfg['interval'])}"
     if last_seen.get(bot) == marker:
         return
     last_seen[bot] = marker
+    if engine.ensure_ranking(profile, cfg):
+        log.info("[%s] ranking semanal dos bots atualizado (%s %s)", bot, profile.market, cfg["interval"])
     htf_raw = mtf_raw = None
     if engine.needs_htf(cfg):
         htf_raw, mtf_raw = engine.htf_frames(get_klines, cfg, len(raw), profile.market)
@@ -55,17 +58,17 @@ def tick(bot: str, last_seen: dict) -> None:
             out = engine.execute(profile, cfg, planned, price)
             log.info("[%s] plano condicional confirmado: ordem %s", bot, out.get("status"))
         else:
-            log.info("[%s] plano confirmado, bloqueado: %s", bot, " | ".join(planned.check.reasons if planned.check else []))
+            log.info("[%s] plano confirmado, ordem não montada: %s", bot, " | ".join(planned.check.reasons if planned.check else []))
         return
     result = engine.run_analysis(profile, cfg, df, price, get_api_key())
     d = result.decision
-    log.info("[%s] %s %s conf=%s%% fonte=%s aprovado=%s", bot, cfg["symbol"], d.decision, d.confidence, d.source,
-             bool(result.check and result.check.allowed))
+    log.info("[%s] %s %s bot=%s conf=%s%% fonte=%s pronta=%s", bot, cfg["symbol"], d.decision,
+             (result.personality or {}).get("name"), d.confidence, d.source, bool(result.check and result.check.allowed))
     if (result.check and result.check.allowed) or d.decision == "CLOSE":
         out = engine.execute(profile, cfg, result, price)
         log.info("[%s] ordem: %s", bot, out.get("status"))
     elif result.check:
-        log.info("[%s] bloqueada: %s", bot, " | ".join(result.check.reasons))
+        log.info("[%s] ordem não montada: %s", bot, " | ".join(result.check.reasons))
     elif engine.auto_arm(profile, cfg, result, df):
         log.info("[%s] plano condicional da IA armado", bot)
 

@@ -1,6 +1,6 @@
 # 📊 TradeBot — Plataforma de Bots de Trade (Streamlit + DeepSeek)
 
-Plataforma com três bots independentes, **dados de mercado reais** e **conta simulada** (paper trading),
+Plataforma com três bots independentes (só cripto: futuros e spot), **dados de mercado reais** e **conta simulada** (paper trading),
 pronta para receber a API de negociação da Binance numa segunda fase.
 
 | Bot | Mercado | Timeframes | Padrões |
@@ -17,15 +17,25 @@ pronta para receber a API de negociação da Binance numa segunda fase.
   recalculados ao vivo (EMAs, Bollinger, VWAP, SuperTrend, volume e painéis de RSI, MACD, Estocástico, ADX e
   OBV) e linhas de stop, alvo, liquidação, plano da IA, suportes/resistências, pivôs, Fibonacci e níveis do usuário.
 * **Seletor “Indicadores no gráfico”** acima dos gráficos para adicionar/remover indicadores na hora.
-* **Gráfico de análise técnica** (Plotly) com candles reais, EMAs, Bollinger, VWAP, SuperTrend, Ichimoku, RSI, MACD,
-  Estocástico, ADX/DMI, OBV, volume, suportes/resistências automáticos, pivôs e Fibonacci; ferramentas de
-  desenho (linha, caminho, retângulo, círculo, borracha), zoom com a roda e marcação de entradas/saídas,
-  stops, alvos e preço de liquidação.
-* **Aba TradingView** com o conjunto completo de ferramentas de desenho (Fibonacci, canais, padrões, régua,
-  posição comprada/vendida).
-* **Boleta e calculadora**: tamanho pela perda máxima ou pela margem, R:R, taxas, break-even, liquidação.
-* **Botão “Analisar mercado e programar ordem”**: as habilidades de programação calculam o cenário, o
-  DeepSeek 4.1 Flash interpreta e devolve a ordem em JSON, e o gestor de risco aprova/bloqueia.
+* **Dois gráficos por página**: ⚡ Tempo real e 🖊️ TradingView, com o conjunto completo de ferramentas de desenho
+  (Fibonacci, canais, padrões, régua, posição comprada/vendida).
+* **Boleta de entrada logo abaixo do gráfico**: à esquerda, as configurações de entrada do bot no mercado (perda máxima
+  por trade em USDT ou %, stop/alvo em ATR, alavancagem e modo de margem, short); à direita, a sua ordem manual com
+  calculadora (tamanho pela perda máxima ou pela margem, R:R, taxas, break-even, liquidação).
+* **Conta de operação** (barra lateral): 🧪 conta demo da plataforma (simulada), 🔶 conta demo da Exchange (Binance
+  testnet) ou 🔴 conta real da Exchange. As contas da Exchange exigem a chave da Binance cadastrada em Minha conta e,
+  nesta versão, **ainda não recebem ordens** (o app avisa em vez de simular em silêncio).
+* **Bot automático no fechamento do candle**: a IA e os bots monitoram cada candle fechado, no tempo gráfico em uso, e
+  entra o bot do **ranking** com melhor desempenho no contexto atual (tempo gráfico, indicadores e leitura de mercado).
+  Se nenhum tem vantagem comprovada no contexto, o bot aguarda. O ranking é **refeito sozinho a cada 7 dias**
+  (`core/ranking.py`) simulando todos os bots nos candles recentes — assim acompanha o mercado real e o selo
+  (aprovado / ressalva / fraco) se adapta. Também dá para atualizar na hora.
+* **Papel da IA**: por padrão a IA só **explica resumidamente** o que acontece no mercado e dá uma **dica útil** do
+  contexto, no tom da personalidade escolhida (professor, direto ao ponto, gestor cauteloso, mentor ou quant).
+  Opcionalmente ela também **interfere** na ativação do bot: confirma ou veta o sinal naquele momento.
+* **Sem bloqueios por metas**: não há meta de operações, meta de lucro, limite de perda, máximo de posições, R:R mínimo
+  nem confiança mínima. O tamanho da ordem vem da perda máxima por trade e do stop; só é barrado o que é impossível
+  (sem stop, venda a descoberto sem margem, alavancagem acima do máximo da Binance, quantidade zero).
 * **Piloto automático** (a cada candle fechado) e execução automática opcional.
 * **Carteira simulada** (página 💰 Carteira): você define a banca inicial, faz aportes/retiradas e opera
   junto com os bots na mesma banca (ou bancas separadas por bot). Tudo vira histórico, extrato (taxas,
@@ -42,32 +52,31 @@ pronta para receber a API de negociação da Binance numa segunda fase.
   * 9 prontas: Seguidor de Tendência, Reversão à Média, Rompimento, Scalper VWAP, Momentum, Price Action,
     Ichimoku, Conservador (multi-confirmação) e Posicional Comprador;
   * crie a sua descrevendo a estratégia em texto (a IA — ou, sem chave, palavras-chave — preenche indicadores,
-    pesos, direção só compra/só venda/misto, filtros e stop/alvo), dê um nome e salve: fica disponível para todos;
+    pesos, direção só compra/só venda/misto, filtros e stop/alvo), dê um nome, escolha com quem compartilhar e salve;
   * **ranking** por R médio por operação (resultado ÷ risco), somando operações reais dos bots e backtests;
   * **backtest** rápido em candles reais (só regras, sem gastar tokens), individual ou de todas de uma vez.
-* **Controle do bot**: botão Ligar/Desligar (piloto automático a cada candle), Analisar agora e escolha da
-  personalidade. Funciona sem IA (somente regras) e com IA (DeepSeek interpreta antes de cada entrada).
+* **Controle do bot**: botão Ligar/Desligar (piloto automático a cada candle), Analisar agora, bot automático pelo
+  ranking ou escolha manual da personalidade. Funciona sem IA (somente regras) e com IA (explica o mercado).
 * **Gráfico enxuto por padrão**: duas médias móveis (Day 9/21, Swing 21/50, Long 50/200) + volume; os demais
   indicadores são adicionados no seletor acima do gráfico.
-* **Você × bot configurável**: escolha se as suas ordens manuais contam na meta de operações/posições do bot,
-  se a meta de lucro e o limite de perda valem só para o bot, para a página ou para a carteira inteira, e se as
-  suas ordens são livres (só aviso) ou respeitam os limites. A IA nunca encerra posições manuais.
 * **Todos os pares em USDT** da Binance (≈900 perpétuos e ≈700 spot) com busca.
 * **Posições por bot**: posições, ordens limitadas, histórico (exporta CSV), curva de patrimônio e
   log de decisões.
-* **Configurações** (abaixo do gráfico): perda máxima por trade (USDT ou %), R:R mínimo, metas de
-  operações/lucro/perda diária, máx. posições, alavancagem e modo de margem, todos os indicadores, modelo da
-  IA, confiança mínima, instruções da sua estratégia e **níveis do usuário** (enviados à IA).
+* **Configurações** (abaixo do gráfico): alavancagem (faixas da Binance), todos os indicadores, IA (modelo, tom,
+  se pode interferir), instruções da sua estratégia, **níveis do usuário** (enviados à IA) e custos simulados.
+* **Bots criados pelos usuários** podem ser compartilhados com **toda a comunidade**, com **um ou mais usuários**
+  escolhidos ou ficar **só com você**. Só o dono altera ou exclui.
 
 ## Fluxo de decisão
 
 ```
 Dados reais (Binance → fallback OKX)
   → 9 habilidades de programação (votos −1…+1 com pesos por estilo)
+  → bot do momento: o melhor do ranking semanal para o contexto do gráfico
   → plano por regras (entrada, stop/alvo por ATR e S/R)
-  → DeepSeek via OpenRouter (JSON: decisão, entrada, stop, alvo, confiança, riscos)
-  → gestor de risco (perda máx., R:R, metas diárias, liquidação, posições)
-  → corretora (simulada hoje; Binance na fase 2)
+  → DeepSeek via OpenRouter (explica o mercado e dá a dica; opcionalmente confirma ou veta o sinal)
+  → dimensionamento pela perda máxima por trade (sem bloqueios por metas)
+  → conta de operação (demo da plataforma hoje; demo/real da Exchange na fase 2)
 ```
 
 Sem chave da OpenRouter, o bot funciona só com as regras.
@@ -136,12 +145,14 @@ views/               Painel, Carteira, Personalidades e páginas dos três bots
 core/data.py         candles e cotações reais (Binance/OKX, APIs públicas)
 core/indicators.py   indicadores em pandas puro
 core/strategy.py     14 habilidades de programação e plano por regras (com personalidade)
-core/personalities.py personalidades prontas e da comunidade, ranking
+core/personalities.py personalidades prontas e dos usuários (compartilhamento), ranking
 core/backtest.py     backtest das personalidades em candles reais (resultado em R)
 core/specialists.json bots especialistas nativos (gerados pela pesquisa)
 core/research_results.json resultados simulados padronizados de todas as personalidades prontas
 core/ai.py           cliente OpenRouter (DeepSeek) e prompt
-core/risk.py         calculadora de trade e gestor de risco
+core/risk.py         calculadora de trade e validação do que é impossível enviar (sem metas que bloqueiam)
+core/ranking.py      ranking semanal automático dos bots (simulação nos candles recentes)
+core/execution.py    conta de operação: demo da plataforma, demo da Exchange ou real da Exchange
 core/paper.py        corretora simulada (stops/alvos/liquidação com máximas e mínimas reais)
 core/broker.py       interface de execução (PaperBroker hoje, BinanceBroker na fase 2)
 core/engine.py       pipeline completo (usado pela UI e pelo worker)
@@ -157,10 +168,9 @@ data/                contas, configurações e logs quando não há banco (fora 
 
 Implementar `BinanceBroker` em `core/broker.py` (spot: `/api/v3/order` + OCO; futuros: `/fapi/v1/leverage`,
 `/fapi/v1/marginType`, `/fapi/v1/order` com `STOP_MARKET`/`TAKE_PROFIT_MARKET` reduceOnly), validar na
-Testnet e trocar `get_broker`. Interface, IA e gestão de risco não mudam.
+Testnet e trocar `get_broker`; depois ligar `EXCHANGE_ORDERS_ENABLED` em `core/execution.py`. A escolha da conta
+(demo/real da Exchange) e a checagem da chave já estão prontas.
 
 > Ferramenta educacional/experimental. Nada aqui é recomendação de investimento.
 
-
-## Outros mercados
-Forex, commodities, índices e ações da B3 (dados do Yahoo Finance, carteira simulada em dólar, bots validados por mercado): veja [docs/outros_mercados.md](docs/outros_mercados.md).
+> Só cripto: futuros perpétuos e spot. Forex, commodities, índices e ações foram removidos da plataforma.

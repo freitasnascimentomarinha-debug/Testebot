@@ -9,10 +9,6 @@ quando o servidor está em um país bloqueado pela Binance.
 Ordem de fontes (cripto): Binance (futuros ou spot) → espelho público da Binance (spot)
 → OKX. A fonte em uso é exibida no cabeçalho do gráfico.
 
-Forex, commodities, índices e ações da B3: o histórico vai embutido na página (baixado pelo servidor) e o navegador assina o
-streaming do Yahoo Finance (``wss://streamer.finance.yahoo.com``, mensagens protobuf em base64): cada negociação move o candle.
-Algumas bolsas chegam atrasadas (~15 min na B3); o mercado fechado não envia negociações.
-
 Os indicadores são recalculados no navegador a cada negociação com as mesmas
 fórmulas de ``core/indicators.py``.
 """
@@ -32,7 +28,7 @@ def chart_height(cfg: dict, base: int = 640) -> int:
 
 
 def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, lines: list[dict],
-                        positions: list[dict], height: int, history=None, prev_close: float | None = None) -> str:
+                        positions: list[dict], height: int) -> str:
     """``lines``: [{"price", "color", "title", "style": "solid|dashed|dotted"}];
     ``positions``: posições abertas no ativo (para o P&L ao vivo)."""
     ind_keys = ("ema_on", "ema_fast", "ema_slow", "ema_trend_on", "ema_trend", "bb_on", "bb_period", "bb_std", "vwap_on",
@@ -41,21 +37,11 @@ def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, l
                 "adx_on", "adx_period", "obv_on")
     pos = [{**{k: p.get(k) for k in ("side", "qty", "entry", "fee_pct", "fees_paid", "margin", "stop_loss", "take_profit", "leverage")},
             "fx": p.get("fx", 1.0)} for p in positions]
-    extra = {}
-    from core import markets
+    from core.data import okx_base
 
-    if markets.is_crypto(market):
-        from core.data import okx_base
-
-        base, mult = okx_base(symbol)
-    else:  # Yahoo: histórico embutido + streaming no navegador
-        base, mult = symbol, 1
-        rows = [[int(t.timestamp() * 1000), float(o), float(h), float(l), float(c), float(v)]
-                for t, o, h, l, c, v in zip(history["time"], history["open"], history["high"], history["low"], history["close"], history["volume"])]
-        extra = {"yahoo": markets.yahoo_symbol(market, symbol.upper()), "history": rows[-1000:], "prev_close": prev_close,
-                 "label": markets.MARKETS[market].label, "no_volume": bool(history.attrs.get("no_volume"))}
+    base, mult = okx_base(symbol)
     conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height,
-                       "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos, **extra})
+                       "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos})
     return _TEMPLATE.replace("__LWC__", LWC_URL).replace("__CONF__", conf)
 
 
@@ -84,18 +70,17 @@ const C = __CONF__, I = C.ind, L = LightweightCharts;
 const SEC = {"1m":60,"3m":180,"5m":300,"15m":900,"30m":1800,"1h":3600,"2h":7200,"4h":14400,"6h":21600,"12h":43200,"1d":86400,"3d":259200,"1w":604800,"1M":2592000}[C.interval];
 const OKX_BAR = {"1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m","1h":"1H","2h":"2H","4h":"4H","6h":"6Hutc","12h":"12Hutc","1d":"1Dutc","3d":"3Dutc","1w":"1Wutc","1M":"1Mutc"}[C.interval];
 const TZ = -new Date().getTimezoneOffset() * 60;  // exibe no fuso do navegador
-const Y = !!C.yahoo;  // forex, commodities, índices e ações: histórico embutido + streaming do Yahoo
 const fut = C.market === "futures";
 const okxInst = C.okx_base + "-USDT" + (fut ? "-SWAP" : "");
 const M = C.okx_mult, VI = fut ? 6 : 5;  // OKX: preço por moeda (×M p/ pares 1000X da Binance); volume em moeda-base
 const okxRow = k => row(+k[0], k[1] * M, k[2] * M, k[3] * M, k[4] * M, k[VI] / M);
 const $ = id => document.getElementById(id);
 const UP = "#26a69a", DN = "#ef5350";
-$("sym").textContent = C.symbol + (Y ? " · " + C.label : fut ? " · Perpétuo" : " · Spot") + " · " + C.interval;
+$("sym").textContent = C.symbol + (fut ? " · Perpétuo" : " · Spot") + " · " + C.interval;
 const fmt = v => v == null || isNaN(v) ? "—" : Math.abs(v) >= 100
   ? v.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})
   : v.toLocaleString("pt-BR", {maximumSignificantDigits: 6});
-const UNIT = Y ? "USD" : "USDT";
+const UNIT = "USDT";
 const money = v => (v >= 0 ? "+" : "−") + Math.abs(v).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 // ------------------------------------------------------------- indicadores
@@ -219,7 +204,7 @@ function upsert(c) {
 function showPrice(c) {
   const prev = data.length > 1 ? data[data.length - 2].close : c.open;
   $("px").textContent = fmt(c.close); $("px").className = c.close >= prev ? "up" : "dn";
-  if (open24) { const ch = (c.close / open24 - 1) * 100; $("chg").textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + (Y ? "% no dia" : "% 24h"); $("chg").className = ch >= 0 ? "up" : "dn"; }
+  if (open24) { const ch = (c.close / open24 - 1) * 100; $("chg").textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "% 24h"; $("chg").className = ch >= 0 ? "up" : "dn"; }
   $("ticks").textContent = ticks ? ticks + " atualizações" : "";
   if (POS.length) {
     let total = 0, margin = 0;
@@ -251,8 +236,7 @@ function status(txt, cls) { $("st").textContent = txt; $("dot").className = cls 
 const row = (t, o, h, l, c, v) => ({time: t / 1000 + TZ, utc: t / 1000, open: +o, high: +h, low: +l, close: +c, volume: +v});
 const SOURCES = [];
 const sl = C.symbol.toLowerCase();
-if (Y) SOURCES.push({name: "Yahoo Finance", kind: "yahoo"});
-else if (fut) SOURCES.push({name: "Binance Futuros", kind: "bn", rest: `https://fapi.binance.com/fapi/v1/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
+if (fut) SOURCES.push({name: "Binance Futuros", kind: "bn", rest: `https://fapi.binance.com/fapi/v1/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
   t24: `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${C.symbol}`, ws: `wss://fstream.binance.com/ws/${sl}@kline_${C.interval}`});
 else {
   SOURCES.push({name: "Binance Spot", kind: "bn", rest: `https://api.binance.com/api/v3/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
@@ -260,7 +244,7 @@ else {
   SOURCES.push({name: "Binance Spot (espelho)", kind: "bn", rest: `https://data-api.binance.vision/api/v3/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
     t24: `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${C.symbol}`, ws: `wss://data-stream.binance.vision/ws/${sl}@kline_${C.interval}`});
 }
-if (!Y) SOURCES.push({name: fut ? "OKX Perpétuo" : "OKX Spot", kind: "okx"});
+SOURCES.push({name: fut ? "OKX Perpétuo" : "OKX Spot", kind: "okx"});
 
 async function okxHistory() {
   let rows = [], after = "", url = "candles";
@@ -274,59 +258,15 @@ async function okxHistory() {
   return rows.reverse().map(okxRow);
 }
 async function history(src) {
-  if (src.kind === "yahoo") { open24 = C.prev_close; return C.history.map(k => row(k[0], k[1], k[2], k[3], k[4], k[5])); }
   if (src.kind === "okx") return okxHistory();
   const r = await fetch(src.rest); if (!r.ok) throw new Error("HTTP " + r.status);
   try { open24 = +(await (await fetch(src.t24)).json()).openPrice; } catch (e) {}
   return (await r.json()).map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
 }
 
-// ---- Yahoo Finance: mensagens protobuf (campos: 1 símbolo, 2 preço float32, 3 horário ms, 9 volume do dia, 22 tamanho do negócio)
-function pbParse(buf) {
-  let i = 0; const out = {};
-  const varint = () => { let r = 0, mul = 1, b; do { b = buf[i++]; r += (b & 0x7f) * mul; mul *= 128; } while (b & 0x80); return r; };
-  const zz = n => n % 2 === 0 ? n / 2 : -(n + 1) / 2;
-  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  while (i < buf.length) {
-    const tag = varint(), f = Math.floor(tag / 8), w = tag % 8;
-    if (w === 0) { const v = varint(); out[f] = (f === 3 || f === 9 || f === 22) ? zz(v) : v; }
-    else if (w === 5) { out[f] = dv.getFloat32(i, true); i += 4; }
-    else if (w === 1) { out[f] = dv.getFloat64(i, true); i += 8; }
-    else if (w === 2) { const n = varint(); out[f] = buf.subarray(i, i + n); i += n; }
-    else break;
-  }
-  return out;
-}
-function yahooTick(tk) {
-  const last = data[data.length - 1]; if (!last || !(tk.p > 0)) return;
-  const p = tk.p, size = tk.size > 0 ? tk.size : 0;
-  const bucket = SEC < 86400 ? Math.floor(tk.t / 1000 / SEC) * SEC : last.utc;
-  if (bucket < last.utc) return;  // negócio mais antigo que o último candle do histórico
-  if (bucket === last.utc) upsert({...last, high: Math.max(last.high, p), low: Math.min(last.low, p), close: p, volume: last.volume + (C.no_volume ? 0 : size)});
-  else upsert(row(bucket * 1000, p, p, p, p, C.no_volume ? 1 : size));
-}
 let ws = null, retry = 0, pingTimer = null;
-function yahooStream() {
-  status("conectando ao Yahoo Finance…");
-  let got = false, quiet = null;
-  ws = new WebSocket("wss://streamer.finance.yahoo.com/?version=2");
-  const sub = () => ws.readyState === 1 && ws.send(JSON.stringify({subscribe: [C.yahoo]}));
-  ws.onopen = () => { sub(); clearInterval(pingTimer); pingTimer = setInterval(sub, 15000);
-    quiet = setTimeout(() => { if (!got) status("conectado · aguardando negócios (mercado fechado ou sem movimento)", ""); }, 12000); };
-  ws.onmessage = ev => {
-    try {
-      const m = JSON.parse(ev.data); if (!m.message) return;
-      const bin = Uint8Array.from(atob(m.message), ch => ch.charCodeAt(0)), d = pbParse(bin);
-      if (d[2] == null) return;
-      if (!got) { got = true; clearTimeout(quiet); retry = 0; status("ao vivo · Yahoo Finance" + (C.market === "stocks" ? " (atraso de ~15 min na B3)" : ""), "live"); }
-      yahooTick({p: d[2], t: d[3] || Date.now(), size: d[22]});
-    } catch (e) {}
-  };
-  ws.onclose = () => { clearTimeout(quiet); status("reconectando…", "err"); setTimeout(yahooStream, Math.min(30000, 1000 * 2 ** retry++)); };
-}
 function stream(i) {
   const src = SOURCES[i]; if (!src) { status("sem fluxo ao vivo — recarregue a página", "err"); return; }
-  if (src.kind === "yahoo") { yahooStream(); return; }
   let opened = false;
   status("conectando a " + src.name + "…");
   ws = new WebSocket(src.kind === "okx" ? "wss://ws.okx.com/ws/v5/business" : src.ws);

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import advisor, ai, htf, indicators as ind, markets, personalities, quota, risk
+from core import advisor, ai, htf, indicators as ind, personalities, quota, ranking, risk
 from core import paper
 from core.broker import get_broker
 from core.data import get_funding_rate
@@ -44,16 +44,24 @@ def _clean(v):
     return round(v, 6) if isinstance(v, float) else v
 
 
-def market_closed(profile: BotProfile, cfg: dict) -> bool:
-    """Forex, commodities, índices e ações: sem negócios recentes = mercado fechado (a cripto opera 24 h)."""
-    if profile.is_crypto:
-        return False
-    try:
-        from core.data import get_ticker
+def ensure_ranking(profile: BotProfile, cfg: dict, progress=None) -> bool:
+    """Atualiza o ranking dos bots se passou uma semana (ver ``core/ranking.py``). Devolve True se recalculou."""
+    return ranking.refresh_if_stale(profile.market, cfg["interval"], progress=progress)
 
-        return not markets.is_open(get_ticker(cfg["symbol"], profile.market).market_time)
-    except Exception:  # noqa: BLE001 - sem cotação, não abre ordem
-        return True
+
+def pick_bot(profile: BotProfile, cfg: dict, df: pd.DataFrame) -> tuple[dict | None, dict]:
+    """Bot mais recomendado para o contexto do gráfico agora, no tempo gráfico atual, segundo o ranking semanal.
+
+    Só entram bots treinados neste mercado e tempo gráfico, sem selo fraco e com vantagem comprovada (R médio positivo) no
+    contexto atual. Devolve ``(bot, info)``; ``bot`` é None quando nenhum tem vantagem — então o melhor é aguardar."""
+    sc = advisor.scenario(df, cfg)
+    vies = advisor.bias(sc)
+    ok_ids = {p["id"] for p in personalities.allowed(profile.market, cfg["interval"])}
+    cands = advisor.candidates(profile, cfg, sc, vies, cfg.get("personality"), top=10)
+    good = [c for c in cands if c["mesmo_tempo"] and c["id"] in ok_ids and (c["contexto_r"] or 0) > 0]
+    good.sort(key=lambda c: -c["pontuacao"])
+    info = {"contexto": sc["contexto"], "contexto_nome": sc["contexto_nome"], "candidatos": [c["id"] for c in good]}
+    return (personalities.get(good[0]["id"]) if good else None), info
 
 
 def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
@@ -61,8 +69,19 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     symbol, interval = cfg["symbol"], cfg["interval"]
     broker = get_broker(profile.key)
     acct = broker.account()
-    st_ = broker.limit_stats(cfg, {symbol: price})
+    st_ = broker.stats({symbol: price})
     personality = personalities.get(cfg.get("personality")) or personalities.get(personalities.DEFAULT_BY_BOT.get(profile.key))
+    waiting = ""
+    if cfg.get("auto_bot", True):  # fechamento do candle: o bot mais recomendado para o contexto assume
+        try:
+            best, pinfo = pick_bot(profile, cfg, df)
+        except Exception:  # noqa: BLE001 - a escolha automática nunca derruba a análise
+            best, pinfo = personality, {}
+        if best is not None:
+            personality = best
+        elif pinfo:
+            waiting = (f"Nenhum bot tem vantagem comprovada em {pinfo['contexto_nome']} no {interval} segundo o ranking "
+                       "semanal: o melhor agora é aguardar.")
     if cfg.get("context_mode") == "favoraveis" and personality:
         best = (personality.get("research") or {}).get("best_contexts")
         if best:
@@ -76,13 +95,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
                        "bb_up", "bb_mid", "bb_low", "atr", "adx", "di_plus", "di_minus", "stoch_k", "vwap", "st_line", "st_dir")}
     budget = risk.risk_budget(cfg, st_["equity"])
     risk_rules = {
-        "perda_maxima_por_trade_usdt": round(budget, 2), "rr_minimo": cfg["min_rr"],
-        "alavancagem": risk.effective_leverage(cfg), "modo_margem": cfg["margin_mode"],
-        "meta_operacoes_dia": cfg["max_trades_day"], "operacoes_hoje": st_["trades_today"],
-        "meta_lucro_dia_usdt": cfg["daily_profit_target"], "limite_perda_dia_usdt": cfg["daily_max_loss"],
-        "resultado_hoje_usdt": round(st_["pnl_today"], 2),
-        "operacoes_contadas": st_["scope_trades"].strip(" ·"), "resultado_contado": st_["scope_pnl"].strip(" ·"), "max_posicoes_abertas": cfg["max_open_positions"],
-        "taxa_pct": cfg["fee_pct"],
+        "perda_maxima_por_trade_usdt": round(budget, 2), "alavancagem": risk.effective_leverage(cfg),
+        "modo_margem": cfg["margin_mode"], "resultado_hoje_usdt": round(st_["pnl_today"], 2), "taxa_pct": cfg["fee_pct"],
     }
     positions = [{k: p.get(k) for k in ("side", "qty", "entry", "stop_loss", "take_profit", "leverage", "liquidation",
                                          "opened", "source")}
@@ -120,7 +134,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     if api_key:
         try:
             decision = ai.ask_ai(context, api_key=api_key, model=cfg["ai_model"], temperature=float(cfg["ai_temperature"]),
-                                 extras=extras)
+                                 extras=extras, persona=cfg.get("ai_persona"))
         except Exception as exc:  # noqa: BLE001
             error = str(exc)
             decision = ai.rules_fallback(plan_d, f"falha na IA ({exc})")
@@ -129,24 +143,28 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
 
     if not decision.advice and rules_adv:
         decision.advice = rules_adv
-    # Modo filtro (padrão): a IA só confirma ou veta o sinal das regras testadas no backtest e usa o
-    # stop/alvo validados; não abre operação sem sinal das regras nem inverte a direção.
-    if decision.source == "ia" and cfg.get("ai_mode", "filtro") == "filtro" and decision.decision in ("BUY", "SELL"):
+    if decision.source == "ia" and not cfg.get("ai_intervene"):
+        # A IA só explica: a decisão é a das regras da personalidade; o texto e as dicas da IA acompanham.
+        ruled = ai.rules_fallback(plan_d, "")
+        ruled.advice, ruled.model, ruled.risks = decision.advice, decision.model, decision.risks
+        ruled.invalidation, ruled.management, ruled.usage = decision.invalidation, decision.management, decision.usage
+        ruled.reasoning = f"[Sinal das regras: {plan_d['direction']}] " + decision.reasoning
+        decision = ruled
+    elif decision.source == "ia" and decision.decision in ("BUY", "SELL"):
+        # A IA interfere: confirma ou veta a ativação do bot; sem sinal das regras ela não abre operação sozinha e usa o
+        # stop/alvo validados.
         if plan_d["direction"] == "HOLD":
-            decision.reasoning = ("[Modo filtro] Sem sinal das regras da personalidade: a IA não abre operação sozinha. "
-                                  "Leitura da IA: " + decision.reasoning)
+            decision.reasoning = ("[IA vetou] Sem sinal das regras do bot neste candle. Leitura da IA: " + decision.reasoning)
             decision.decision = "HOLD"
         elif plan_d["direction"] != decision.decision:
-            decision.reasoning = ("[Modo filtro] A IA discordou da direção das regras: operação vetada. "
-                                  "Leitura da IA: " + decision.reasoning)
+            decision.reasoning = ("[IA vetou] A IA discordou da direção do sinal das regras. Leitura da IA: " + decision.reasoning)
             decision.decision = "HOLD"
         else:
             decision.order_type, decision.entry = "MARKET", plan_d["entry"]
             decision.stop_loss, decision.take_profit = plan_d["stop_loss"], plan_d["take_profit"]
-            decision.reasoning = "[Modo filtro] A IA confirmou o sinal das regras. " + decision.reasoning
-
-    if decision.decision in ("BUY", "SELL") and market_closed(profile, cfg):
-        decision.reasoning = "[Mercado fechado] Sem negócios agora: nenhuma ordem a mercado é aberta. " + decision.reasoning
+            decision.reasoning = "[IA confirmou o sinal das regras] " + decision.reasoning
+    if waiting and decision.decision in ("BUY", "SELL"):
+        decision.reasoning = f"[Bot automático em espera] {waiting} " + decision.reasoning
         decision.decision = "HOLD"
 
     check = None
@@ -157,8 +175,6 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
             decision.take_profit = None
         check = risk.check_trade(cfg, st_, decision.decision, entry, decision.stop_loss, decision.take_profit, profile.market,
                                  trailing=trailing)
-        if decision.confidence < int(cfg["ai_min_confidence"]):
-            check.add("confianca", f"Confiança {decision.confidence}% abaixo do mínimo configurado ({cfg['ai_min_confidence']}%).")
 
     result = AnalysisResult(plan=plan_d, decision=decision, check=check, price=price, symbol=symbol,
                             interval=interval, time=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=error,
@@ -186,7 +202,6 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
             fee_pct=float(cfg["fee_pct"]), slippage_pct=float(cfg["slippage_pct"]),
             source=d.source, note=d.reasoning[:300], max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"],
             personality=result.personality, trail_dist=result.plan.get("trail_dist"), be_r=result.plan.get("be_r") or 0.0,
-            fx=calc.fx,
         )
     else:
         raise ValueError("Não há ordem aprovada para executar.")
@@ -225,12 +240,16 @@ def prepare(df: pd.DataFrame, cfg: dict, htf_raw: pd.DataFrame | None = None,
 
 def needs_htf(cfg: dict) -> bool:
     """A personalidade escolhida usa filtro de tendência de tempo maior/intermediário?"""
+    if cfg.get("auto_bot", True):  # qualquer bot do ranking pode ser o escolhido no fechamento do candle
+        return True
     p = personalities.get(cfg.get("personality"))
     return bool(p and any(htf.needs(p.get("filters"))))
 
 
 def htf_frames(getter, cfg: dict, n: int, market: str):
     """Candles dos tempos maiores exigidos pela personalidade escolhida: (htf_raw, mtf_raw)."""
+    if cfg.get("auto_bot", True):
+        return htf.frames(getter, cfg["symbol"], cfg["interval"], n, market, {"htf_trend": True, "mtf_trend": True})
     p = personalities.get(cfg.get("personality"))
     return htf.frames(getter, cfg["symbol"], cfg["interval"], n, market, (p or {}).get("filters"))
 
@@ -268,7 +287,7 @@ def check_armed_plan(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: fl
                              take_profit=st_["take_profit"], confidence=75, reasoning=why, risks="Plano condicional: confira o gestor de risco.",
                              model="plano", source="ia" if rec.get("origem") == "ia" else "regras")
     broker = get_broker(bot)
-    stats = broker.limit_stats(cfg, {cfg["symbol"]: price})
+    stats = broker.stats({cfg["symbol"]: price})
     trailing = bool(st_["trail_dist"])
     check = risk.check_trade(cfg, stats, side, price, decision.stop_loss, decision.take_profit, profile.market, trailing=trailing)
     plan_d = {"direction": side, "score": 0.0, "regime": "plano condicional", "entry": price, "stop_loss": decision.stop_loss,

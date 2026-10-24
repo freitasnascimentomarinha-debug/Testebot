@@ -2,9 +2,9 @@
 
 A IA recebe o contexto completo (candles, indicadores, votos das habilidades,
 plano por regras, níveis do usuário, regras de risco e estado da conta) e
-devolve um JSON estrito com a ordem a ser programada. A resposta sempre passa
-pelo gestor de risco antes de virar ordem — a IA nunca ignora os limites do
-usuário.
+devolve um JSON estrito com a ordem a ser programada. A IA explica o
+mercado e dá uma dica útil; só interfere na decisão de ativar o bot (confirmando ou vetando o sinal das regras) quando o
+usuário permite.
 """
 from __future__ import annotations
 
@@ -40,20 +40,36 @@ class AIDecision:
         return asdict(self)
 
 
+# Tom da IA nas explicações (escolhido pelo usuário em Configurações → IA)
+AI_PERSONAS = {
+    "professor": ("🎓 Professor didático", "Explica como um professor paciente: usa linguagem simples e, quando útil, ensina o conceito em uma frase."),
+    "direto": ("⚡ Direto ao ponto", "Fala como um trader experiente com pressa: frases curtas, sem rodeios, só o que muda a decisão."),
+    "cauteloso": ("🛡️ Gestor cauteloso", "Fala como um gestor de risco: destaca primeiro o que pode dar errado e só depois a oportunidade."),
+    "mentor": ("🧭 Mentor motivador", "Fala como um mentor calmo e encorajador: reforça disciplina e processo, sem prometer resultado."),
+    "quant": ("📊 Analista quantitativo", "Fala como um analista quantitativo: números e probabilidades primeiro, opinião por último."),
+}
+DEFAULT_PERSONA = "professor"
+
+
+def persona_text(key: str | None) -> str:
+    label, text = AI_PERSONAS.get(key or "", AI_PERSONAS[DEFAULT_PERSONA])
+    return f"Seu estilo de comunicação ({label}): {text}"
+
+
 SYSTEM_PROMPT = """Você é um trader profissional e analista técnico quantitativo de criptomoedas, com mais de 15 anos de
 mercado (price action, estrutura de mercado, volume, tendência multitemporal, gestão de risco), e também PROFESSOR: explica em
 português claro o PORQUÊ de cada conclusão, cita os números recebidos (ADX, RSI, volume relativo, ATR, níveis, tendência do tempo
 maior) e, quando útil, ensina o conceito em uma frase. Tom técnico, didático e direto; sem promessas de lucro e sem exageros.
+Seu papel é EXPLICAR RESUMIDAMENTE o que está acontecendo no mercado e dar uma DICA ÚTIL para o contexto atual. O campo
+"papel_da_ia" informa se o usuário deixou você INTERFERIR na decisão de ativar o bot ("interferir": o sistema só abre a operação
+se o seu "decision" confirmar o sinal das regras) ou apenas explicar ("explicar": o "decision" é só a sua leitura e não abre nada).
 Você recebe dados REAIS já calculados por habilidades de programação. Regras obrigatórias:
 1. Responda SOMENTE com um objeto JSON válido, sem texto fora dele.
-2. Respeite o estilo do bot (horizonte), o mercado (spot não permite venda a descoberto
-   sem margem) e as regras de risco recebidas. Nunca sugira stop mais distante do que o
-   permitido pela perda máxima por trade — o tamanho da posição será calculado pelo sistema.
+2. Respeite o estilo do bot (horizonte) e o mercado (spot não permite venda a descoberto sem margem). O tamanho da
+   posição é calculado pelo sistema a partir da perda máxima por trade.
 3. Toda entrada (BUY/SELL) exige stop_loss numérico coerente com o lado (compra: stop < entrada; venda: stop > entrada) e,
-   salvo na personalidade sem alvo (modo surfar), take_profit coerente (compra: entrada < alvo; venda: alvo < entrada) com
-   relação risco:retorno maior ou igual ao mínimo informado.
-4. Prefira HOLD quando os sinais forem conflitantes, o regime for lateral sem ponto claro
-   ou as metas diárias estiverem próximas. Preservar capital é prioridade.
+   salvo na personalidade sem alvo (modo surfar), take_profit coerente (compra: entrada < alvo; venda: alvo < entrada).
+4. Prefira HOLD quando os sinais forem conflitantes ou o regime for lateral sem ponto claro. Preservar capital é prioridade.
 5. Use CLOSE apenas quando houver posição aberta pelo bot (source diferente de "manual") no ativo e o
    cenário tiver se invertido. Posições "manual" são do usuário: considere-as como exposição já existente,
    mas nunca as encerre.
@@ -61,8 +77,8 @@ Você recebe dados REAIS já calculados por habilidades de programação. Regras
    Se o cenário não se encaixar na estratégia dela, responda HOLD. As "instrucoes_do_usuario" complementam.
 7. "order_type": "LIMIT" só quando houver nível técnico claro para entrada melhor
    (informe "entry"); caso contrário use "MARKET".
-8. "analise" é obrigatória: "cenario" (4 a 7 frases: contexto, força da tendência, o que o volume diz, tempo gráfico maior,
-   estrutura de suportes e resistências, com números), "leitura_tecnica" (3 a 6 itens curtos com números),
+8. "analise" é obrigatória: "cenario" (RESUMO de 2 a 4 frases: contexto, força da tendência, volume e tempo gráfico maior, com números),
+   "leitura_tecnica" (3 a 5 itens curtos com números),
    "melhor_oportunidade" (qual é a melhor oportunidade NO TEMPO GRÁFICO ATUAL: onde, sob qual condição, por quê e o que
    invalida a ideia) e "dica" (1 a 2 frases práticas e didáticas).
 9. "bot_recomendado": escolha o melhor bot para ESTE cenário SOMENTE entre os "candidatos_de_bot" (use o campo id). Priorize
@@ -118,6 +134,7 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
         "bot": {"estilo": profile.name, "mercado": profile.market_label, "horizonte": profile.horizon,
                 "ativo": symbol, "timeframe": interval,
                 "venda_permitida": bool(cfg.get("allow_short")) and (profile.market == "futures" or cfg.get("leverage_on"))},
+        "papel_da_ia": "interferir" if cfg.get("ai_intervene") else "explicar",
         "regras_de_risco": risk_rules,
         "conta_simulada": account,
         "posicoes_abertas_no_ativo": positions,
@@ -199,7 +216,8 @@ def build_advice(data: dict, rules: dict, extras: dict) -> dict:
     return advice
 
 
-def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2, extras: dict | None = None) -> AIDecision:
+def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2, extras: dict | None = None,
+           persona: str | None = None) -> AIDecision:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -207,7 +225,7 @@ def ask_ai(context: dict, *, api_key: str, model: str, temperature: float = 0.2,
         "X-Title": "TradeBot Platform",
     }
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": SYSTEM_PROMPT + "\n" + persona_text(persona)},
         {"role": "user", "content": "Contexto do mercado e da conta (JSON):\n" + json.dumps(context, ensure_ascii=False, default=str)},
     ]
     # Modelos que "raciocinam" gastam tokens antes de responder e podem devolver conteúdo vazio ou cortado. Por isso há uma

@@ -13,8 +13,7 @@ SETTINGS_FILE = "settings.json"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 
 # Par de médias móveis exibido por padrão em cada estilo (rápida, lenta)
-EMA_PAIRS = {"day": (9, 21), "swing": (21, 50), "long": (50, 200), "forex": (9, 21), "commodities": (21, 50), "indices": (21, 50),
-             "stocks": (21, 50)}
+EMA_PAIRS = {"day": (9, 21), "swing": (21, 50), "long": (50, 200)}
 
 # Chaves de exibição de indicadores; versões antigas das configurações são migradas
 # uma vez para o novo padrão enxuto (2 médias + volume).
@@ -23,39 +22,26 @@ INDICATOR_KEYS = ("ema_on", "ema_fast", "ema_slow", "bb_on", "vwap_on", "supertr
 
 
 def default_settings(profile: BotProfile) -> dict:
-    from core import markets
-
-    mk = markets.MARKETS.get(profile.market)  # None na cripto
-    futures = profile.market == "futures" or (mk is not None and mk.max_leverage > 1)
+    futures = profile.market == "futures"
     return {
         # Mercado
-        "symbol": mk.default_symbol if mk else "BTCUSDT",
+        "symbol": "BTCUSDT",
         "interval": profile.default_interval,
         "candles": profile.candles,
         # Risco por operação
         "risk_mode": "% do saldo",      # "USDT" ou "% do saldo" (banca-padrão pequena: 100 USDT)
         "max_loss_usdt": 2.0,           # perda máxima aceitável por trade
         "max_loss_pct": 2.0,
-        "min_rr": 1.5,                  # relação risco:retorno mínima
         "atr_sl_mult": profile.atr_sl_mult,
         "atr_tp_mult": profile.atr_tp_mult,
-        # Metas diárias
-        "max_trades_day": 6 if futures else 3,
-        "daily_profit_target": 10.0,    # ao atingir, o bot para no dia
-        "daily_max_loss": 6.0,          # ao atingir, o bot para no dia
-        "max_open_positions": 2 if futures else 3,
-        # Escopo dos limites (você × bot)
-        "limits_trades_scope": "bot",       # meta de operações e posições simultâneas
-        "limits_pnl_scope": "carteira",     # meta de lucro e limite de perda do dia
-        "manual_limits": "livre",           # suas ordens manuais: livre | pnl | todos
         # Alavancagem
         "leverage_on": profile.leverage_on_by_default,
         "leverage": profile.default_leverage,
         "margin_mode": "Isolada",
-        "allow_short": mk.allow_short if mk else futures,
+        "allow_short": futures,
         # Custos simulados
-        "fee_pct": mk.fee_pct if mk else (0.05 if futures else 0.10),
-        "slippage_pct": mk.slippage_pct if mk else 0.02,
+        "fee_pct": 0.05 if futures else 0.10,
+        "slippage_pct": 0.02,
         # Indicadores
         # Indicadores: por padrão só duas médias móveis + volume (os demais são adicionados pelo usuário)
         "ema_on": True, "ema_fast": EMA_PAIRS[profile.key][0], "ema_slow": EMA_PAIRS[profile.key][1],
@@ -79,11 +65,12 @@ def default_settings(profile: BotProfile) -> dict:
         "context_mode": "sempre",   # "sempre" ou "favoraveis" (só nos contextos favoráveis da personalidade)
         # IA
         "ai_model": DEFAULT_MODEL,
-        "ai_mode": "filtro",         # "filtro": IA confirma/veta o sinal das regras · "livre": IA decide sozinha
+        "ai_intervene": False,       # False: a IA só explica e dá dicas · True: ela confirma ou veta a ativação do bot
+        "ai_persona": "professor",   # tom das explicações (core/ai.py: AI_PERSONAS)
+        "auto_bot": True,            # no fechamento do candle usa o bot mais recomendado para o contexto (ranking semanal)
         "ai_temperature": 0.2,
         "ai_auto_execute": False,
         "ai_auto_arm": True,         # piloto automático arma os planos condicionais propostos pela IA
-        "ai_min_confidence": 60,
         "ai_candles_context": 60,
         "ai_instructions": "",
         # Automação

@@ -4,20 +4,21 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import fastsim, personalities as P
+from core import accounts, fastsim, personalities as P
 from core.ai import strategy_from_text
 from core.profiles import PROFILES
 from core.settings import DEFAULT_MODEL, load_settings, save_settings
 from core.strategy import SKILLS
 from core.paper import account_id, get_account, stats
+from core.storage import current_user
 from core.ui import api_key, cached_symbols, cached_votes, fmt
 
 st.title("🏆 Personalidades dos bots")
 st.caption("Cada personalidade é uma estratégia: quais indicadores o bot usa, quando entra, em que direção e com que "
-           "stop/alvo. Escolha a que performa melhor no ranking, crie a sua e compartilhe com todos.")
+           "stop/alvo. Escolha a que performa melhor no ranking, ou crie a sua e compartilhe com a comunidade ou só com quem você escolher.")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
-MARKET_LABEL = {"futures": "Futuros", "spot": "Spot (só compra)", **{k: m.label for k, m in P.markets.MARKETS.items()}}
+MARKET_LABEL = {"futures": "Futuros", "spot": "Spot (só compra)"}
 
 
 def mlabel(m: str) -> str:
@@ -176,7 +177,9 @@ with tab_lib:
             c1, c2 = st.columns([3, 1.2])
             using = [PROFILES[b].name for b, pid in in_use.items() if pid == p["id"]]
             c1.markdown(f"#### {p['name']}  \n"
-                        f"{'Pronta' if p.get('builtin') else 'Da comunidade'} · por **{p.get('author') or '—'}**"
+                        f"{'Pronta' if p.get('builtin') else P.VISIBILITY.get(p.get('visibility') or 'comunidade', '')} · por **{p.get('author') or '—'}**"
+                        + ("" if p.get("builtin") or p.get("visibility") != "usuarios" or not p.get("shared_with")
+                           else f" · com: {', '.join(p['shared_with'])}")
                         + (f" · em uso: {', '.join(using)}" if using else ""))
             c1.write(p.get("summary") or "")
             with c1.expander("Ver estratégia completa"):
@@ -207,11 +210,11 @@ with tab_lib:
                                       label_visibility="collapsed")
                 if st.button("Usar neste bot", key=f"use_{p['id']}", width="stretch", type="primary"):
                     use_in_bot(p["id"], target)
-                if st.button("Duplicar e editar" if p.get("builtin") else "Editar", key=f"edit_{p['id']}",
-                             width="stretch"):
-                    st.session_state["persona_template"] = {**p, "duplicate": bool(p.get("builtin"))}
+                mine = P.can_edit(p, current_user())
+                if st.button("Editar" if mine else "Duplicar e editar", key=f"edit_{p['id']}", width="stretch"):
+                    st.session_state["persona_template"] = {**p, "duplicate": not mine}
                     st.info("Abra a aba ✍️ Criar estratégia: os campos foram preenchidos.")
-                if not p.get("builtin"):
+                if mine:
                     if st.checkbox("Confirmar exclusão", key=f"delok_{p['id']}"):
                         if st.button("Excluir", key=f"del_{p['id']}", width="stretch"):
                             P.delete_custom(p["id"])
@@ -237,6 +240,8 @@ def load_template(p: dict, duplicate: bool) -> None:
     ss["pe_trail"] = float(p.get("trail_atr") or 3.0)
     ss["pe_be"] = float(p.get("be_r") or 0.0)
     ss["pe_markets"] = p.get("markets", ["futures", "spot"])
+    ss["pe_visibility"] = "privado" if duplicate and p.get("builtin") else (p.get("visibility") or "comunidade")
+    ss["pe_shared"] = list(p.get("shared_with") or [])
     f = p.get("filters", {})
     for k in P.FILTERS:
         ss[f"pe_f_{k}"] = bool(f.get(k))
@@ -254,7 +259,7 @@ if "persona_template" in st.session_state:
 for key, default in (("pe_name", ""), ("pe_author", ""), ("pe_summary", ""), ("pe_desc", ""), ("pe_dir", "misto"),
                      ("pe_skills", ["tendencia", "momentum"]), ("pe_threshold", 30), ("pe_sl", 1.5), ("pe_tp", 3.0),
                      ("pe_tf", ""), ("pe_exit", "tp"), ("pe_trail", 3.0), ("pe_be", 0.0), ("pe_markets", ["futures", "spot"]), ("pe_adx_min", 0), ("pe_adx_max", 0), ("pe_vol_mult", 0.0),
-                     ("pe_id", None)):
+                     ("pe_id", None), ("pe_visibility", "comunidade"), ("pe_shared", [])):
     st.session_state.setdefault(key, default)
 
 with tab_new:
@@ -324,8 +329,18 @@ with tab_new:
     st.number_input("Volume mínimo em relação à média (0 = sem filtro; ex.: 1,5 = 50% acima)", 0.0, 5.0, step=0.1,
                     key="pe_vol_mult")
 
+    st.markdown("**Compartilhamento**")
+    st.radio("Quem pode ver e usar esta estratégia", list(P.VISIBILITY), format_func=P.VISIBILITY.get, key="pe_visibility", horizontal=True,
+             help="Só você pode alterar ou excluir. Quem recebe a estratégia pode usá-la nos bots e vê-la no ranking.")
+    if st.session_state["pe_visibility"] == "usuarios":
+        others = [u for u in accounts.list_users() if u != current_user()] if accounts.enabled() else []
+        if others:
+            st.multiselect("Compartilhar com", others, key="pe_shared", placeholder="Escolha um ou mais usuários")
+        else:
+            st.info("O compartilhamento com usuários específicos exige as contas ligadas e outros usuários cadastrados.")
+
     c1, c2, _ = st.columns([1, 1, 2])
-    if c1.button("💾 Salvar e compartilhar", type="primary", width="stretch"):
+    if c1.button("💾 Salvar", type="primary", width="stretch"):
         ss = st.session_state
         if not ss["pe_name"].strip() or not ss["pe_skills"]:
             st.error("Dê um nome e escolha pelo menos um indicador.")
@@ -336,18 +351,26 @@ with tab_new:
                     "summary": ss["pe_summary"].strip(), "description": ss["pe_desc"].strip(),
                     "direction": ss["pe_dir"], "skills": weights, "threshold": ss["pe_threshold"],
                     "sl_atr": ss["pe_sl"], "tp_atr": ss["pe_tp"], "filters": filters,
-                    "markets": ss["pe_markets"] or ["futures", "spot"], "timeframes": ss["pe_tf"].strip()}
+                    "markets": ss["pe_markets"] or ["futures", "spot"], "timeframes": ss["pe_tf"].strip(),
+                    "visibility": ss["pe_visibility"], "shared_with": ss["pe_shared"] if ss["pe_visibility"] == "usuarios" else []}
             if ss["pe_exit"] == "surf":
                 data.update(trail_atr=ss["pe_trail"], be_r=ss["pe_be"])
             if editing:
                 old = P.get(editing) or {}
                 data.update(id=editing, created=old.get("created"))
-            saved = P.save_custom(data)
-            st.toast(f"“{saved['name']}” salva e compartilhada.", icon="✅")
-            st.session_state["persona_saved_msg"] = (f"“{saved['name']}” salva. Ela já aparece na Biblioteca, no Ranking "
-                                                "e na escolha de personalidade de cada bot.")
-            st.session_state["pe_reset"] = True
-            st.rerun()
+                if old.get("owner"):
+                    data["owner"] = old["owner"]
+            try:
+                saved = P.save_custom(data)
+            except PermissionError as exc:
+                st.error(str(exc))
+            else:
+                st.toast(f"“{saved['name']}” salva.", icon="✅")
+                st.session_state["persona_saved_msg"] = (
+                    f"“{saved['name']}” salva ({P.VISIBILITY[saved['visibility']].split(' ', 1)[1].lower()}). Ela aparece na "
+                    "Biblioteca, no Ranking e na escolha de personalidade de cada bot para quem tem acesso.")
+                st.session_state["pe_reset"] = True
+                st.rerun()
     if c2.button("Limpar", width="stretch"):
         st.session_state["pe_reset"] = True
         st.rerun()
@@ -385,15 +408,13 @@ with tab_bt:
 
     c1, c2, c3, c4 = st.columns([2.2, 1, 1, 1])
     symbols = cached_symbols(market)
-    default_sym = ("BTCUSDT",) if P.markets.is_crypto(market) else (P.markets.MARKETS[market].default_symbol,)
+    default_sym = ("BTCUSDT",)
     if st.session_state.get("sim_coins_market") != market:  # trocou de mercado: os ativos antigos não existem no novo
         st.session_state["sim_coins"] = [s_ for s_ in default_sym if s_ in symbols]
         st.session_state["sim_coins_market"] = market
     coins = c1.multiselect("Ativos", symbols, key="sim_coins",
                            help="Cada ativo é simulado e as operações entram na mesma banca, na ordem em que fecharam.")
     max_days = {"5m": 60, "15m": 120, "1h": 365, "4h": 900, "1d": 1500}[itv]
-    if not P.markets.is_crypto(market):  # histórico intradiário do Yahoo é limitado
-        max_days = {"5m": 55, "15m": 55, "1h": 700, "4h": 700, "1d": 1500}[itv]
     period_opts = [d for d in (7, 15, 30, 40, 60, 90, 180, 365, 730) if d <= max_days]
     days = c2.selectbox("Período (dias)", period_opts, index=period_opts.index(40) if 40 in period_opts else 0,
                         key="sim_days")
@@ -418,7 +439,7 @@ with tab_bt:
             for t in trades:
                 rows.append({**t, "moeda": sym})
             rs_ = [t["r"] for t in trades]
-            per_coin.append({"Moeda": sym.replace("USDT", "") if P.markets.is_crypto(market) else sym, "Operações": len(rs_),
+            per_coin.append({"Moeda": sym.replace("USDT", ""), "Operações": len(rs_),
                              "Acerto": (np.mean([r > 0 for r in rs_]) * 100) if rs_ else 0.0,
                              "R médio": float(np.mean(rs_)) if rs_ else 0.0})
             bar.progress(n_ / len(coins), text=f"{sym}: {len(trades)} operações")

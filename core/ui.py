@@ -1,15 +1,13 @@
 """Interface Streamlit compartilhada pelas três páginas de bot."""
 from __future__ import annotations
 
-from datetime import datetime
-
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import engine, markets, paper, personalities, regime, risk
+from core import ai as ai_mod, engine, execution, paper, personalities, ranking, regime, risk
 from core.broker import get_broker
-from core.charts import PLOTLY_CONFIG, build_chart, tradingview_widget
+from core.charts import tradingview_widget
 from core import leverage as lev_rules
 from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
 from core.profiles import PROFILES, SYMBOLS, BotProfile
@@ -63,25 +61,7 @@ def cached_brackets(symbol: str):
 def cached_votes(symbol: str, interval: str, market: str, days: int):
     """Votos de todas as habilidades (simulação rápida) para os últimos ``days`` dias + aquecimento.
     Calculado uma vez por moeda/timeframe e reaproveitado por todos os bots."""
-    from core import fastsim
-
-    cfg = {**default_settings(PROFILES[fastsim.bot_for(market, interval)]), "symbol": symbol, "interval": interval}
-    if not markets.is_crypto(market):  # custo total por lado = spread/corretagem + derrapagem (mesmo da pesquisa)
-        cfg["fee_pct"] = markets.MARKETS[market].fee_pct + markets.MARKETS[market].slippage_pct
-    n = int(days * fastsim.PER_DAY[interval]) + 260
-    from core import htf
-
-    raw = get_klines(symbol, interval, n, market)
-    try:  # tendência dos tempos maiores (para as personalidades com esses filtros)
-        htf_raw = get_klines(symbol, htf.HTF_OF[interval], htf.htf_candles(interval, n), market)
-    except Exception:  # noqa: BLE001
-        htf_raw = None
-    try:
-        mtf_raw = (get_klines(symbol, htf.MTF_OF[interval], int(n * htf.SECONDS[interval] / htf.SECONDS[htf.MTF_OF[interval]])
-                              + htf.CANDLES_NEEDED, market) if interval in htf.MTF_OF else None)
-    except Exception:  # noqa: BLE001
-        mtf_raw = None
-    return fastsim.prepare(raw, cfg, htf_raw, mtf_raw), cfg
+    return ranking.votes_for(symbol, interval, market, days, get_klines)
 
 
 def api_key() -> str | None:
@@ -135,21 +115,15 @@ def render_bot_page(bot: str) -> None:
     st.title(f"{profile.icon} Bot de {profile.name}")
     st.caption(f"{profile.market_label} · {profile.description} · Execução: **{broker.name}** com dados reais.")
 
+    execution_banner()
+
     # Seleção de ativo e timeframe -------------------------------------------
     c1, c2, c3, c4 = st.columns([2, 1.2, 1, 1.2])
-    if profile.is_crypto:
-        all_symbols = cached_symbols(profile.market)
-        options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
-        c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
-                     help="Clique e digite para buscar qualquer moeda negociada na Binance "
-                          f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
-    else:
-        codes = markets.symbols(profile.market)
-        if st.session_state.get(_k(bot, "symbol")) not in codes:
-            st.session_state[_k(bot, "symbol")] = markets.MARKETS[profile.market].default_symbol
-        c1.selectbox(f"Ativo ({len(codes)} em {markets.MARKETS[profile.market].label})", codes, key=_k(bot, "symbol"),
-                     format_func=lambda c: markets.display_name(profile.market, c),
-                     help="Digite para buscar pelo código ou pelo nome do ativo.")
+    all_symbols = cached_symbols(profile.market)
+    options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
+    c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
+                 help="Clique e digite para buscar qualquer moeda negociada na Binance "
+                      f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
     if st.session_state[_k(bot, "interval")] not in profile.intervals:
         st.session_state[_k(bot, "interval")] = profile.default_interval
     c2.selectbox("Timeframe", profile.intervals, key=_k(bot, "interval"))
@@ -160,39 +134,42 @@ def render_bot_page(bot: str) -> None:
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
     live_metrics(profile, cfg)
-    col_chart, col_ticket = st.columns([3.2, 1.25], gap="medium")
-    with col_chart:
-        if not profile.is_crypto:  # outros mercados: só o gráfico do TradingView
-            st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua de medição e as "
-                       "ferramentas **Posição comprada / vendida** (risco:retorno visual). Os desenhos ficam no navegador; "
-                       "níveis que a IA deve considerar podem ser cadastrados em *Níveis do usuário*, abaixo.")
-            components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
-        else:
-            indicator_picker(bot, cfg)
-            tab_rt, tab_chart, tab_tv = st.tabs(["⚡ Tempo real", "📈 Análise técnica (indicadores)",
-                                                 "🖊️ TradingView — ferramentas de desenho"])
-            with tab_rt:
-                positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
-                height = chart_height(cfg)
-                components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
-                                                    cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
-                                                    height=height), height=height + 5)
-                st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
-                           "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
-                           "descontadas as taxas de entrada e saída).")
-            with tab_chart:
-                analysis_chart(profile, cfg)
-            with tab_tv:
-                st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua de medição e as "
-                           "ferramentas **Posição comprada / vendida** (risco:retorno visual). Os desenhos ficam no navegador; "
-                           "níveis que a IA deve considerar podem ser cadastrados em *Níveis do usuário*, abaixo.")
-                components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+    indicator_picker(bot, cfg)
+    tab_rt, tab_tv = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho"])
+    with tab_rt:
+        positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
+        height = chart_height(cfg)
+        components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
+                                            cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
+                                            height=height), height=height + 5)
+        st.caption("Candles transmitidos ao vivo direto da corretora para o seu navegador (WebSocket): cada "
+                   "negociação move o candle, os indicadores e o lucro/prejuízo das posições abertas (já "
+                   "descontadas as taxas de entrada e saída).")
+    with tab_tv:
+        st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua de medição e as "
+                   "ferramentas **Posição comprada / vendida** (risco:retorno visual). Os desenhos ficam no navegador; "
+                   "níveis que a IA deve considerar podem ser cadastrados em *Níveis do usuário*, abaixo.")
+        components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+
+    # Logo abaixo do gráfico: a boleta de entrada do bot no mercado (configurações) e a boleta manual
+    st.subheader("🧮 Boleta de entrada")
+    col_bot, col_ticket = st.columns([1, 1], gap="medium")
+    with col_bot:
+        entry_panel(profile, cfg)
     with col_ticket:
         trade_ticket(profile, cfg)
 
     ai_section(profile, cfg)
     portfolio_section(profile, cfg)
     settings_section(profile, cfg)
+
+
+def execution_banner() -> None:
+    """Conta em que as ordens são executadas (escolhida na barra lateral)."""
+    mode = execution.get_mode()
+    st.caption(f"Conta de operação: **{execution.MODES[mode]}**" + (" · ordens simuladas com dados reais." if mode == "simulada" else ""))
+    if (why := execution.orders_problem(mode)):
+        st.warning(why)
 
 
 def ensure_personality(profile: BotProfile, interval: str) -> None:
@@ -265,14 +242,6 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.session_state[f"{bot}__atr"] = float(df["atr"].iloc[-2])
         st.session_state[f"{bot}__df"] = df
         st.session_state[f"{bot}__source"] = f"{df.attrs.get('source')} · cotação: {ticker.source}"
-        mkt_open = True
-        if not profile.is_crypto:
-            mkt_open = markets.is_open(ticker.market_time)
-            st.session_state[f"{bot}__market_open"] = mkt_open
-            last_trade = (datetime.fromtimestamp(ticker.market_time).strftime("%d/%m %H:%M") + " UTC") if ticker.market_time else "—"
-            st.caption(("🟢 **Mercado aberto**" if mkt_open else f"🔴 **Mercado fechado** (último negócio {last_trade})")
-                       + " · " + markets.MARKETS[profile.market].delay_note)
-
         broker = get_broker(bot)
         funding = cached_funding(symbol) if profile.market == "futures" else None
         events = broker.sync(symbol, raw, price, funding)
@@ -285,13 +254,11 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         s = broker.stats({symbol: price})
 
         m = st.columns(6)
-        m[0].metric(symbol, fmt_price(price), f"{ticker.change_pct:+.2f}% {'24h' if profile.is_crypto else 'no dia'}")
+        m[0].metric(symbol, fmt_price(price), f"{ticker.change_pct:+.2f}% 24h")
         m[1].metric("Banca", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)",
                     help="Patrimônio da carteira simulada (saldo livre + margens + P&L em aberto), em USDT.")
-        m[2].metric("Resultado hoje", fmt(s["pnl_today"]), f"meta {fmt(cfg_now['daily_profit_target'], 0)}")
-        lim = broker.limit_stats(cfg_now, {symbol: price})
-        m[3].metric("Operações do bot hoje", f"{lim['trades_today']}/{cfg_now['max_trades_day']}",
-                    help="Contadas conforme Configurações → Metas de operação" + lim["scope_trades"] + ".")
+        m[2].metric("Resultado hoje", fmt(s["pnl_today"]))
+        m[3].metric("Operações hoje", f"{s['trades_today']}")
         m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]), f"{s['open_positions']} posição(ões)",
                     delta_color="off", help="Lucro/prejuízo das posições abertas já descontando taxas de entrada e saída.")
         m[5].metric("Taxa de acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
@@ -301,39 +268,17 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.caption(f"🧭 **Contexto do gráfico agora ({interval}):** {regime.label(ctx)} — {regime.REGIMES[ctx][1]}")
 
         if cfg_now.get("autopilot"):
-            if not mkt_open:
-                st.caption("🤖 Piloto automático em espera: mercado fechado.")
-            elif personalities.is_allowed(cfg_now.get("personality"), profile.market, interval):
-                autopilot_step(profile, cfg_now, df, price)
-            else:
+            if (why := execution.orders_problem()):
+                st.caption("🤖 Piloto automático em espera: " + why)
+            elif not personalities.allowed(profile.market, interval):
                 st.warning("Piloto automático em espera: não há bot treinado e testado neste tempo gráfico. Troque o tempo "
-                           "gráfico ou a personalidade.")
+                           "gráfico.")
+            else:
+                autopilot_step(profile, cfg_now, df, price)
         if st.session_state.pop(f"{bot}__need_rerun", False):
             st.rerun()  # posição encerrada/ordem executada: atualiza linhas do gráfico e carteira
 
     _live()
-
-
-def analysis_chart(profile: BotProfile, cfg: dict) -> None:
-    @st.fragment(run_every=int(cfg["refresh_sec"]))
-    def _chart():
-        bot = profile.key
-        df = st.session_state.get(f"{bot}__df")
-        if df is None:
-            st.info("Carregando dados…")
-            return
-        cfg_now = _cfg_now(profile, cfg)
-        acct = get_broker(bot).account()
-        result = st.session_state.get(f"{bot}__analysis")
-        plan = result.decision.to_dict() if result and result.symbol == cfg_now["symbol"] else None
-        fig = build_chart(df, cfg_now, symbol=cfg_now["symbol"], interval=cfg_now["interval"], positions=acct["positions"],
-                          orders=acct["orders"], history=acct["history"], plan=plan)
-        st.plotly_chart(fig, config=PLOTLY_CONFIG, key=f"{bot}_chart")
-        st.caption(f"Fonte: {st.session_state.get(f'{bot}__source', '')} · atualizado às "
-                   f"{datetime.now().strftime('%H:%M:%S')} · role para zoom, arraste para mover, use a barra do "
-                   "gráfico para desenhar linhas, retângulos e círculos.")
-
-    _chart()
 
 
 def realtime_lines(bot: str, cfg: dict) -> list[dict]:
@@ -391,6 +336,10 @@ def autopilot_step(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: floa
         st.caption(f"🤖 Piloto automático ativo — próxima análise no fechamento do candle ({marker.split('-', 2)[-1][:16]}).")
         return
     st.session_state[f"{bot}__autopilot_last"] = marker
+    if ranking.is_stale(profile.market, cfg["interval"]):  # a cada 7 dias o ranking dos bots é refeito com o mercado recente
+        with st.spinner("Atualizando o ranking semanal dos bots com o mercado recente…"):
+            if engine.ensure_ranking(profile, cfg):
+                st.toast("Ranking semanal dos bots atualizado.", icon="🏆")
     # 1) plano condicional armado: confere o gatilho no candle que acabou de fechar
     state, planned = engine.check_armed_plan(profile, cfg, df, price)
     if state and state.startswith("cancelado"):
@@ -404,7 +353,7 @@ def autopilot_step(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: floa
             except Exception as exc:  # noqa: BLE001
                 st.toast(f"Plano confirmado, mas falhou ao executar ({exc})", icon="⚠️")
         else:
-            st.toast("Plano confirmado, mas o gestor de risco bloqueou: " + " | ".join(planned.check.reasons if planned.check else []), icon="🛑")
+            st.toast("Plano confirmado, mas a ordem não pôde ser montada: " + " | ".join(planned.check.reasons if planned.check else []), icon="🛑")
         return
     # 2) análise normal do candle
     with st.spinner("Piloto automático analisando o candle fechado…"):
@@ -422,8 +371,47 @@ def autopilot_step(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: floa
         st.toast("Plano condicional da IA armado.", icon="📌")
 
 
-# ------------------------------------------------------- boleta + calculadora
+# ------------------------------------------------------- boleta de entrada
+ENTRY_KEYS = ("leverage_on", "leverage", "margin_mode", "risk_mode", "max_loss_usdt", "max_loss_pct", "atr_sl_mult", "atr_tp_mult",
+              "allow_short")
+
+
+def entry_panel(profile: BotProfile, cfg: dict) -> None:
+    """Configurações com que o bot entra no mercado: tamanho pelo risco, stop/alvo, alavancagem e margem."""
+    bot = profile.key
+    k = lambda n: _k(bot, n)  # noqa: E731
+    st.markdown("**🤖 Entrada do bot no mercado**")
+    c = st.columns([1.2, 1])
+    c[0].radio("Perda máxima por trade", ["% do saldo", "USDT"], key=k("risk_mode"), horizontal=True,
+               help="Quanto a banca perde se o stop for atingido. O tamanho da posição é calculado a partir dele (já com as taxas).")
+    if st.session_state[k("risk_mode")] == "USDT":
+        c[1].number_input("USDT por trade", 1.0, 1e6, step=5.0, key=k("max_loss_usdt"))
+    else:
+        c[1].number_input("% do patrimônio", 0.1, 20.0, step=0.1, key=k("max_loss_pct"))
+    c = st.columns(2)
+    c[0].number_input("Stop = ATR ×", 0.5, 10.0, step=0.1, key=k("atr_sl_mult"),
+                      help="Usado nas entradas sem stop próprio. Cada bot do ranking tem o seu stop/alvo testado; este vale para a boleta manual.")
+    c[1].number_input("Alvo = ATR ×", 0.5, 30.0, step=0.5, key=k("atr_tp_mult"))
+    leverage_controls(profile, cfg)
+    st.toggle("Permitir operações vendidas (short)", key=k("allow_short"),
+              help="No spot, vender a descoberto exige margem (alavancagem ligada).")
+
+    cfg = {**cfg, **{n: st.session_state[k(n)] for n in ENTRY_KEYS}}
+    price, atr_v = st.session_state.get(f"{bot}__last_price"), st.session_state.get(f"{bot}__atr")
+    if not price or not atr_v:
+        return
+    s = get_broker(bot).stats({cfg["symbol"]: price})
+    sl, tp = price - atr_v * float(cfg["atr_sl_mult"]), price + atr_v * float(cfg["atr_tp_mult"])
+    calc = risk.calculate("BUY", price, sl, tp, leverage=risk.effective_leverage(cfg), fee_pct=float(cfg["fee_pct"]),
+                          risk_usdt=risk.risk_budget(cfg, s["equity"]), available=s["available"], symbol=cfg["symbol"],
+                          market=profile.market, margin_mode=cfg["margin_mode"])
+    st.caption(f"Uma compra agora a {fmt_price(price)} teria {calc.qty:g} {cfg['symbol'].removesuffix('USDT')} · margem "
+               f"{fmt(calc.margin)} USDT ({calc.leverage:g}×) · risco {fmt(calc.risk_usdt)} USDT · retorno {fmt(calc.reward_usdt)} USDT · "
+               f"R:R {fmt(calc.rr) if calc.rr else '—'}. Sem bloqueio por metas ou limites diários.")
+
+
 def trade_ticket(profile: BotProfile, cfg: dict) -> None:
+    """Boleta manual: ordem a mercado ou limitada com a calculadora de risco."""
     bot = profile.key
     price = st.session_state.get(f"{bot}__last_price")
     atr_v = st.session_state.get(f"{bot}__atr")
@@ -433,12 +421,10 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
     broker = get_broker(bot)
     s = broker.stats({cfg["symbol"]: price})
 
-    st.subheader("🧮 Boleta e calculadora")
-    leverage_controls(profile, cfg)
-    cfg = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ("leverage_on", "leverage", "margin_mode")}}
+    st.markdown("**✍️ Sua ordem manual e calculadora**")
+    cfg = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ENTRY_KEYS}}
     lev = risk.effective_leverage(cfg)
-    can_short = cfg["allow_short"] and (profile.market == "futures" or not profile.is_crypto or cfg["leverage_on"])
-    market_closed = not profile.is_crypto and not st.session_state.get(f"{bot}__market_open", True)
+    can_short = cfg["allow_short"] and (profile.market == "futures" or cfg["leverage_on"])
     sides = ["Compra (long)", "Venda (short)"] if can_short else ["Compra (long)"]
     side_label = st.segmented_control("Lado", sides, default=sides[0], key=f"{bot}__t_side") or sides[0]
     side = "BUY" if side_label.startswith("Compra") else "SELL"
@@ -475,17 +461,16 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
                               margin_usdt=margin, available=s["available"], symbol=cfg["symbol"],
                               market=profile.market, margin_mode=cfg["margin_mode"])
 
-    rr_ok = calc.rr is not None and calc.rr >= float(cfg["min_rr"])
     st.markdown(
         f"""
 | | |
 |---|---|
-| Quantidade | **{calc.qty:g}**{'' if profile.is_crypto else ' ' + markets.MARKETS[profile.market].unit} |
+| Quantidade | **{calc.qty:g}** |
 | Nocional | {fmt(calc.notional)} USDT |
 | Margem ({calc.leverage:g}×) | {fmt(calc.margin)} USDT |
 | Risco (stop) | <span style="color:#ef5350">−{fmt(calc.risk_usdt)} USDT</span> ({fmt(calc.stop_pct)}%) |
 | Retorno (alvo) | <span style="color:#26a69a">+{fmt(calc.reward_usdt)} USDT</span> ({fmt(calc.tp_pct)}%) |
-| Risco:retorno | **{fmt(calc.rr) if calc.rr else '—'}** {'✅' if rr_ok else '⚠️'} |
+| Risco:retorno | **{fmt(calc.rr) if calc.rr else '—'}** |
 | Taxas (ida+volta) | {fmt(calc.fees_usdt)} USDT |
 | Break-even | {fmt_price(calc.breakeven)} |
 | Liquidação est. | {fmt_price(calc.liquidation)} |
@@ -493,22 +478,16 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
     for w in calc.warnings:
         st.warning(w)
 
-    if market_closed and otype == "Mercado":
-        st.warning("Mercado fechado: ordens a mercado ficam bloqueadas (o preço não anda). Use uma ordem limitada ou aguarde a abertura.")
-    if st.button(f"Enviar ordem simulada — {'COMPRAR' if side == 'BUY' else 'VENDER'}", type="primary",
-                 width="stretch", key=f"{bot}__t_send", disabled=calc.qty <= 0 or (market_closed and otype == "Mercado")):
-        check = risk.check_trade(cfg, broker.limit_stats(cfg, {cfg["symbol"]: price}, manual=True),
-                                 side, entry, sl, tp, profile.market)
-        blocks = risk.MANUAL_BLOCKS[cfg.get("manual_limits", "livre")]
-        hard = check.blocking(blocks)
-        if hard:
-            for r in hard:
+    blocked = execution.orders_problem()
+    if st.button(f"Enviar ordem — {'COMPRAR' if side == 'BUY' else 'VENDER'}", type="primary",
+                 width="stretch", key=f"{bot}__t_send", disabled=calc.qty <= 0 or bool(blocked)):
+        check = risk.check_trade(cfg, s, side, entry, sl, tp, profile.market)
+        if check.reasons:
+            for r in check.reasons:
                 st.error(r)
-            st.caption("Regra das suas ordens manuais: " + risk.MANUAL_MODES[cfg.get("manual_limits", "livre")]
-                       + " (Configurações → Metas de operação).")
         else:
-            for r in check.warnings(blocks):
-                st.warning(f"Aviso (ordem manual permitida): {r}")
+            for n in check.notes:
+                st.info(n)
             try:
                 out = broker.place_order(symbol=cfg["symbol"], market=profile.market, side=side, qty=calc.qty,
                                          order_type="LIMIT" if otype == "Limitada" else "MARKET", price=price,
@@ -520,29 +499,14 @@ def trade_ticket(profile: BotProfile, cfg: dict) -> None:
                 st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
-    manual_mode = cfg.get("manual_limits", "livre")
-    st.caption(f"Suas ordens: {risk.MANUAL_MODES[manual_mode].split(' —')[0].lower()}.")
+    if blocked:
+        st.caption(blocked)
 
 
 def leverage_controls(profile: BotProfile, cfg: dict) -> None:
-    """Alavancagem e modo de margem no topo da boleta, com os limites da Binance."""
+    """Alavancagem e modo de margem na boleta, com os limites da Binance."""
     bot = profile.key
     futures = profile.market == "futures"
-    if not profile.is_crypto:
-        mk = markets.MARKETS[profile.market]
-        if mk.max_leverage <= 1:
-            st.session_state[_k(bot, "leverage_on")] = False
-            st.caption("Ações à vista: sem alavancagem (1×) e só compradas.")
-            return
-        c1, c2 = st.columns([1, 1.2])
-        c1.toggle("Alavancado", key=_k(bot, "leverage_on"), help=f"Alavancagem simulada de até {mk.max_leverage}×.")
-        c2.radio("Margem", ["Isolada", "Cruzada"], key=_k(bot, "margin_mode"), horizontal=True,
-                 help="Isolada: o risco fica limitado à margem da posição. Cruzada: todo o saldo livre sustenta a posição.")
-        key = _k(bot, "leverage")
-        st.session_state[key] = int(min(max(1, st.session_state.get(key, 1)), mk.max_leverage))
-        if st.session_state.get(_k(bot, "leverage_on")):
-            st.slider(f"Alavancagem (máx. {mk.max_leverage}×)", 1, mk.max_leverage, key=key)
-        return
     c1, c2 = st.columns([1, 1.2])
     c1.toggle("Alavancado", key=_k(bot, "leverage_on"),
               help="Futuros: alavancagem do contrato perpétuo. Spot: conta de Margem da Binance.")
@@ -580,12 +544,13 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
         st.session_state[pkey] = options[0]
     persona = personalities.get(st.session_state.get(pkey)) if options else None
 
+    auto = bool(cfg.get("auto_bot", True))
     with st.container(border=True):
         c1, c2 = st.columns([1.3, 1])
         with c1:
             if on:
                 st.markdown("### 🟢 Bot LIGADO")
-                st.caption("Analisa sozinho a cada candle fechado e executa as ordens aprovadas pelo gestor de risco.")
+                st.caption("Monitora o fechamento de cada candle no tempo gráfico atual e executa as ordens dos bots.")
             else:
                 st.markdown("### ⚪ Bot desligado")
                 st.caption("Ligue para o bot operar sozinho, ou use **Analisar agora** para uma análise pontual.")
@@ -597,12 +562,18 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                 st.rerun()
             run = b2.button("🔍 Analisar agora", width="stretch", key=f"{bot}__run_ai",
                             type="primary" if not on else "secondary", disabled=blocked)
-            st.toggle("Na análise manual, executar automaticamente se aprovado", key=_k(bot, "ai_auto_execute"))
+            st.toggle("🏆 Bot automático: usar o bot mais recomendado para o contexto", key=_k(bot, "auto_bot"),
+                      help="No fechamento de cada candle, a IA e os bots leem o contexto do gráfico (tempo gráfico, indicadores e "
+                           "leitura de mercado) e entra o bot do ranking com melhor desempenho nesse contexto. O ranking é refeito "
+                           "sozinho toda semana com o mercado recente. Desligado, vale sempre a personalidade escolhida.")
+            st.toggle("Na análise manual, executar automaticamente a ordem montada", key=_k(bot, "ai_auto_execute"))
         with c2:
             if blocked:
                 trained = personalities.trained_intervals(profile.market)
                 st.warning(f"Nenhum bot foi treinado e se destacou no {cfg['interval']} em {profile.market_label.lower()}. "
                            f"Escolha um tempo gráfico com bots treinados: {', '.join(trained) or '—'}.")
+            elif auto:
+                ranking_panel(profile, cfg)
             else:
                 def _label(pid):
                     p_ = personalities.get(pid) or {}
@@ -613,7 +584,7 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                              help="Só aparecem os bots treinados e testados neste mercado e tempo gráfico, que se destacaram "
                                   "na pesquisa (✅ aprovado · 🟡 aprovado com ressalva · · criado por você, sem teste). Para "
                                   "ver outros, mude o tempo gráfico. Compare o desempenho na página Personalidades.")
-            if persona:
+            if persona and not auto:
                 st.caption(f"{persona.get('tip') or persona.get('summary') or persona.get('description', '')[:140]} · "
                            f"{personalities.DIRECTIONS[persona.get('direction', 'misto')]} · "
                            f"indicado: {persona.get('timeframes', '—')}")
@@ -627,29 +598,30 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                     else:
                         st.caption(("✅ " if rs.get("status") == "aprovado" else "🟡 ") + line)
             st.page_link("views/bots.py", label="Ver todos os bots especialistas", icon="🤖")
-            mode_txt = "IA como filtro das regras" if cfg.get("ai_mode", "filtro") == "filtro" else "IA livre + regras"
-            st.markdown(f"**Cérebro:** {mode_txt if key else 'somente regras (sem IA)'}")
+            persona_label = ai_mod.AI_PERSONAS.get(cfg.get("ai_persona"), ai_mod.AI_PERSONAS[ai_mod.DEFAULT_PERSONA])[0]
+            role = ("pode confirmar ou vetar a ativação do bot" if cfg.get("ai_intervene") else "só explica o mercado e dá dicas")
+            st.markdown(f"**IA:** {persona_label} · {role}" if key else "**IA:** desligada — o bot decide só pelas regras")
             if not key:
                 st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "
-                           "OpenRouter, a IA interpreta o cenário antes de cada entrada e escreve a leitura do especialista "
-                           "(cenário, melhor bot e plano condicional).")
-        rs = (persona or {}).get("research") or {}
-        best = rs.get("best_contexts") or []
-        fav_key = f"{bot}__fav_toggle"
-        st.session_state[fav_key] = cfg.get("context_mode") == "favoraveis"
-        st.toggle("🎯 Operar só nos contextos favoráveis desta personalidade", key=fav_key, disabled=not best,
-                  on_change=lambda: set_setting(bot, "context_mode",
-                                                "favoraveis" if st.session_state[fav_key] else "sempre"),
-                  help="O bot só entra quando o gráfico está num dos contextos em que esta personalidade teve melhor "
-                       "resultado na simulação (escolhidos nas moedas da busca e provados nas moedas inéditas).")
-        if best:
-            filt = rs.get("context_filtered") or {}
-            st.caption(f"Contextos favoráveis: {', '.join(regime.label(c) for c in best)}. "
-                       + (f"Simulado só neles: {filt['ret_pct']:+.1f}% em {rs['period_label']} (≈ {filt['monthly_pct']:+.1f}% "
-                          f"ao mês, acerto {filt['win_pct']:.0f}%) contra {rs['ret_pct']:+.1f}% operando sempre."
-                          if filt else ""))
-        else:
-            st.caption("Esta personalidade não teve contexto com resultado positivo consistente na simulação.")
+                           "OpenRouter, a IA resume o que acontece no mercado e dá a dica do contexto.")
+        if not auto:
+            rs = (persona or {}).get("research") or {}
+            best = rs.get("best_contexts") or []
+            fav_key = f"{bot}__fav_toggle"
+            st.session_state[fav_key] = cfg.get("context_mode") == "favoraveis"
+            st.toggle("🎯 Operar só nos contextos favoráveis desta personalidade", key=fav_key, disabled=not best,
+                      on_change=lambda: set_setting(bot, "context_mode",
+                                                    "favoraveis" if st.session_state[fav_key] else "sempre"),
+                      help="O bot só entra quando o gráfico está num dos contextos em que esta personalidade teve melhor "
+                           "resultado na simulação (escolhidos nas moedas da busca e provados nas moedas inéditas).")
+            if best:
+                filt = rs.get("context_filtered") or {}
+                st.caption(f"Contextos favoráveis: {', '.join(regime.label(c) for c in best)}. "
+                           + (f"Simulado só neles: {filt['ret_pct']:+.1f}% em {rs['period_label']} (≈ {filt['monthly_pct']:+.1f}% "
+                              f"ao mês, acerto {filt['win_pct']:.0f}%) contra {rs['ret_pct']:+.1f}% operando sempre."
+                              if filt else ""))
+            else:
+                st.caption("Esta personalidade não teve contexto com resultado positivo consistente na simulação.")
         ctx = st.session_state.get(f"{bot}__context")
         if ctx and ctx != "indefinido":
             recs = personalities.best_for_context(ctx, market=profile.market, interval=cfg["interval"], min_trades=15)
@@ -660,10 +632,6 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
         if on:
             st.caption("⚠️ O bot fica ligado enquanto esta página estiver aberta no navegador. Para operar 24 h, "
                        "use o worker.py num servidor.")
-    lim = get_broker(bot).limit_stats(cfg, {cfg["symbol"]: st.session_state.get(f"{bot}__last_price", 0) or 0})
-    st.caption(f"Limites do bot hoje: {lim['trades_today']}/{cfg['max_trades_day']} operações · "
-               f"{lim['open_positions']}/{cfg['max_open_positions']} posições ({risk.TRADES_SCOPES[cfg['limits_trades_scope']].lower()})"
-               f" · resultado {fmt(lim['pnl_today'])} USDT ({risk.PNL_SCOPES[cfg['limits_pnl_scope']].lower()}).")
 
     armed_panel(profile, cfg)
 
@@ -676,7 +644,9 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
             with st.spinner(f"Executando habilidades e consultando {cfg['ai_model'] if key else 'regras'}…"):
                 result = engine.run_analysis(profile, cfg, df, price, key)
             st.session_state[f"{bot}__analysis"] = result
-            if cfg["ai_auto_execute"] and ((result.check and result.check.allowed) or result.decision.decision == "CLOSE"):
+            if cfg["ai_auto_execute"] and execution.orders_problem():
+                st.warning(execution.orders_problem())
+            elif cfg["ai_auto_execute"] and ((result.check and result.check.allowed) or result.decision.decision == "CLOSE"):
                 try:
                     out = engine.execute(profile, cfg, result, price)
                     st.success(f"Ordem programada automaticamente: {out.get('status')}.")
@@ -690,6 +660,32 @@ def ai_section(profile: BotProfile, cfg: dict) -> None:
                    "máxima por trade — ou **Ligar bot** para ele fazer isso sozinho a cada candle.")
         return
     render_analysis(profile, cfg, result)
+
+
+def ranking_panel(profile: BotProfile, cfg: dict) -> None:
+    """Ranking semanal dos bots deste tempo gráfico e o bot que está no comando agora."""
+    bot = profile.key
+    market, interval = profile.market, cfg["interval"]
+    result = st.session_state.get(f"{bot}__analysis")
+    active = (result.personality or {}).get("name") if result and result.symbol == cfg["symbol"] and result.interval == interval else None
+    st.markdown(f"**🏆 Bot do momento:** {active}" if active else "**🏆 Bot do momento:** definido no fechamento do próximo candle")
+    age = ranking.age_days(market, interval)
+    rows = ranking.leaderboard(market, interval, top=3)
+    if rows:
+        st.caption("Ranking da semana (retorno simulado nos candles recentes): " + " · ".join(
+            f"{i + 1}º {r['name']} ({r['monthly_pct']:+.1f}%/mês)" for i, r in enumerate(rows)))
+        st.caption(f"Atualizado há {age:.0f} dia(s); se refaz sozinho a cada {ranking.MAX_AGE_DAYS} dias.")
+    else:
+        st.caption("O ranking semanal ainda não foi calculado neste tempo gráfico: vale o desempenho da pesquisa original até a "
+                   "primeira atualização, que acontece sozinha quando o bot estiver ligado.")
+    if st.button("🔄 Atualizar ranking agora", key=f"{bot}__rank_now"):
+        bar = st.progress(0.0, text="Baixando candles recentes…")
+        try:
+            ranking.refresh(market, interval, progress=lambda f, t: bar.progress(min(f, 1.0), text=t))
+            st.rerun()
+        except Exception as exc:  # noqa: BLE001
+            bar.empty()
+            st.error(f"Não foi possível atualizar agora: {exc}")
 
 
 def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResult) -> None:
@@ -706,7 +702,7 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
         h[3].metric("Stop", fmt_price(d.stop_loss))
         h[4].metric("Alvo", fmt_price(d.take_profit))
         h[5].metric("Placar regras", f"{result.plan['score']:+.0f}", result.plan["regime"], delta_color="off")
-        st.markdown(f"**Análise ({'IA' if d.source == 'ia' else 'somente regras'}):** {d.reasoning}")
+        st.markdown(f"**Análise ({'IA' if d.model not in ('regras', '') else 'somente regras'}):** {d.reasoning}")
         if d.risks:
             st.markdown(f"**Riscos:** {d.risks}")
         if d.invalidation:
@@ -723,14 +719,18 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
                             f"margem {fmt(calc.margin)} USDT ({calc.leverage:g}×) · risco {fmt(calc.risk_usdt)} USDT · "
                             f"retorno {fmt(calc.reward_usdt)} USDT · R:R {fmt(calc.rr) if calc.rr else '—'}")
             if result.check.allowed:
-                st.success("Gestor de risco: ordem APROVADA.")
+                st.success("Ordem montada e pronta para executar.")
             else:
-                st.error("Gestor de risco: ordem BLOQUEADA — " + " | ".join(result.check.reasons))
+                st.error("Não foi possível montar a ordem: " + " | ".join(result.check.reasons))
+            for note in result.check.notes:
+                st.caption(note)
 
         executable = (result.check and result.check.allowed) or d.decision == "CLOSE"
         if result.executed:
             st.success(f"Ordem enviada: {result.executed.get('status')}")
-        elif executable and st.button("✅ Executar plano na conta simulada", key=f"{bot}__exec_plan", type="primary"):
+        elif executable and execution.orders_problem():
+            st.caption(execution.orders_problem())
+        elif executable and st.button("✅ Executar plano", key=f"{bot}__exec_plan", type="primary"):
             price = st.session_state.get(f"{bot}__last_price", result.price)
             try:
                 out = engine.execute(profile, cfg, result, price)
@@ -842,7 +842,7 @@ def render_advice(profile: BotProfile, cfg: dict, result: engine.AnalysisResult)
     else:
         auto = cfg.get("autopilot") and cfg.get("ai_auto_arm") and adv.get("fonte") == "ia"
         st.caption(("O piloto automático arma planos da IA sozinho. " if auto else "") +
-                   "Armar não abre ordem agora: só se o candle fechar confirmando o gatilho, e ainda passa pelo gestor de risco. "
+                   "Armar não abre ordem agora: só se o candle fechar confirmando o gatilho, e o tamanho da ordem sai da sua perda máxima por trade. "
                    "Esse tipo de entrada condicional não tem backtest.")
         if st.button("📌 Armar este plano", key=f"{bot}__arm_plan", type="primary"):
             df = st.session_state.get(f"{bot}__df")
@@ -963,57 +963,11 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
     k = lambda n: _k(bot, n)  # noqa: E731
     st.divider()
     st.subheader("⚙️ Configurações do bot")
-    t_risk, t_goal, t_lev, t_ind, t_ai, t_lv, t_acct = st.tabs(
-        ["Risco por trade", "Metas de operação", "Alavancagem", "Indicadores", "IA", "Níveis do usuário", "Conta"])
-
-    with t_risk:
-        c = st.columns(3)
-        c[0].radio("Perda máxima definida em", ["USDT", "% do saldo"], key=k("risk_mode"), horizontal=True)
-        if cfg["risk_mode"] == "USDT":
-            c[1].number_input("Perda mínima aceitável por trade (USDT)", 1.0, 1e6, step=5.0, key=k("max_loss_usdt"),
-                              help="Valor máximo que você aceita perder se o stop for atingido. O tamanho da posição "
-                                   "é calculado a partir dele (já incluindo as taxas).")
-        else:
-            c[1].number_input("Perda máxima por trade (% do patrimônio)", 0.1, 20.0, step=0.1, key=k("max_loss_pct"))
-        c[2].number_input("Risco:retorno mínimo", 0.5, 10.0, step=0.1, key=k("min_rr"))
-        c = st.columns(4)
-        c[0].number_input("Stop = ATR ×", 0.5, 10.0, step=0.1, key=k("atr_sl_mult"))
-        c[1].number_input("Alvo = ATR ×", 0.5, 30.0, step=0.5, key=k("atr_tp_mult"))
-        c[2].number_input("Taxa por lado (%)", 0.0, 1.0, step=0.01, format="%.3f", key=k("fee_pct"))
-        c[3].number_input("Slippage simulado (%)", 0.0, 1.0, step=0.01, format="%.3f", key=k("slippage_pct"))
-
-    with t_goal:
-        c = st.columns(4)
-        c[0].number_input("Meta de operações por dia", 1, 100, key=k("max_trades_day"))
-        c[1].number_input("Meta de lucro diária (USDT)", 0.0, 1e6, step=10.0, key=k("daily_profit_target"),
-                          help="Ao atingir, o bot deixa de abrir operações até o dia seguinte (UTC). 0 = sem meta.")
-        c[2].number_input("Limite de perda diária (USDT)", 0.0, 1e6, step=10.0, key=k("daily_max_loss"),
-                          help="Ao atingir, o bot deixa de abrir operações até o dia seguinte (UTC). 0 = sem limite.")
-        c[3].number_input("Máx. posições simultâneas", 1, 20, key=k("max_open_positions"))
-        st.markdown("**Você × bot — o que conta em cada limite**")
-        c = st.columns(3)
-        c[0].selectbox("Meta de operações e posições simultâneas contam", list(risk.TRADES_SCOPES),
-                       format_func=risk.TRADES_SCOPES.get, key=k("limits_trades_scope"),
-                       help="'Só as operações do bot': as suas ordens manuais não consomem a meta do bot.")
-        c[1].selectbox("Meta de lucro e limite de perda do dia contam", list(risk.PNL_SCOPES),
-                       format_func=risk.PNL_SCOPES.get, key=k("limits_pnl_scope"),
-                       help="'Carteira inteira' protege a banca: se o dia estiver ruim no total (seu + bots), "
-                            "o bot para de abrir operações.")
-        c[2].selectbox("Suas ordens manuais", list(risk.MANUAL_MODES), format_func=risk.MANUAL_MODES.get,
-                       key=k("manual_limits"),
-                       help="Regras básicas (stop obrigatório, alavancagem e liquidação) valem sempre. Quando as "
-                            "suas ordens respeitam limites, contam as operações do bot e as suas desta página.")
-        lim = get_broker(bot).limit_stats(cfg, {cfg["symbol"]: st.session_state.get(f"{bot}__last_price", 0) or 0})
-        st.caption(f"Hoje, para o bot: {lim['trades_today']}/{cfg['max_trades_day']} operações e "
-                   f"{lim['open_positions']}/{cfg['max_open_positions']} posições{lim['scope_trades']} · resultado "
-                   f"{fmt(lim['pnl_today'])} USDT{lim['scope_pnl']} (meta +{fmt(cfg['daily_profit_target'])} / "
-                   f"limite −{fmt(cfg['daily_max_loss'])}).")
+    t_lev, t_ind, t_ai, t_lv, t_acct = st.tabs(["Alavancagem", "Indicadores", "IA", "Níveis do usuário", "Conta"])
 
     with t_lev:
         futures = profile.market == "futures"
-        st.caption("Liga/desliga, modo de margem e nível de alavancagem ficam no topo da **boleta**, como na Binance.")
-        st.toggle("Permitir operações vendidas (short)", key=k("allow_short"),
-                  help="No spot, vender a descoberto exige margem (alavancagem ligada).")
+        st.caption("Liga/desliga, modo de margem e nível de alavancagem ficam na **boleta de entrada**, logo abaixo do gráfico.")
         if futures:
             tiers, source = cached_brackets(cfg["symbol"])
             st.markdown(f"**Faixas de alavancagem de {cfg['symbol']}** (fonte: {source}) — quanto maior a posição, "
@@ -1028,13 +982,6 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                 st.caption(f"Com {cfg['leverage']}× (isolada) uma posição comprada pequena é liquidada com queda de "
                            f"≈{100 - (liq or 0):.2f}%. A conta simulada usa a fórmula oficial da Binance e cobra o "
                            "financiamento (funding) a cada 8 h.")
-        elif not profile.is_crypto:
-            mk = markets.MARKETS[profile.market]
-            st.markdown(f"**{mk.label} (simulação):** alavancagem de até **{mk.max_leverage}×**, margem de manutenção de "
-                        f"**{lev_rules.OTHER_MMR * 100:.1f}%** do valor da posição e liquidação por margem isolada ou cruzada. "
-                        f"Custo por lado: {mk.fee_pct:g}% (spread/corretagem) + {mk.slippage_pct:g}% de derrapagem. Não há swap "
-                        "(juros overnight) nem dividendos na simulação. Os valores em outras moedas são convertidos para dólar "
-                        "pela cotação do momento.")
         else:
             st.markdown("**Margem no spot (Binance Margin):** Cruzada até **3×** e Isolada até **10×**. A liquidação "
                         "ocorre quando o nível de margem (ativos ÷ dívida) chega a **1,1**.")
@@ -1100,18 +1047,19 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
             st.text_input("Chave da OpenRouter (somente nesta sessão)", type="password", key=f"{bot}__or_key_w",
                           value=st.session_state.get("_or_key", ""), on_change=_save_key,
                           help="Para não digitar sempre, defina OPENROUTER_API_KEY nos Secrets do Streamlit.")
-        st.radio("Papel da IA", ["filtro", "livre"], key=k("ai_mode"), horizontal=True,
-                 format_func=lambda m: {"filtro": "🛡️ Filtro — confirma ou veta o sinal das regras (recomendado)",
-                                        "livre": "🧠 Livre — a IA decide entrada, stop e alvo"}[m],
-                 help="Filtro: o bot só entra quando as regras da personalidade (testadas no backtest) dão sinal e a "
-                      "IA concorda; usa o stop/alvo validados. Livre: a IA pode abrir operações que as regras não "
-                      "deram e escolher os próprios níveis — mais flexível, mas sem validação em backtest.")
+        st.selectbox("Personalidade da IA (tom das explicações)", list(ai_mod.AI_PERSONAS), key=k("ai_persona"),
+                     format_func=lambda i: ai_mod.AI_PERSONAS[i][0], help=None)
+        st.caption(ai_mod.AI_PERSONAS[st.session_state.get(k("ai_persona"), ai_mod.DEFAULT_PERSONA)][1])
+        st.toggle("Deixar a IA interferir na decisão de ativar o bot", key=k("ai_intervene"),
+                  help="Desligado (padrão): a IA só explica resumidamente o que acontece no mercado e dá uma dica útil sobre o "
+                       "contexto; o bot entra quando as regras do bot do momento dão sinal. Ligado: no fechamento do candle a IA "
+                       "também confirma ou veta o sinal — se discordar, o bot não entra naquele momento. Sem sinal das regras, "
+                       "a IA nunca abre operação sozinha.")
         c[1].slider("Temperatura", 0.0, 1.0, step=0.05, key=k("ai_temperature"))
         st.toggle("📌 Piloto automático: armar sozinho os planos condicionais propostos pela IA", key=k("ai_auto_arm"),
                   help="Com o piloto ligado, quando a IA diz 'só entro se o preço fechar acima de X com volume', o sistema arma esse "
-                       "gatilho e abre a ordem sozinho se ele se confirmar (sempre passando pelo gestor de risco). Desligado, "
+                       "gatilho e abre a ordem sozinho se ele se confirmar (o tamanho da ordem sai da sua perda máxima por trade). Desligado, "
                        "você arma manualmente no botão do plano. Esse tipo de entrada condicional ainda não tem backtest.")
-        c[2].slider("Confiança mínima para executar (%)", 0, 100, key=k("ai_min_confidence"))
         st.slider("Candles enviados como contexto", 20, 200, step=10, key=k("ai_candles_context"))
         st.text_area("Instruções da sua estratégia para a IA", key=k("ai_instructions"), height=110,
                      placeholder="Ex.: Só operar a favor da EMA 200. Evitar entradas 30 min antes de notícias dos EUA. "
@@ -1152,6 +1100,9 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                 st.rerun()
 
     with t_acct:
+        c = st.columns(2)
+        c[0].number_input("Taxa por lado (%)", 0.0, 1.0, step=0.01, format="%.3f", key=k("fee_pct"))
+        c[1].number_input("Slippage simulado (%)", 0.0, 1.0, step=0.01, format="%.3f", key=k("slippage_pct"))
         st.write("A banca, os aportes/retiradas, o extrato e o histórico completo ficam na página **Carteira**.")
         st.page_link("views/wallet.py", label="Abrir Carteira simulada", icon="💰")
         if st.button("Restaurar configurações padrão deste bot", key=f"{bot}__defaults"):
