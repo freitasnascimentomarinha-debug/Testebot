@@ -4,11 +4,11 @@ import json
 import pandas as pd
 import streamlit as st
 
-from core import accounts, paper, personalities, quota
+from core import accounts, execution, paper, personalities, quota
 from core.auth import current_user
 from core.binance_ui import render_binance
 from core.storage import get_secret
-from core.profiles import PROFILES
+from core.profiles import PAGE_BOTS, PROFILES
 from core.settings import load_settings
 from core.storage import backend, export_all, import_all
 
@@ -21,13 +21,29 @@ info = accounts.info(user) or {}
 st.caption(f"Usuário **{user}**" + (f" · conta criada em {info['created'][:10]}" if info.get("created") else "")
            + f" · dados guardados em: {backend().name}")
 
+st.subheader("🏦 Conta de operação")
+st.caption("Onde as ordens dos bots e as suas são executadas. A escolha fica salva na sua conta.")
+_modes = list(execution.MODES)
+_pick = st.radio("Executar as ordens na", _modes, index=_modes.index(execution.get_mode()), format_func=execution.MODES.get,
+                 key="acc_mode", label_visibility="collapsed")
+if (_why := execution.key_problem(_pick, user)):
+    st.warning(_why)
+if _pick != "simulada" and not execution.EXCHANGE_ORDERS_ENABLED:
+    st.info("O envio de ordens para a Exchange ainda não está ativo nesta versão: ao escolher esta conta, os bots e a boleta ficam "
+            "em espera (nenhuma ordem é enviada nem simulada).")
+if st.button("💾 Salvar conta de operação", type="primary", disabled=_pick == execution.get_mode()):
+    execution.set_mode(_pick)
+    st.success(f"Conta de operação salva: {execution.MODES[_pick]}.")
+    st.rerun()
+st.caption(f"Conta em uso agora: **{execution.MODES[execution.get_mode()]}**")
+
 st.subheader("💾 Suas escolhas salvas")
 st.caption("Tudo abaixo fica salvo na sua conta e volta igual na próxima vez que você entrar, em qualquer aparelho. "
            "Altere em cada bot, em Configurações do bot.")
 acct = paper.get_account(paper.account_id("day"))
 st.metric("Banca inicial da carteira (USDT)", f"{acct['initial']:,.2f}")
 rows = []
-for key, p in PROFILES.items():
+for key, p in ((k, PROFILES[k]) for k in PAGE_BOTS):
     c = load_settings(key)
     risk = f"{c['max_loss_pct']:g}% do saldo" if c["risk_mode"] == "% do saldo" else f"{c['max_loss_usdt']:g} USDT"
     rows.append({"Bot": p.name, "Ativo": c["symbol"], "Tempo gráfico": c["interval"], "Perda máxima por trade": risk,

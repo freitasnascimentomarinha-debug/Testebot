@@ -6,7 +6,7 @@ import streamlit as st
 
 from core import accounts, fastsim, personalities as P
 from core.ai import strategy_from_text
-from core.profiles import PROFILES
+from core.profiles import PAGE_BOTS, PROFILES
 from core.settings import DEFAULT_MODEL, load_settings, save_settings
 from core.strategy import SKILLS
 from core.paper import account_id, get_account, stats
@@ -25,7 +25,7 @@ def mlabel(m: str) -> str:
     return MARKET_LABEL.get(m, m)
 
 
-BOT_LABEL = {k: f"{p.icon} {p.name}" for k, p in PROFILES.items()}
+BOT_LABEL = {k: f"{PROFILES[k].icon} {PROFILES[k].name}" for k in PAGE_BOTS}
 
 
 def use_in_bot(pid: str, bot: str) -> None:
@@ -165,13 +165,13 @@ with tab_rank:
                 "nos últimos 40 dias.")
     c1, c2, c3 = st.columns([2, 1.2, 1])
     pick = c1.selectbox("Usar uma personalidade", [r["id"] for r in rows], format_func=lambda i: P.get(i)["name"])
-    bot = c2.selectbox("no bot", list(PROFILES), format_func=BOT_LABEL.get, key="rank_bot")
+    bot = c2.selectbox("no bot", list(PAGE_BOTS), format_func=BOT_LABEL.get, key="rank_bot")
     if c3.button("Usar agora", type="primary", width="stretch"):
         use_in_bot(pick, bot)
 
 # --------------------------------------------------------------- biblioteca
 with tab_lib:
-    in_use = {k: load_settings(k).get("personality") for k in PROFILES}
+    in_use = {k: load_settings(k).get("personality") for k in PAGE_BOTS}
     for p in P.list_all():
         with st.container(border=True):
             c1, c2 = st.columns([3, 1.2])
@@ -206,7 +206,7 @@ with tab_lib:
                         f"{rs['ret_seen']:+.1f}% · moedas inéditas {rs['ret_new']:+.1f}% · acerto {rs['win_pct']:.0f}% · "
                         f"pior queda {rs['dd_pct']:.0f}%. Passado não garante futuro.")
             with c2:
-                target = st.selectbox("Bot", list(PROFILES), format_func=BOT_LABEL.get, key=f"lib_bot_{p['id']}",
+                target = st.selectbox("Bot", list(PAGE_BOTS), format_func=BOT_LABEL.get, key=f"lib_bot_{p['id']}",
                                       label_visibility="collapsed")
                 if st.button("Usar neste bot", key=f"use_{p['id']}", width="stretch", type="primary"):
                     use_in_bot(p["id"], target)

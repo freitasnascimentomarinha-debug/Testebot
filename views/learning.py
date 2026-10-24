@@ -30,7 +30,7 @@ QUIZ = {
          ["O lucro ou prejuízo já realizado", "O lucro ou prejuízo das posições em andamento, com taxas", "A taxa de acerto"], 1,
          "É o resultado ainda em andamento, já descontadas as taxas."),
         ("Na carteira única…",
-         ["Cada bot tem a sua banca", "Os três bots e as suas ordens manuais dividem a mesma banca", "Só o Day Trade opera"], 1,
+         ["Cada bot tem a sua banca", "Os bots (Futuros e Spot) e as suas ordens manuais dividem a mesma banca", "Só o bot de Futuros opera"], 1,
          "Na separada, cada bot tem a sua subconta, boa para comparar um bot contra o outro."),
     ],
     "aula3": [

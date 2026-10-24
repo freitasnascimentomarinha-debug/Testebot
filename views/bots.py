@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core import indicators as ind, personalities as P, regime
-from core.profiles import PROFILES
+from core.profiles import PAGE_BOTS, PROFILES
 from core.settings import default_settings, load_settings, save_settings
 from core.strategy import SKILLS
 from core.ui import cached_klines, cached_symbols
@@ -19,7 +19,7 @@ if msg := st.session_state.pop("bots_toast", None):
     st.toast(msg, icon="✅")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
-STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}
+STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}  # estilo pelo tempo gráfico do bot
 
 
 def rr_label(p: dict) -> str:
@@ -83,12 +83,12 @@ with tab_gal:
     st.caption(f"{len(view)} de {len(bots)} bots · {ok} aprovados na prova final")
 
     # --------------------------------------------------------------------- cards
-    in_use = {b: load_settings(b).get("personality") for b in PROFILES}
+    in_use = {b: load_settings(b).get("personality") for b in PAGE_BOTS}
     cols = st.columns(3)
     for n, p in enumerate(view):
         rs = p.get("research", {})
         lv = live.get(p["id"], {})
-        bot = p.get("bot") or ("day" if "futures" in p.get("markets", []) else "swing")
+        bot = {"long": "swing"}.get(p.get("bot"), p.get("bot")) or ("day" if "futures" in p.get("markets", []) else "swing")  # Long roda na página Spot
         with cols[n % 3].container(border=True):
             st.markdown(f"#### {p['name']}")
             mk = rs.get("market") or ("futures" if "futures" in p.get("markets", ["futures"])[:1] else "spot")

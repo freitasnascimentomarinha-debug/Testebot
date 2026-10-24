@@ -10,7 +10,7 @@ from core.broker import get_broker
 from core.charts import tradingview_widget
 from core import leverage as lev_rules
 from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
-from core.profiles import PROFILES, SYMBOLS, BotProfile
+from core.profiles import PROFILES, SYMBOLS, BotProfile, style_of
 from core import indicators as ind
 from core.realtime import chart_height, realtime_chart_html
 from core.settings import DEFAULT_MODEL, default_settings, load_settings, save_settings
@@ -112,8 +112,9 @@ def render_bot_page(bot: str) -> None:
     cfg = init_settings(profile)
     broker = get_broker(bot)
 
-    st.title(f"{profile.icon} Bot de {profile.name}")
-    st.caption(f"{profile.market_label} · {profile.description} · Execução: **{broker.name}** com dados reais.")
+    st.title(f"{profile.icon} {profile.name}")
+    st.caption(f"{profile.market_label} · estilo pelo tempo gráfico: **{style_of(st.session_state.get(_k(bot, 'interval'), cfg['interval']))}** "
+               "(até 1h day trade · 2h a 12h swing · 1d ou mais long) · dados reais.")
 
     execution_banner()
 
@@ -167,7 +168,8 @@ def render_bot_page(bot: str) -> None:
 def execution_banner() -> None:
     """Conta em que as ordens são executadas (escolhida na barra lateral)."""
     mode = execution.get_mode()
-    st.caption(f"Conta de operação: **{execution.MODES[mode]}**" + (" · ordens simuladas com dados reais." if mode == "simulada" else ""))
+    st.caption(f"Conta de operação: **{execution.MODES[mode]}**" + (" · ordens simuladas com dados reais." if mode == "simulada" else "")
+               + " · troque em **Minha conta**.")
     if (why := execution.orders_problem(mode)):
         st.warning(why)
 
