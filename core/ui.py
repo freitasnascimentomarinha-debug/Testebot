@@ -91,12 +91,24 @@ def init_settings(profile: BotProfile) -> dict:
     widget) e devolve o dicionário atual, salvando se algo mudou."""
     bot = profile.key
     stored = load_settings(bot)
+    for name, value in st.session_state.pop(_k(bot, "__pending"), {}).items():  # mudanças pedidas por botões na execução anterior
+        st.session_state[_k(bot, name)] = value
     for name, value in stored.items():
         st.session_state.setdefault(_k(bot, name), value)
     cfg = {name: st.session_state[_k(bot, name)] for name in stored}
     if cfg != stored:
         save_settings(bot, cfg)
     return cfg
+
+
+def queue_setting(bot: str, **changes) -> None:
+    """Muda configurações cujo widget já foi desenhado nesta execução (o Streamlit proíbe alterar o valor de um widget depois
+    de criado): salva agora e aplica no início da próxima execução, antes dos widgets."""
+    cfg = load_settings(bot)
+    cfg.update(changes)
+    save_settings(bot, cfg)
+    pending = st.session_state.get(_k(bot, "__pending"), {})
+    st.session_state[_k(bot, "__pending")] = {**pending, **changes}
 
 
 def set_setting(bot: str, name: str, value) -> None:
@@ -815,11 +827,11 @@ def render_advice(profile: BotProfile, cfg: dict, result: engine.AnalysisResult)
         if best.get("ativo"):
             b1.success("Já é o bot ativo")
         elif b1.button("Usar este bot", key=f"{bot}__use_best", type="primary", width="stretch"):
-            set_setting(bot, "personality", best["id"])
-            st.session_state[_k(bot, "personality")] = best["id"]
+            changes = {"personality": best["id"], "auto_bot": False}  # escolha manual: desliga o bot automático
             tested = p.get("tested_interval")
             if tested and tested in profile.intervals:
-                set_setting(bot, "interval", tested)
+                changes["interval"] = tested
+            queue_setting(bot, **changes)
             st.rerun()
         if best.get("alternativas"):
             b2.caption("Alternativas: " + " · ".join(a["nome"] for a in best["alternativas"]))

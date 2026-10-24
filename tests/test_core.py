@@ -1234,3 +1234,32 @@ def test_spot_page_has_no_leverage_or_short(monkeypatch):
     assert "Alavancagem" not in [t.label for t in at.tabs]
     assert "Spot: compra e venda à vista" in " ".join(c.value for c in at.caption)
     assert 1 == load_settings("swing")["leverage"] and PROFILES["swing"].max_leverage == 1
+
+
+def test_queue_setting_after_widgets_does_not_raise(monkeypatch):
+    """Botões desenhados depois dos widgets (ex.: 'Usar este bot') não podem alterar o valor deles na mesma execução."""
+    from streamlit.testing.v1 import AppTest
+
+    _offline_market(monkeypatch)
+    paper.set_wallet_mode("única")
+
+    def page():
+        import streamlit as st
+
+        st.page_link = lambda *a, **k: None
+        from core.ui import queue_setting, render_bot_page
+
+        render_bot_page("day")
+        if st.session_state.get("pedido") and not st.session_state.get("feito"):
+            st.session_state["feito"] = True
+            queue_setting("day", interval="1h", auto_bot=False)
+
+    at = AppTest.from_function(page, default_timeout=120).run()
+    at.session_state["pedido"] = True
+    at = at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    at = at.run()  # a mudança pendente entra no começo da execução seguinte, antes dos widgets
+    assert not at.exception and at.session_state["day__interval"] == "1h" and at.session_state["day__auto_bot"] is False
+    from core.settings import load_settings
+
+    assert load_settings("day")["interval"] == "1h"
