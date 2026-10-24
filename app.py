@@ -69,9 +69,8 @@ pages = {
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
                     st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")],
     "Mercado Cripto": [
-        st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
-        st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),
-        st.Page("views/long_trade.py", title="Long Trade · Spot", icon="🏔️", url_path="long-trade"),
+        st.Page("views/day_trade.py", title="Futuros", icon="⚡", url_path="futuros"),
+        st.Page("views/swing_trade.py", title="Spot", icon="🌊", url_path="spot"),
     ],
 }
 
@@ -92,18 +91,9 @@ require_login()
 with st.sidebar:
     st.divider()
     if _authed and not _gated:
-        _modes = list(execution.MODES)
-        _cur = execution.get_mode()
-        _pick = st.radio("Conta de operação", _modes, index=_modes.index(_cur), format_func=execution.MODES.get, key="_account_mode",
-                         help="Onde as ordens são executadas: na conta demo da plataforma (simulada), na conta demo da Exchange "
-                              "(Binance testnet) ou na conta real da Exchange. As contas da Exchange exigem a chave da Binance "
-                              "cadastrada em Minha conta.")
-        if _pick != _cur:
-            execution.set_mode(_pick)
-            st.rerun()
-        if (_why := execution.orders_problem(_pick)):
+        st.caption(f"Conta de operação: {execution.MODES[execution.get_mode()]}")
+        if (_why := execution.orders_problem()):
             st.caption("⚠️ " + _why)
-        st.divider()
     store = backend()
     if getattr(store, "last_error", None):  # só avisa quando uma gravação realmente falhou
         st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")

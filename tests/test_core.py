@@ -1176,3 +1176,33 @@ def test_share_custom_bots_with_community_or_selected_users(monkeypatch):
             Pm.delete_custom(pid)
     finally:
         storage.set_user(None)
+
+
+def test_style_by_interval_and_account_page_saves_mode(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from core import accounts, execution, storage
+    from core.profiles import PAGE_BOTS, PROFILES, style_of
+
+    assert PAGE_BOTS == ("day", "swing") and PROFILES["day"].name == "Futuros" and PROFILES["swing"].name == "Spot"
+    assert style_of("15m").endswith("Day Trade") and style_of("4h").endswith("Swing Trade") and style_of("1d").endswith("Long Trade")
+    assert "1d" in PROFILES["day"].intervals and {"1d", "1w", "1M"} <= set(PROFILES["swing"].intervals)
+
+    monkeypatch.setattr(accounts, "info", lambda u: {"created": "2026-01-01"})
+    storage.set_user("conta_pagina")
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        at = AppTest.from_file(os.path.join(root, "views", "account.py"), default_timeout=60)
+        at.session_state["_user"] = "conta_pagina"
+        at = at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        radio = next(r for r in at.radio if r.key == "acc_mode")
+        radio.set_value("demo").run()
+        at = at.run()
+        save = next(b for b in at.button if "Salvar conta de operação" in b.label)
+        save.click()
+        at = at.run()
+        assert not at.exception and execution.get_mode() == "demo"
+    finally:
+        execution.set_mode("simulada")
+        storage.set_user(None)

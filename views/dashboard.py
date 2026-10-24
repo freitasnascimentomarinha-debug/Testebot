@@ -18,8 +18,8 @@ st.caption("Bots operando com cotações reais — "
               else "cada um com a sua **banca separada**."))
 st.page_link("views/wallet.py", label="Abrir Carteira (banca, aportes, extrato e histórico completo)", icon="💰")
 
-PAGES = {"day": "day_trade", "swing": "swing_trade", "long": "long_trade"}
-GROUPS = [("Mercado Cripto", ["day", "swing", "long"])]
+PAGES = {"day": "day_trade", "swing": "swing_trade"}
+GROUPS = [("Mercado Cripto", ["day", "swing"])]
 curves = []
 cells = []  # (coluna, chave): uma linha de cartões por grupo de mercados
 for title, keys in GROUPS:

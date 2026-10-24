@@ -32,6 +32,17 @@ class BotProfile:
         return True
 
 
+# Páginas do menu: Futuros e Spot. O estilo (day trade, swing ou long) vem do tempo gráfico escolhido.
+PAGE_BOTS = ("day", "swing")
+
+
+def style_of(interval: str) -> str:
+    """Estilo de operação pelo tempo gráfico: até 1h day trade; de 2h a 12h swing; de 1d em diante long."""
+    if interval in ("1m", "3m", "5m", "15m", "30m", "1h"):
+        return "⚡ Day Trade"
+    return "🌊 Swing Trade" if interval in ("2h", "4h", "6h", "12h") else "🏔️ Long Trade"
+
+
 SYMBOLS = (
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT",
     "AVAXUSDT", "LINKUSDT", "DOTUSDT", "LTCUSDT", "TRXUSDT", "SUIUSDT", "TONUSDT",
@@ -40,11 +51,11 @@ SYMBOLS = (
 PROFILES: dict[str, BotProfile] = {
     "day": BotProfile(
         key="day",
-        name="Day Trade",
+        name="Futuros",
         icon="⚡",
         market="futures",
         description="Operações intradiárias em futuros perpétuos, comprado ou vendido, com alavancagem.",
-        intervals=("1m", "3m", "5m", "15m", "30m", "1h"),
+        intervals=("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d"),
         default_interval="15m",
         default_leverage=5,
         max_leverage=125,
@@ -59,11 +70,11 @@ PROFILES: dict[str, BotProfile] = {
     ),
     "swing": BotProfile(
         key="swing",
-        name="Swing Trade",
+        name="Spot",
         icon="🌊",
         market="spot",
         description="Operações de dias a semanas no mercado à vista, seguindo ondas de tendência.",
-        intervals=("15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d"),
+        intervals=("15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"),
         default_interval="4h",
         default_leverage=3,
         max_leverage=10,
