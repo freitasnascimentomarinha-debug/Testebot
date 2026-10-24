@@ -145,27 +145,9 @@ def _okx_klines(symbol: str, interval: str, limit: int, market: str) -> list:
              float(r[vol_idx]) / mult] for r in reversed(rows)]
 
 
-def _yahoo_market_symbol(symbol: str, market: str) -> str:
-    from core import markets
-
-    try:
-        return markets.yahoo_symbol(market, symbol)
-    except KeyError as exc:
-        raise MarketDataError(str(exc)) from exc
-
-
 def get_klines(symbol: str, interval: str, limit: int = 500, market: str = "spot") -> pd.DataFrame:
     """Candles OHLCV em UTC. ``df.attrs['source']`` informa o provedor usado."""
     symbol = symbol.upper().strip()
-    from core import markets
-
-    if not markets.is_crypto(market):  # forex, commodities, índices e ações da B3
-        from core import yahoo
-
-        try:
-            return yahoo.klines(_yahoo_market_symbol(symbol, market), interval, limit)
-        except yahoo.YahooError as exc:
-            raise MarketDataError(f"Yahoo Finance: {exc}") from exc
     errors = []
     attempts = []
     if market == "futures":
@@ -189,17 +171,6 @@ def get_klines(symbol: str, interval: str, limit: int = 500, market: str = "spot
 
 def get_ticker(symbol: str, market: str = "spot") -> Ticker:
     symbol = symbol.upper().strip()
-    from core import markets
-
-    if not markets.is_crypto(market):
-        from core import yahoo
-
-        try:
-            q = yahoo.quote(_yahoo_market_symbol(symbol, market))
-        except yahoo.YahooError as exc:
-            raise MarketDataError(f"Yahoo Finance: {exc}") from exc
-        change = (q["last"] / q["prev_close"] - 1) * 100 if q["prev_close"] else 0.0
-        return Ticker(symbol, q["last"], change, q["high"], q["low"], q["volume"] * q["last"], "Yahoo Finance", q["market_time"])
     errors = []
 
     def binance(base: str, path: str, name: str):
@@ -260,10 +231,6 @@ def last_closed_candle_time(df: pd.DataFrame, interval: str) -> pd.Timestamp:
 
 def list_symbols(market: str) -> list[str]:
     """Todos os pares em USDT negociáveis no mercado (spot: por volume)."""
-    from core import markets
-
-    if not markets.is_crypto(market):
-        return markets.symbols(market)
     if market == "futures":
         from core.leverage import futures_symbols
 

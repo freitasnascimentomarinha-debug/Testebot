@@ -19,8 +19,7 @@ if msg := st.session_state.pop("bots_toast", None):
     st.toast(msg, icon="✅")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
-STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo", "forex": "💱 Forex", "commodities": "🛢️ Commodities",
-         "indices": "📈 Índices", "stocks": "🇧🇷 Ações B3"}
+STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}
 
 
 def rr_label(p: dict) -> str:
@@ -93,7 +92,7 @@ with tab_gal:
         with cols[n % 3].container(border=True):
             st.markdown(f"#### {p['name']}")
             mk = rs.get("market") or ("futures" if "futures" in p.get("markets", ["futures"])[:1] else "spot")
-            market = {"futures": "Futuros", "spot": "Spot"}.get(mk) or (P.markets.MARKETS[mk].label if mk in P.markets.MARKETS else mk)
+            market = {"futures": "Futuros", "spot": "Spot"}.get(mk, mk)
             badges = [STYLE.get(bot, bot), rs.get("interval") or p.get("tested_interval") or p.get("timeframes", ""), market,
                       f"R:R {rr_label(p)}"]
             st.markdown(" ".join(f"`{b}`" for b in badges if b))

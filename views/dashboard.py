@@ -1,4 +1,4 @@
-"""Painel geral: resumo das subcontas simuladas (cripto e demais mercados)."""
+"""Painel geral: resumo dos bots de cripto (futuros e spot)."""
 import pandas as pd
 import streamlit as st
 
@@ -18,9 +18,8 @@ st.caption("Bots operando com cotações reais — "
               else "cada um com a sua **banca separada**."))
 st.page_link("views/wallet.py", label="Abrir Carteira (banca, aportes, extrato e histórico completo)", icon="💰")
 
-PAGES = {"day": "day_trade", "swing": "swing_trade", "long": "long_trade", "forex": "forex", "commodities": "commodities",
-         "indices": "indices", "stocks": "acoes"}
-GROUPS = [("Mercado Cripto", ["day", "swing", "long"]), ("Outros mercados", ["forex", "commodities", "indices", "stocks"])]
+PAGES = {"day": "day_trade", "swing": "swing_trade", "long": "long_trade"}
+GROUPS = [("Mercado Cripto", ["day", "swing", "long"])]
 curves = []
 cells = []  # (coluna, chave): uma linha de cartões por grupo de mercados
 for title, keys in GROUPS:
@@ -45,7 +44,7 @@ for col, key in cells:
                    f"{'alavancado ' + str(cfg['leverage']) + '×' if cfg['leverage_on'] else 'sem alavancagem'}")
         a, b = st.columns(2)
         a.metric("Banca" + (" (única)" if mode == "única" else ""), fmt(s["equity"]), f"{s['total_pnl_pct']:+.2f}%")
-        b.metric("Hoje", fmt(s["pnl_today"]), f"{s['trades_today']}/{cfg['max_trades_day']} operações", delta_color="off")
+        b.metric("Hoje", fmt(s["pnl_today"]), f"{s['trades_today']} operações", delta_color="off")
         a.metric("Posições abertas", s["open_positions"])
         b.metric("Acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
         st.caption(f"Piloto automático: {'🟢 ligado' if cfg['autopilot'] else '⚪ desligado'} · "
@@ -75,12 +74,13 @@ with st.expander("Como funciona o fluxo de decisão"):
 1. **Dados reais** — candles e cotação da Binance (futuros USDⓈ-M ou spot), com fallback para a OKX.
 2. **Habilidades de programação** — 9 regras determinísticas (tendência, momentum, MACD, Bollinger, SuperTrend,
    VWAP, volume/OBV, estrutura de topos/fundos e suportes/resistências) votam de −1 a +1 com pesos por estilo.
-3. **IA (via OpenRouter)** — recebe o contexto completo e devolve um JSON com decisão,
-   entrada, stop, alvo, confiança, riscos e condução.
-4. **Gestor de risco** — dimensiona a posição pela sua *perda máxima por trade*, valida R:R mínimo, metas diárias,
-   limite de perda, posições simultâneas, alavancagem e liquidação.
-5. **Execução** — ordem enviada à conta simulada (fase 2: Binance). Stops e alvos são monitorados com as máximas e
-   mínimas reais de cada candle.
+3. **Bot do momento** — no fechamento de cada candle, no tempo gráfico em uso, entra o bot do **ranking** com melhor
+   desempenho no contexto do gráfico. O ranking é refeito sozinho toda semana com o mercado recente.
+4. **IA (via OpenRouter)** — resume o que está acontecendo no mercado e dá uma dica útil, no tom da personalidade
+   escolhida. Opcionalmente, também confirma ou veta a ativação do bot naquele momento.
+5. **Dimensionamento** — a posição é calculada pela sua *perda máxima por trade* (sem bloqueios por metas ou limites diários).
+6. **Execução** — ordem enviada à conta de operação escolhida na barra lateral. Hoje: conta demo da plataforma (simulada);
+   Stops e alvos são monitorados com as máximas e mínimas reais de cada candle.
 """)
 
 with st.expander("💾 Backup e restauração dos dados"):

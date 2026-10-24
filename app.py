@@ -43,7 +43,7 @@ if "core" in sys.modules and _disk_version and _loaded_version != _disk_version:
     st.cache_data.clear()
     st.cache_resource.clear()
 
-from core import accounts, credentials  # noqa: E402
+from core import accounts, credentials, execution  # noqa: E402
 from core.auth import current_user, is_authenticated, logout, password_configured, require_login  # noqa: E402  (depois do set_page_config)
 import core  # noqa: E402
 from core import APP_VERSION  # noqa: E402
@@ -60,7 +60,7 @@ st.markdown("""<style>
 _acct_pages = ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else []) + \
     ([st.Page("views/admin.py", title="Administração", icon="🛡️", url_path="admin")]
      if accounts.enabled() and accounts.is_admin(st.session_state.get("_user")) else [])
-# Ordem do menu: conta e administração primeiro, depois o painel geral, a cripto e os demais mercados.
+# Ordem do menu: conta e administração primeiro, depois o painel geral e os mercados de cripto (futuros e spot).
 pages = {
     **({"Conta": _acct_pages} if _acct_pages else {}),
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
@@ -72,12 +72,6 @@ pages = {
         st.Page("views/day_trade.py", title="Day Trade · Futuros", icon="⚡", url_path="day-trade"),
         st.Page("views/swing_trade.py", title="Swing Trade · Spot", icon="🌊", url_path="swing-trade"),
         st.Page("views/long_trade.py", title="Long Trade · Spot", icon="🏔️", url_path="long-trade"),
-    ],
-    "Outros mercados": [
-        st.Page("views/forex.py", title="Forex", icon="💱", url_path="forex"),
-        st.Page("views/commodities.py", title="Commodities", icon="🛢️", url_path="commodities"),
-        st.Page("views/indices.py", title="Índices", icon="📈", url_path="indices"),
-        st.Page("views/acoes.py", title="Ações Brasil (B3)", icon="🇧🇷", url_path="acoes-brasil"),
     ],
 }
 
@@ -97,6 +91,19 @@ require_login()
 
 with st.sidebar:
     st.divider()
+    if _authed and not _gated:
+        _modes = list(execution.MODES)
+        _cur = execution.get_mode()
+        _pick = st.radio("Conta de operação", _modes, index=_modes.index(_cur), format_func=execution.MODES.get, key="_account_mode",
+                         help="Onde as ordens são executadas: na conta demo da plataforma (simulada), na conta demo da Exchange "
+                              "(Binance testnet) ou na conta real da Exchange. As contas da Exchange exigem a chave da Binance "
+                              "cadastrada em Minha conta.")
+        if _pick != _cur:
+            execution.set_mode(_pick)
+            st.rerun()
+        if (_why := execution.orders_problem(_pick)):
+            st.caption("⚠️ " + _why)
+        st.divider()
     store = backend()
     if getattr(store, "last_error", None):  # só avisa quando uma gravação realmente falhou
         st.error(f"Última gravação falhou (nova tentativa automática): {store.last_error[:200]}")
