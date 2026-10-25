@@ -9,7 +9,6 @@ import streamlit.components.v1 as components
 
 from core import ai as ai_mod, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
 from core.broker import get_broker
-from core.charts import tradingview_widget
 from core import leverage as lev_rules
 from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
 from core.profiles import PROFILES, SYMBOLS, BotProfile, style_of
@@ -131,17 +130,10 @@ def render_bot_page(bot: str) -> None:
     header_slot = st.container()   # o cabeçalho é desenhado pelo fragmento ao vivo, mas ocupa o topo da página
     execution_banner()
 
-    # Seleção de ativo (o tempo gráfico fica em botões no cabeçalho) -------------------------------------------
-    c1, c3, c4 = st.columns([2.4, 1, 1.2])
+    # Ativo: clique no nome da moeda dentro do gráfico; tempo gráfico: botões do cabeçalho; candles e atualização: Configurações → Gráfico
     all_symbols = cached_symbols(profile.market)
-    options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
-    c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
-                 help="Clique e digite para buscar qualquer moeda negociada na Binance "
-                      f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
     if st.session_state[_k(bot, "interval")] not in profile.intervals:
         st.session_state[_k(bot, "interval")] = profile.default_interval
-    c3.number_input("Candles", 150, 1500, step=50, key=_k(bot, "candles"))
-    c4.selectbox("Atualização (s)", (5, 10, 15, 30, 60, 120, 300, 600), key=_k(bot, "refresh_sec"))
     cfg = {name: st.session_state[_k(bot, name)] for name in cfg}
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
@@ -152,21 +144,14 @@ def render_bot_page(bot: str) -> None:
     # embaixo, posições/histórico, controle do bot e configurações.
     col_chart, col_side = st.columns([3.3, 1.2], gap="medium")
     with col_chart:
-        indicator_picker(bot, cfg)
-        tab_rt, tab_tv, tab_ctl, tab_cfg = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho", "🧠 Análise do bot",
-                                                     "⚙️ Configurações"])
+        tab_rt, tab_ctl, tab_cfg = st.tabs(["⚡ Tempo real", "🧠 Análise do bot", "⚙️ Configurações"])
         with tab_rt:
             positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"] and p.get("market") == profile.market]
             height = chart_height(cfg)
             orders = [o for o in broker.account()["orders"] if o["symbol"] == cfg["symbol"] and o.get("market") == profile.market]
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
                                                 cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions, orders=orders,
-                                                height=height), height=height + 5)
-        with tab_tv:
-            st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua e as ferramentas "
-                       "**Posição comprada / vendida**. Os desenhos ficam no navegador; níveis para a IA ficam em "
-                       "*Configurações → Níveis do usuário*.")
-            components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+                                                height=height, symbols=all_symbols), height=height + 5)
         with tab_ctl:
             analysis_panel(profile, cfg)
         with tab_cfg:
@@ -207,6 +192,13 @@ def chart_bridge(profile: BotProfile, cfg: dict) -> None:
     if not ev or ev.get("uid") == st.session_state.get(f"{bot}__chart_uid"):
         return
     st.session_state[f"{bot}__chart_uid"] = ev.get("uid")
+    if ev.get("kind") == "symbol":   # moeda escolhida no próprio gráfico
+        sym = str(ev.get("value", "")).upper().strip()
+        if sym in cached_symbols(profile.market) and sym != cfg["symbol"]:
+            set_setting(bot, "symbol", sym)
+            st.session_state.pop(f"{bot}__scan_marker", None)
+            st.rerun()
+        return
     ok, msg = chart_actions.handle(profile, cfg, ev, st.session_state.get(f"{bot}__last_price"), st.session_state.get(f"{bot}__atr"))
     if msg:
         st.toast(msg, icon="✅" if ok else "🚫")
@@ -218,21 +210,6 @@ def execution_banner() -> None:
     """Aviso quando a conta de operação escolhida não pode enviar ordens (a conta em uso aparece no cabeçalho)."""
     if (why := execution.orders_problem(execution.get_mode())):
         st.warning(why)
-
-
-def indicator_picker(bot: str, cfg: dict) -> None:
-    """Liga/desliga indicadores dos gráficos (mesmas chaves da aba Indicadores)."""
-    key = f"{bot}__ind_pick"
-    st.session_state[key] = [label for label, flag in INDICATOR_FLAGS.items() if cfg.get(flag)]
-
-    def _apply():
-        chosen = set(st.session_state[key])
-        for label, flag in INDICATOR_FLAGS.items():
-            st.session_state[_k(bot, flag)] = label in chosen
-
-    st.multiselect("Indicadores no gráfico", list(INDICATOR_FLAGS), key=key, on_change=_apply,
-                   placeholder="Escolha os indicadores", help="Adicione ou remova indicadores. Parâmetros (períodos, "
-                   "desvios etc.) ficam em Configurações do bot → Indicadores.")
 
 
 # ------------------------------------------------------- seção ao vivo (fragments)
@@ -687,9 +664,16 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     k = lambda n: _k(bot, n)  # noqa: E731
     futures = profile.market == "futures"
-    labels = (["Alavancagem"] if futures else []) + ["Varredura", "Indicadores", "IA", "Níveis do usuário", "Conta"]
+    labels = ["Gráfico"] + (["Alavancagem"] if futures else []) + ["Varredura", "Indicadores", "IA", "Níveis do usuário", "Conta"]
     tabs = dict(zip(labels, st.tabs(labels)))
     t_scan, t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[-5:])
+
+    with tabs["Gráfico"]:
+        c = st.columns(2)
+        c[0].number_input("Candles carregados", 150, 1500, step=50, key=k("candles"))
+        c[1].selectbox("Atualização (s)", (5, 10, 15, 30, 60, 120, 300, 600), key=k("refresh_sec"),
+                       help="De quantos em quantos segundos a página confere preços, stops e alvos e roda o bot.")
+        st.caption("A moeda se troca clicando no nome dela no topo do gráfico; o tempo gráfico, nos botões do cabeçalho.")
 
     with t_scan:
         st.toggle("🔎 Procurar oportunidades em várias moedas", key=k("scan_on"),

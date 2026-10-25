@@ -30,7 +30,8 @@ def chart_height(cfg: dict, base: int = 640) -> int:
 
 
 def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, lines: list[dict],
-                        positions: list[dict], height: int, orders: list[dict] | None = None, demo: list | None = None) -> str:
+                        positions: list[dict], height: int, orders: list[dict] | None = None, demo: list | None = None,
+                        symbols: list[str] | None = None) -> str:
     """``lines``: [{"price", "color", "title", "style": "solid|dashed|dotted"}];
     ``positions``: posições abertas no ativo (para o P&L ao vivo)."""
     ind_keys = ("ema_on", "ema_fast", "ema_slow", "ema_trend_on", "ema_trend", "bb_on", "bb_period", "bb_std", "vwap_on",
@@ -42,7 +43,7 @@ def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, l
     from core.data import okx_base
 
     base, mult = okx_base(symbol)
-    conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height,
+    conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height, "symbols": list(symbols or [])[:3000],
                        "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos,
                        "orders": [{k: o.get(k) for k in ("id", "side", "qty")} | {"price": o["limit_price"]} for o in (orders or [])],
                        **({"demo": demo} if demo else {})})
@@ -56,7 +57,10 @@ _TEMPLATE = r"""<!doctype html><html><head><meta charset="utf-8">
 <style>
   html,body{margin:0;background:#0e1117;color:#d1d4dc;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
   #bar{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;padding:6px 8px;font-size:13px;min-height:28px}
-  #sym{font-weight:700;font-size:15px} #px{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  #sym{font-weight:700;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:7px;background:#1e2433;border:1px solid #2a3042} #sym:hover{border-color:#5a6385}
+  #symbox{position:fixed;top:36px;left:8px;z-index:30;width:230px;background:#141824;border:1px solid #2a3042;border-radius:10px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none}
+  #symbox input{width:100%;box-sizing:border-box;background:#0e1117;color:#e6e8ee;border:1px solid #2a3042;border-radius:7px;padding:7px 9px;font-size:13px;margin-bottom:6px}
+  #symlist{max-height:260px;overflow:auto} #symlist div{padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px} #symlist div:hover,#symlist div.on{background:#2a3042} #px{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
   .up{color:#26a69a} .dn{color:#ef5350} .mut{color:#8a8f98}
   #dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#8a8f98;margin-right:5px}
   #dot.live{background:#26a69a;box-shadow:0 0 6px #26a69a} #dot.err{background:#ef5350}
@@ -96,7 +100,18 @@ const M = C.okx_mult, VI = fut ? 6 : 5;  // OKX: preço por moeda (×M p/ pares 
 const okxRow = k => row(+k[0], k[1] * M, k[2] * M, k[3] * M, k[4] * M, k[VI] / M);
 const $ = id => document.getElementById(id);
 const UP = "#26a69a", DN = "#ef5350";
-$("sym").textContent = C.symbol + (fut ? " · Perpétuo" : " · Spot") + " · " + C.interval;
+$("sym").textContent = C.symbol + (fut ? " · Perpétuo" : " · Spot") + " · " + C.interval + " ▾";
+{ // trocar de moeda clicando no nome: busca e lista dos pares do mercado
+  const box = document.createElement("div"); box.id = "symbox";
+  box.innerHTML = '<input placeholder="Buscar moeda… (ex.: SOL)" autocomplete="off"><div id="symlist"></div>'; document.body.appendChild(box);
+  const inp = box.querySelector("input"), list = box.querySelector("#symlist");
+  const draw = () => { const q = inp.value.trim().toUpperCase(); const rows = (C.symbols || []).filter(s => s.includes(q)).sort((a, b) => (a.startsWith(q) ? 0 : 1) - (b.startsWith(q) ? 0 : 1)).slice(0, 80);
+    list.innerHTML = rows.map(s => `<div data-s="${s}" class="${s === C.symbol ? "on" : ""}">${s.replace(/USDT$/, "")}<span class="mut">/USDT</span></div>`).join("") || '<div class="mut">Nenhuma moeda encontrada</div>'; };
+  $("sym").onclick = () => { box.style.display = box.style.display === "block" ? "none" : "block"; if (box.style.display === "block") { inp.value = ""; draw(); inp.focus(); } };
+  inp.oninput = draw;
+  inp.onkeydown = e => { if (e.key === "Enter") { const f = list.querySelector("div[data-s]"); if (f) f.click(); } if (e.key === "Escape") box.style.display = "none"; };
+  list.onclick = e => { const d = e.target.closest("div[data-s]"); if (!d) return; box.style.display = "none"; if (d.dataset.s !== C.symbol) send({kind: "symbol", value: d.dataset.s}); };
+}
 const fmt = v => v == null || isNaN(v) ? "—" : Math.abs(v) >= 100
   ? v.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})
   : v.toLocaleString("pt-BR", {maximumSignificantDigits: 6});
