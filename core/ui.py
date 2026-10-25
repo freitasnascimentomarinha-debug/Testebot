@@ -699,6 +699,9 @@ def open_positions(profile: BotProfile, cfg: dict) -> None:
         acct = get_broker(bot).account()
         price = st.session_state.get(f"{bot}__last_price", 0)
         positions = [p for p in acct["positions"] if p.get("market") == profile.market]
+        if not positions:
+            st.caption("Nenhuma posição aberta.")
+            return
         prices = {p["symbol"]: (price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]) for p in positions}
         cards = [positions_view.card_data(p, prices[p["symbol"]]) for p in positions]
         res = _cards_component()(key=f"{bot}-position-cards", data={"cards": cards}, on_action_change=lambda: None)
