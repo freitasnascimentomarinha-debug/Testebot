@@ -100,8 +100,8 @@ def simulate_bot(votes: dict, persona: dict, market: str, days: float, risk_pct:
         "win_pct": round(sum(r["wins"] for r in per_symbol) / n_tr * 100, 1) if n_tr else 0.0, "trades": n_tr,
         "positive": sum(r["ret"] > 0 for r in per_symbol), "symbols": len(per_symbol),
         "per_symbol": {r["symbol"]: round(r["ret"], 2) for r in per_symbol},
-        "contexts": {c: {"n": len(v), "avg_r": round(float(np.mean(v)), 3), "win_pct": round(float(np.mean([x > 0 for x in v]) * 100), 1)}
-                     for c, v in by_ctx.items()},
+        "contexts": {c: {"n": len(v), "avg_r": round(float(np.mean(v)), 3), "win_pct": round(float(np.mean([x > 0 for x in v]) * 100), 1),
+                         "ret_pct": round(compound(v)[0], 2)} for c, v in by_ctx.items()},
     }
 
 

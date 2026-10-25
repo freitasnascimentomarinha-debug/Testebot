@@ -661,7 +661,7 @@ def test_personality_only_where_trained():
             assert rs["market"] == market and rs["interval"] == interval and rs["status"] in ("aprovado", "ressalva")
     assert not any(p["id"] == "esp_5m_bb_reversal_2x1" for p in Pm.allowed("futures", "5m"))  # fraco no teste
     assert Pm.allowed("futures", "30m") == [] and Pm.allowed("spot", "5m") == []
-    assert Pm.trained_intervals("futures") == ["5m", "15m", "1h"]
+    assert [i for i in Pm.trained_intervals("futures") if i != "4h"] == ["5m", "15m", "1h"]   # 4h vem dos bots por contexto, se gerados
     assert "experimental" not in Pm.allowed("futures", "5m")[0]["name"].lower()
     for bot, pid in Pm.DEFAULT_BY_BOT.items():  # o padrão de cada bot vale no tempo gráfico padrão dele
         assert Pm.is_allowed(pid, PROFILES[bot].market, PROFILES[bot].default_interval)
@@ -1737,3 +1737,22 @@ def test_context_research_two_tiers_aprovado_and_ressalva():
     res = cr.search_cell(cell, "tendencia", "long", fast=True, simulate=mixed)
     assert res["research"]["status"] == "aprovado" and res["bot"]["threshold"] == 20
     assert (1.0, 2.0) not in cr.EXITS[:1] and (4.0, 6.0) in cr.EXITS and (5.0, 5.0) in cr.EXITS     # stops largos diluem as taxas nos tempos curtos
+
+
+def test_bots_gallery_survives_weekly_ranking_contexts_without_extra_fields(monkeypatch):
+    """Depois da 1ª atualização semanal os contextos vêm só com n, R médio e acerto: a galeria não pode quebrar."""
+    from streamlit.testing.v1 import AppTest
+
+    from core import personalities as Pm
+    from core import ranking
+
+    base = next(b for b in Pm.BUILTINS if (b.get("research") or {}).get("market") == "futures" and b["research"].get("contexts"))
+    rs = base["research"]
+    res = {"ret_pct": 3.0, "monthly_pct": 3.0, "win_pct": 50.0, "dd_pct": 4.0, "trades": 50, "positive": 4, "symbols": 5, "status": "aprovado",
+           "contexts": {"lateral": {"n": 12, "avg_r": 0.2, "win_pct": 55.0}}}
+    rank = {f"{rs['market']}|{rs['interval']}": {"updated": "2026-10-20T00:00:00+00:00", "days": 30, "results": {base["id"]: res}, "order": [base["id"]]}}
+    monkeypatch.setattr(ranking, "load", lambda: rank)
+    assert Pm.get(base["id"])["research"]["contexts"]["lateral"] == {"n": 12, "avg_r": 0.2, "win_pct": 55.0}
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]

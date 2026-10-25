@@ -138,7 +138,7 @@ with tab_gal:
                     st.markdown("**Desempenho por contexto do gráfico** (operando só naquele contexto):")
                     st.dataframe(pd.DataFrame([{
                         "Contexto": regime.label(k), "% do tempo": rs.get("context_share", {}).get(k),
-                        "Operações": v["n"], "Acerto": v["win_pct"], "R médio": v["avg_r"], "Retorno": v["ret_pct"]}
+                        "Operações": v["n"], "Acerto": v["win_pct"], "R médio": v["avg_r"], "Retorno": v.get("ret_pct")}
                         for k, v in rs["contexts"].items()]).sort_values("R médio", ascending=False),
                         hide_index=True, column_config={
                             "% do tempo": st.column_config.NumberColumn(format="%.0f%%"),
@@ -196,7 +196,7 @@ with tab_ctx:
         if not rs.get("contexts"):
             continue
         names.append(f"{p['name']} · {rs['interval']}")
-        rows.append([rs["contexts"][k][field] if k in rs["contexts"] and rs["contexts"][k]["n"] >= 3 else None for k in ctx_keys])
+        rows.append([rs["contexts"][k].get(field) if k in rs["contexts"] and rs["contexts"][k]["n"] >= 3 else None for k in ctx_keys])
     if rows:
         z = pd.DataFrame(rows, index=names, columns=[regime.label(k) for k in ctx_keys])
         mid = 50 if field == "win_pct" else 0
