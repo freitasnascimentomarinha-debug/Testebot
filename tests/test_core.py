@@ -736,7 +736,7 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
     paper.set_wallet_mode("única")
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
     profile = PROFILES["day"]
-    cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_count": 20, "scan_pool": 40, "scan_max_entries": 2,
+    cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_count": 18, "scan_pool": 40, "scan_max_entries": 2,
            "candles": 400}
     asked, fetched = [], []
 
@@ -761,15 +761,18 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
     pool = lambda market: ranked  # noqa: E731
     import random
     sample = scanner.symbols_for(cfg, "futures", pool, random.Random(1))
-    assert sample[0] == "BTCUSDT" and len(sample) == 20 and len(set(sample)) == 20                # a da tela + 19 sorteadas, sem repetir
+    assert sample[0] == "BTCUSDT" and len(sample) == 18 and len(set(sample)) == 18                # a da tela + 17 sorteadas, sem repetir
     assert set(sample) <= set(ranked[:40])                                                          # só entre as 40 de maior volume
     assert scanner.symbols_for(cfg, "futures", pool, random.Random(2)) != sample                    # sorteio: muda a cada varredura
-    assert len(scanner.symbols_for({**cfg, "scan_count": 5}, "futures", pool, random.Random(1))) == 20   # mínimo de 20
+    assert len(scanner.symbols_for({**cfg, "scan_count": 5}, "futures", pool, random.Random(1))) == 5     # configurável, para menos...
+    assert len(scanner.symbols_for({**cfg, "scan_count": 40}, "futures", pool, random.Random(1))) == 40   # ...ou para mais
+    assert len(scanner.symbols_for({k: v for k, v in cfg.items() if k != "scan_count"}, "futures", pool, random.Random(1))) == 15  # padrão: 15
+    assert default_settings(PROFILES["day"])["scan_count"] == 15 and default_settings(PROFILES["day"])["scan_bots"] == 3
     assert scanner.symbols_for(cfg, "futures", pool, random.Random(1), extra=["C59USDT"])[-1] == "C59USDT"  # posição aberta entra sempre
     assert scanner.symbols_for({**cfg, "scan_on": False}, "futures", pool) == ["BTCUSDT"]
 
     rep = scanner.run(profile, cfg, "chave", klines=klines, ticker=ticker, pool=pool, rng=random.Random(3))
-    assert rep.scanned == 20 and len(set(fetched)) >= 20 and "BTCUSDT" in fetched
+    assert rep.scanned == 18 and len(set(fetched)) >= 18 and "BTCUSDT" in fetched
     assert all(n == scanner.WINDOW + scanner.WARMUP + 1 for n in limits)                      # 120 candles fechados + aquecimento + o em formação
     assert len(asked) <= 1                                     # no máximo uma consulta à IA por varredura (só para a melhor oportunidade)
     assert 1 <= len(rep.executed) <= 2 and rep.viewed is not None             # o cenário sintético tem sinal: o bot opera
@@ -1503,6 +1506,11 @@ def test_scan_tries_the_best_bots_for_the_context_until_one_signals(monkeypatch)
     monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: (order, {}))
     res = scanner._best_signal(profile, cfg, df, price)
     assert res.decision.decision in ("BUY", "SELL") and res.personality["id"] == "esp_15m_ema_3x1"
+    asked_top = []
+    monkeypatch.setattr(scanner.engine, "pick_bots", lambda p, c, d, top=3: asked_top.append(top) or ([Pm.get("esp_15m_ema_3x1")], {}))
+    scanner._best_signal(profile, cfg, df, price, top=7)
+    assert asked_top == [7]                                                # quantos bots testar por moeda vem da configuração
+    monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: (mute[:2], {}))
     # nenhum bot dá sinal: devolve a leitura do melhor do ranking, sem abrir nada
     monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: (mute[:2], {}))
     res = scanner._best_signal(profile, cfg, df, price)

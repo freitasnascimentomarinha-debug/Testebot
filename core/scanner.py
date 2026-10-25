@@ -21,7 +21,7 @@ from core import data as market_data
 DEFAULT_SCAN = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "LTCUSDT"]
 WINDOW = 120      # candles fechados analisados em cada moeda
 WARMUP = 210      # candles anteriores só para os indicadores "esquentarem" (médias de 200 períodos etc.)
-MIN_COUNT = 20
+DEFAULT_COUNT = 15
 
 
 @dataclass
@@ -37,11 +37,11 @@ class ScanReport:
 
 def symbols_for(cfg: dict, market: str, pool=None, rng: random.Random | None = None, extra=()) -> list[str]:
     """Moedas da varredura: a da tela primeiro, depois um sorteio entre as de maior volume do mercado (futuros ou spot) até completar
-    ``scan_count`` (mínimo 20), mais as que têm posição aberta do bot (para o sinal contrário poder encerrá-las)."""
+    ``scan_count`` (padrão 15), mais as que têm posição aberta do bot (para o sinal contrário poder encerrá-las)."""
     first = str(cfg["symbol"]).upper()
     if not cfg.get("scan_on", True):
         return [first]
-    count = max(MIN_COUNT, int(cfg.get("scan_count") or MIN_COUNT))
+    count = max(1, int(cfg.get("scan_count") or DEFAULT_COUNT))
     try:
         ranked = (pool or market_data.volume_ranking)(market)
     except Exception:  # noqa: BLE001
@@ -92,7 +92,7 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
                 htf_raw, mtf_raw = engine.htf_frames(klines, cfg_s, len(raw), profile.market)
             # indicadores calculados com o aquecimento; a análise olha os últimos 120 candles fechados (+ o candle em formação)
             df = engine.prepare(raw, cfg_s, htf_raw, mtf_raw).tail(WINDOW + 1).reset_index(drop=True)
-            res = _best_signal(profile, cfg_s, df, price)   # só regras: não gasta IA
+            res = _best_signal(profile, cfg_s, df, price, int(cfg.get("scan_bots") or 3))   # só regras: não gasta IA
         except Exception as exc:  # noqa: BLE001 - um ativo sem dados não derruba a varredura
             report.notes.append(f"{sym}: sem dados ({str(exc)[:60]})")
             continue

@@ -727,12 +727,16 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                        "escolhe sozinho o melhor bot do ranking para o contexto de cada uma e entra nas melhores oportunidades. "
                        "Desligado, opera só a moeda da tela.")
         off = not st.session_state[k("scan_on")]
-        c = st.columns(3)
-        c[0].number_input("Moedas analisadas por varredura", scanner.MIN_COUNT, 100, key=k("scan_count"), disabled=off,
-                          help="Mínimo de 20. A moeda da tela entra sempre; as demais são sorteadas.")
-        c[1].number_input("Sorteio entre as N de maior volume", 20, 200, step=10, key=k("scan_pool"), disabled=off,
+        c = st.columns(4)
+        c[0].number_input("Moedas por varredura", 1, 100, key=k("scan_count"), disabled=off,
+                          help="Padrão 15. A moeda da tela entra sempre; as demais são sorteadas. Mais moedas = mais oportunidades, "
+                               "mas a varredura demora mais.")
+        c[1].number_input("Sorteio entre as N de maior volume", 10, 200, step=10, key=k("scan_pool"), disabled=off,
                           help="Volume negociado nas últimas 24 h neste mercado (moedas estáveis ficam de fora).")
-        c[2].number_input("Entradas novas por varredura", 1, 10, key=k("scan_max_entries"), disabled=off,
+        c[2].number_input("Bots testados por moeda", 1, 10, key=k("scan_bots"), disabled=off,
+                          help="Em cada moeda o sistema lê o contexto e testa, em ordem, os melhores bots do ranking para ele até um "
+                               "dar sinal. Mais bots = mais chances de achar entrada, mas a varredura demora mais.")
+        c[3].number_input("Entradas novas por varredura", 1, 10, key=k("scan_max_entries"), disabled=off,
                           help="Quantas das melhores oportunidades o bot abre a cada candle fechado. No máximo uma posição por moeda.")
         st.caption("A IA é consultada só para a melhor oportunidade de cada varredura (e só quando o bot encontra uma), "
                    "para economizar tokens. Sem oportunidade, nada é enviado à IA.")
