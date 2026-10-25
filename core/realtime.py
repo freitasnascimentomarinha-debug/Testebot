@@ -15,6 +15,7 @@ fórmulas de ``core/indicators.py``.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 LWC_URL = "https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"
 
@@ -24,26 +25,31 @@ PANE_HEIGHT = 110
 
 
 def chart_height(cfg: dict, base: int = 640) -> int:
-    return base + PANE_HEIGHT * sum(bool(cfg.get(f)) for f in PANE_FLAGS)
+    """Altura fixa: os indicadores ligados dentro do gráfico dividem esse espaço com o painel de preço."""
+    return base + PANE_HEIGHT + PANE_HEIGHT * min(sum(bool(cfg.get(f)) for f in PANE_FLAGS), 2)
 
 
 def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, lines: list[dict],
-                        positions: list[dict], height: int) -> str:
+                        positions: list[dict], height: int, orders: list[dict] | None = None, demo: list | None = None) -> str:
     """``lines``: [{"price", "color", "title", "style": "solid|dashed|dotted"}];
     ``positions``: posições abertas no ativo (para o P&L ao vivo)."""
     ind_keys = ("ema_on", "ema_fast", "ema_slow", "ema_trend_on", "ema_trend", "bb_on", "bb_period", "bb_std", "vwap_on",
                 "supertrend_on", "st_period", "st_mult", "volume_on", "rsi_on", "rsi_period", "rsi_ob", "rsi_os",
                 "macd_on", "macd_fast", "macd_slow", "macd_signal", "stoch_on", "stoch_k", "stoch_d",
                 "adx_on", "adx_period", "obv_on")
-    pos = [{**{k: p.get(k) for k in ("side", "qty", "entry", "fee_pct", "fees_paid", "margin", "stop_loss", "take_profit", "leverage")},
+    pos = [{**{k: p.get(k) for k in ("id", "side", "qty", "entry", "fee_pct", "fees_paid", "margin", "stop_loss", "take_profit", "leverage", "liquidation")},
             "fx": p.get("fx", 1.0)} for p in positions]
     from core.data import okx_base
 
     base, mult = okx_base(symbol)
     conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height,
-                       "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos})
-    return _TEMPLATE.replace("__LWC__", LWC_URL).replace("__CONF__", conf)
+                       "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos,
+                       "orders": [{k: o.get(k) for k in ("id", "side", "qty")} | {"price": o["limit_price"]} for o in (orders or [])],
+                       **({"demo": demo} if demo else {})})
+    return _TEMPLATE.replace("__TOOLS__", _TOOLS_JS).replace("__LWC__", LWC_URL).replace("__CONF__", conf)
 
+
+_TOOLS_JS = (Path(__file__).with_name("chart_tools.js")).read_text(encoding="utf-8")
 
 _TEMPLATE = r"""<!doctype html><html><head><meta charset="utf-8">
 <script src="__LWC__"></script>
@@ -57,7 +63,18 @@ _TEMPLATE = r"""<!doctype html><html><head><meta charset="utf-8">
   #pnl{font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;padding:1px 8px;border-radius:6px}
   #pnl.up{background:rgba(38,166,154,.15)} #pnl.dn{background:rgba(239,83,80,.15)}
   #chart{width:100%}
-  #ohlc{position:absolute;left:10px;top:46px;z-index:3;font-size:12px;pointer-events:none;font-variant-numeric:tabular-nums}
+  #ohlc{position:absolute;left:46px;top:66px;z-index:3;font-size:12px;pointer-events:none;font-variant-numeric:tabular-nums}
+  #tools{position:absolute;left:6px;top:96px;z-index:5;display:flex;flex-direction:column;gap:3px;background:rgba(14,17,23,.85);padding:3px;border:1px solid #2a2e39;border-radius:6px}
+  #tools button,#menu button,#closebtn{background:#1c2030;color:#d1d4dc;border:1px solid #2a2e39;border-radius:4px;cursor:pointer;font-size:14px;min-width:28px;height:26px}
+  #tools button.on{background:#26a69a;color:#06130f;border-color:#26a69a} #tools button:hover,#menu button:hover{border-color:#8a8f98}
+  #menu{display:inline-flex;gap:8px;align-items:center;font-size:12px} #menu select{background:#1c2030;color:#d1d4dc;border:1px solid #2a2e39;border-radius:4px;height:26px}
+  #menu button{font-size:12px;padding:0 8px} .chk{display:inline-flex;gap:3px;align-items:center;cursor:pointer}
+  #closebtn{font-size:12px;padding:0 10px;background:#7b2d2d;border-color:#ef5350}
+  #indbox{position:absolute;right:70px;top:34px;z-index:6;background:#161a25;border:1px solid #2a2e39;border-radius:6px;padding:8px 10px;font-size:12px;display:flex;flex-direction:column;gap:3px;max-width:220px}
+  #indbox label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  #pop{position:absolute;z-index:7;background:#161a25;border:1px solid #2a2e39;border-radius:6px;padding:8px;font-size:12px;width:210px}
+  #pop button{display:block;width:100%;margin:5px 0 0;padding:6px;border-radius:4px;border:1px solid #2a2e39;background:#1c2030;color:#d1d4dc;cursor:pointer}
+  #pop button.b{background:#1f6f66;border-color:#26a69a} #pop button.s{background:#7b2d2d;border-color:#ef5350}
 </style></head><body>
 <div id="bar"><span id="sym"></span><span id="px">—</span><span id="chg" class="mut"></span>
 <span id="pnl" style="display:none"></span>
@@ -143,6 +160,9 @@ const chart = L.createChart($("chart"), {
 });
 const candles = chart.addSeries(L.CandlestickSeries, {upColor: UP, downColor: DN, borderVisible: false, wickUpColor: UP, wickDownColor: DN});
 const SERIES = [];  // {key, s, kind}
+let pane = 0;
+function buildInd() {
+  SERIES.length = 0; pane = 0;
 const line = (key, color, pane, opts = {}) => SERIES.push({key, s: chart.addSeries(L.LineSeries, {color, lineWidth: 1,
   priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, ...opts}, pane)});
 if (I.volume_on) { const s = chart.addSeries(L.HistogramSeries, {priceFormat: {type: "volume"}, priceScaleId: "vol", lastValueVisible: false, priceLineVisible: false}, 0);
@@ -152,7 +172,6 @@ if (I.ema_trend_on) line("ema_trend", "#ab47bc", 0, {lineWidth: 2, title: "EMA "
 if (I.bb_on) { ["bb_up", "bb_mid", "bb_low"].forEach(k => line(k, "rgba(100,149,237,.75)", 0, {lineStyle: k === "bb_mid" ? 0 : 1})); }
 if (I.vwap_on) line("vwap", "#00bcd4", 0, {lineWidth: 2, lineStyle: 2, title: "VWAP"});
 if (I.supertrend_on) { line("st_up", UP, 0, {lineWidth: 2}); line("st_dn", DN, 0, {lineWidth: 2}); }
-let pane = 0;
 const guide = (s, v, c) => s.createPriceLine({price: v, color: c || "#5d606b", lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: ""});
 if (I.rsi_on) { pane++; line("rsi", "#ab47bc", pane, {title: "RSI", lastValueVisible: true});
   const s = SERIES[SERIES.length - 1].s; guide(s, I.rsi_ob, DN); guide(s, I.rsi_os, UP); }
@@ -163,10 +182,14 @@ if (I.stoch_on) { pane++; line("stoch_k", "#42a5f5", pane, {title: "Estoc."}); l
 if (I.adx_on) { pane++; line("adx", "#fdd835", pane, {lineWidth: 2, title: "ADX"}); line("di_plus", UP, pane); line("di_minus", DN, pane);
   guide(SERIES[SERIES.length - 3].s, 25); }
 if (I.obv_on) { pane++; line("obv", "#26c6da", pane, {title: "OBV"}); }
-function layoutPanes() {  // painel de preço com o espaço restante; indicadores com altura fixa
+}
+function destroyInd() { SERIES.forEach(x => chart.removeSeries(x.s)); SERIES.length = 0; }
+buildInd();
+function layoutPanes() {  // painel de preço com o espaço restante (mínimo 260 px); indicadores com altura fixa, menor se faltar espaço
   const ps = chart.panes(); if (ps.length < 2) return;
   const total = C.height - 40 - 30;  // desconta a escala de tempo
-  ps.forEach((p, i) => p.setHeight(i === 0 ? total - (ps.length - 1) * __PANE_H__ : __PANE_H__));
+  const h = Math.max(70, Math.min(__PANE_H__, Math.floor((total - 260) / (ps.length - 1))));
+  ps.forEach((p, i) => p.setHeight(i === 0 ? total - (ps.length - 1) * h : h));
 }
 
 const STYLE = {solid: 0, dotted: 1, dashed: 2};
@@ -189,7 +212,7 @@ function render(all) {
   });
 }
 function setAll(rows) {
-  data = rows; candles.setData(data); render(true); layoutPanes();
+  data = rows; candles.setData(data); render(true); layoutPanes(); if (window.applyType) applyType();
   chart.timeScale().setVisibleLogicalRange({from: data.length - 150, to: data.length + 5});
   if (data.length) showPrice(data[data.length - 1]);
 }
@@ -198,7 +221,7 @@ function upsert(c) {
   const last = data[data.length - 1];
   if (last && c.time < last.time) return;
   if (last && c.time === last.time) data[data.length - 1] = c; else data.push(c);
-  candles.update(c); ticks++; showPrice(c);
+  candles.update(c); ticks++; showPrice(c); if (window.refreshType && ctype !== "candle") refreshType(c);
   if (!pending) { pending = true; setTimeout(() => { pending = false; render(false); }, 200); }  // até 5 recálculos/s
 }
 function showPrice(c) {
@@ -232,10 +255,12 @@ setInterval(() => {
 }, 1000);
 function status(txt, cls) { $("st").textContent = txt; $("dot").className = cls || ""; }
 
+__TOOLS__
 // ------------------------------------------------------------------ fontes
 const row = (t, o, h, l, c, v) => ({time: t / 1000 + TZ, utc: t / 1000, open: +o, high: +h, low: +l, close: +c, volume: +v});
 const SOURCES = [];
 const sl = C.symbol.toLowerCase();
+if (C.demo) SOURCES.push({name: "Demonstração", kind: "demo"});
 if (fut) SOURCES.push({name: "Binance Futuros", kind: "bn", rest: `https://fapi.binance.com/fapi/v1/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
   t24: `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${C.symbol}`, ws: `wss://fstream.binance.com/ws/${sl}@kline_${C.interval}`});
 else {
@@ -261,6 +286,7 @@ async function okxHistory() {
   return rows.reverse().map(okxRow);
 }
 async function history(src) {
+  if (src.kind === "demo") return C.demo.map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
   if (src.kind === "okx") return okxHistory();
   const r = await fetch(src.rest); if (!r.ok) throw new Error("HTTP " + r.status);
   try { open24 = +(await (await fetch(src.t24)).json()).openPrice; } catch (e) {}
@@ -270,6 +296,7 @@ async function history(src) {
 let ws = null, retry = 0, pingTimer = null;
 function stream(i) {
   const src = SOURCES[i]; if (!src) { status("sem fluxo ao vivo — recarregue a página", "err"); return; }
+  if (src.kind === "demo") { status("demonstração (sem fluxo ao vivo)", "live"); return; }
   let opened = false;
   status("conectando a " + src.name + "…");
   ws = new WebSocket(src.kind === "okx" ? "wss://ws.okx.com/ws/v5/business" : src.ws);

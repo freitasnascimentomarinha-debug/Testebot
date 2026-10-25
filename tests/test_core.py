@@ -1768,3 +1768,70 @@ def test_realtime_spot_chart_lists_binance_websocket_ports_in_order():
     fut = realtime.realtime_chart_html(symbol="BTCUSDT", interval="1h", market="futures", cfg=default_settings(PROFILES["day"]), lines=[],
                                        positions=[], height=600)
     assert "fstream.binance.com" in fut and "stream.binance.com:9443" not in fut.split("if (fut)")[1].split("else {")[0]
+
+
+def test_chart_actions_validate_everything_coming_from_the_browser():
+    """Os pedidos do gráfico (ordem limite, stop/alvo, zerar, cancelar) vêm do navegador: tudo é validado antes de agir."""
+    from core import chart_actions
+    from core.broker import get_broker
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    prof, cfg = PROFILES["day"], {**default_settings(PROFILES["day"]), "symbol": "BTCUSDT"}
+    broker = get_broker("day")
+    ev = lambda **k: {"tb": 1, "symbol": "BTCUSDT", "market": "futures", "uid": "u", **k}  # noqa: E731
+    price, atr = 80_000.0, 400.0
+
+    ok, msg = chart_actions.handle(prof, cfg, ev(kind="limit", side="BUY", price=79_000), price, atr)
+    assert ok and "Ordem limite" in msg
+    (order,) = [o for o in broker.account()["orders"]]
+    assert order["limit_price"] == 79_000 and order["side"] == "BUY" and order["source"] == "manual" and order["stop_loss"] < 79_000 < order["take_profit"]
+    # recusas: outro ativo/mercado, preço longe, lado inválido, números ruins, mensagem sem marca
+    for bad in (ev(kind="limit", side="BUY", price=79_000, symbol="ETHUSDT"), ev(kind="limit", side="BUY", price=79_000, market="spot"),
+                ev(kind="limit", side="BUY", price=40_000), ev(kind="limit", side="HOLD", price=79_000),
+                ev(kind="limit", side="BUY", price="abc"), ev(kind="limit", side="BUY", price=float("nan")), ev(kind="limit", side="BUY", price=-5),
+                {"kind": "limit", "side": "BUY", "price": 79_000}, "texto", None, ev(kind="desconhecido")):
+        assert chart_actions.handle(prof, cfg, bad, price, atr)[0] is False
+    assert len(broker.account()["orders"]) == 1
+    assert chart_actions.handle(PROFILES["swing"], {**default_settings(PROFILES["swing"]), "symbol": "BTCUSDT"},
+                                ev(kind="limit", side="SELL", price=81_000, market="spot"), price, atr) == (False, "No spot só é possível comprar.")
+    # cancelar só ordens existentes deste mercado
+    assert chart_actions.handle(prof, cfg, ev(kind="cancel_order", id="nao-existe"), price, atr)[0] is False
+    assert chart_actions.handle(prof, cfg, ev(kind="cancel_order", id=order["id"]), price, atr)[0] and not broker.account()["orders"]
+    # posição: mover stop/alvo (só do lado certo) e zerar
+    pos = broker.place_order(symbol="BTCUSDT", market="futures", side="BUY", qty=0.01, price=price, stop_loss=79_000, take_profit=82_000, leverage=5,
+                             fee_pct=0.0, source="manual")["position"]
+    assert chart_actions.handle(prof, cfg, ev(kind="protect", id=pos["id"], stop_loss=80_500, take_profit=82_000), price, atr)[0] is False  # stop acima da entrada
+    assert chart_actions.handle(prof, cfg, ev(kind="protect", id=pos["id"], stop_loss=79_500, take_profit=83_000), price, atr)[0]
+    now = broker.account()["positions"][0]
+    assert now["stop_loss"] == 79_500 and now["take_profit"] == 83_000
+    assert chart_actions.handle(prof, cfg, ev(kind="protect", id="outra"), price, atr)[0] is False
+    ok, msg = chart_actions.handle(prof, cfg, ev(kind="close", id=pos["id"]), price, atr)
+    assert ok and "encerrada" in msg and not broker.account()["positions"]
+
+
+def test_chart_actions_blocked_on_exchange_accounts(monkeypatch):
+    from core import chart_actions, execution
+
+    prof, cfg = PROFILES["day"], {**default_settings(PROFILES["day"]), "symbol": "BTCUSDT"}
+    monkeypatch.setattr(execution, "orders_problem", lambda mode=None: "Conta da Exchange sem envio de ordens.")
+    ok, msg = chart_actions.handle(prof, cfg, {"tb": 1, "symbol": "BTCUSDT", "market": "futures", "kind": "limit", "side": "BUY", "price": 79_000},
+                                   80_000.0, 400.0)
+    assert not ok and "Exchange" in msg
+
+
+def test_realtime_chart_has_tools_and_sends_requests_to_the_page():
+    from core import realtime
+
+    pos = [{"id": "p1", "side": "BUY", "qty": 1, "entry": 100.0, "fee_pct": 0.05, "fees_paid": 0.1, "margin": 20, "stop_loss": 98.0,
+            "take_profit": 105.0, "leverage": 5, "liquidation": 85.0}]
+    orders = [{"id": "o1", "side": "BUY", "qty": 1, "limit_price": 95.0}]
+    html = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="futures", cfg=default_settings(PROFILES["day"]), lines=[],
+                                        positions=pos, orders=orders, height=700)
+    for needle in ('data-tool="', "Heikin-Ashi", "Fibonacci", "window.parent.postMessage", 'kind: "limit"', 'kind: "protect"', 'kind: "close"',
+                   'kind: "cancel_order"', "Indicadores ▾", '"id": "p1"', '"liquidation": 85.0', '"id": "o1"', "tb_draw_"):
+        assert needle in html, needle
+    assert "__TOOLS__" not in html and "__CONF__" not in html
+    demo = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="spot", cfg=default_settings(PROFILES["swing"]), lines=[],
+                                        positions=[], height=700, demo=[[1, 1, 2, 0.5, 1.5, 10]])
+    assert '"demo": [[1, 1, 2, 0.5, 1.5, 10]]' in demo

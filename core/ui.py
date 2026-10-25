@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import ai as ai_mod, engine, execution, paper, personalities, ranking, regime, risk, scanner
+from core import ai as ai_mod, chart_actions, engine, execution, paper, personalities, ranking, regime, risk, scanner
 from core.broker import get_broker
 from core.charts import tradingview_widget
 from core import leverage as lev_rules
@@ -159,8 +159,9 @@ def render_bot_page(bot: str) -> None:
         with tab_rt:
             positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"] and p.get("market") == profile.market]
             height = chart_height(cfg)
+            orders = [o for o in broker.account()["orders"] if o["symbol"] == cfg["symbol"] and o.get("market") == profile.market]
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
-                                                cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
+                                                cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions, orders=orders,
                                                 height=height), height=height + 5)
         with tab_tv:
             st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua e as ferramentas "
@@ -180,6 +181,38 @@ def render_bot_page(bot: str) -> None:
             entry_panel(profile, cfg)
 
     portfolio_section(profile, cfg)
+    chart_bridge(profile, cfg)
+
+
+CHART_BRIDGE_JS = """
+export default function (component) {
+  const { setTriggerValue } = component;
+  // O gráfico (iframe) avisa a página por postMessage; aqui o aviso vira um valor para o Python, que valida tudo antes de agir.
+  const onMessage = (e) => { const d = e.data; if (d && d.tb === 1 && typeof d.kind === 'string') setTriggerValue('chart', d); };
+  window.addEventListener('message', onMessage);
+  return () => window.removeEventListener('message', onMessage);
+}
+"""
+
+
+@st.cache_resource(show_spinner=False)
+def _chart_bridge():
+    return st.components.v2.component("tb_chart_bridge", js=CHART_BRIDGE_JS)
+
+
+def chart_bridge(profile: BotProfile, cfg: dict) -> None:
+    """Recebe e executa os pedidos feitos no gráfico (ordem limite, mover stop/alvo, zerar, cancelar)."""
+    bot = profile.key
+    res = _chart_bridge()(key=f"{bot}-chart-bridge", on_chart_change=lambda: None)
+    ev = getattr(res, "chart", None)
+    if not ev or ev.get("uid") == st.session_state.get(f"{bot}__chart_uid"):
+        return
+    st.session_state[f"{bot}__chart_uid"] = ev.get("uid")
+    ok, msg = chart_actions.handle(profile, cfg, ev, st.session_state.get(f"{bot}__last_price"), st.session_state.get(f"{bot}__atr"))
+    if msg:
+        st.toast(msg, icon="✅" if ok else "🚫")
+    if ok:
+        st.rerun()
 
 
 def execution_banner() -> None:
@@ -281,18 +314,7 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
 def realtime_lines(bot: str, cfg: dict) -> list[dict]:
     """Linhas de preço do gráfico em tempo real (só mudam quando há ação do
     usuário, para o gráfico não recarregar a cada atualização)."""
-    market = PROFILES[bot].market  # o mesmo par existe em futuros e no spot: cada página mostra só as ordens do seu mercado
-    acct = get_broker(bot).account()
-    lines = []  # a linha de entrada (com P&L ao vivo) é desenhada pelo próprio gráfico
-    for p in acct["positions"]:
-        if p["symbol"] != cfg["symbol"] or p.get("market") != market:
-            continue
-        if p.get("stop_loss"):
-            lines.append({"price": p["stop_loss"], "color": "#ef5350", "title": "SL"})
-        if p.get("take_profit"):
-            lines.append({"price": p["take_profit"], "color": "#26a69a", "title": "TP"})
-        if p.get("liquidation"):
-            lines.append({"price": p["liquidation"], "color": "#ff9800", "style": "dotted", "title": "Liq."})
+    lines = []  # entrada, stop, alvo e liquidação das posições e as ordens limitadas são desenhados pelo próprio gráfico (arrastáveis)
     df = st.session_state.get(f"{bot}__df")
     if df is not None and len(df) > 50:
         closed = df.iloc[:-1]  # níveis de candles fechados: não mudam a cada atualização
@@ -307,9 +329,6 @@ def realtime_lines(bot: str, cfg: dict) -> list[dict]:
         if cfg.get("fib_on"):
             lines += [{"price": v, "color": "rgba(255,193,7,.7)", "style": "dotted", "title": f"Fib {k}"}
                       for k, v in ind.fibonacci(closed).items()]
-    for o in acct["orders"]:
-        if o["symbol"] == cfg["symbol"] and o.get("market") == market:
-            lines.append({"price": o["limit_price"], "color": "#bdbdbd", "title": f"LIMIT {o['side']}"})
     result = st.session_state.get(f"{bot}__analysis")
     if result and result.symbol == cfg["symbol"] and result.decision.decision in ("BUY", "SELL") and not result.executed:
         d = result.decision
