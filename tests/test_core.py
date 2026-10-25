@@ -2172,17 +2172,43 @@ def test_events_translation_and_tooltip(monkeypatch):
             "liquidez": 1, "desc": "Resolve to the change in bps.", "opcoes": [{"nome": "No change", "pct": 94.5}, {"nome": "25 bps increase", "pct": 5.5}]}
     loc = pt.localize([card])[0]
     assert loc["titulo"] == "Decisão do Fed em outubro?" and [o["nome"] for o in loc["opcoes"]] == ["Sem mudança", "Alta de 25 bps"] and not loc["traduzido"]
-    assert "juros" in loc["explicacao"].lower() and "desc" not in loc                    # explicação genérica em português, sem o texto original
-    assert "preço" in pt.generic_explanation({**card, "escada": True}) and "sim ou não" in pt.generic_explanation({**card, "opcoes": [{"nome": "Sim", "pct": 1}, {"nome": "Não", "pct": 99}]})
+    assert "juros" in str(loc["explicacao"]).lower() and "desc" not in loc               # explicação genérica em português, sem o texto original
+    assert loc["explicacao"][0][0] == "O que é" and any(r == "Por que importa" for r, _ in loc["explicacao"])
+    assert "preço" in str(pt.generic_explanation({**card, "escada": True})) and "sim ou não" in str(pt.generic_explanation({**card, "opcoes": [{"nome": "Sim", "pct": 1}, {"nome": "Não", "pct": 99}]}))
     k = pt.key_of(card)
-    good = {"itens": [{"id": k, "titulo": "Decisão do Fed em outubro", "opcoes": ["Sem mudança", "Alta de 0,25 p.p."], "explicacao": "Aposta no que o Fed fará com os juros."}]}
+    good = {"itens": [{"id": k, "titulo": "Decisão do Fed em outubro", "opcoes": ["Sem mudança", "Alta de 0,25 p.p."], "o_que_e": "Aposta no que o Fed fará com os juros.", "contexto": "O FOMC se reúne oito vezes por ano.", "importa": "Juros altos pesam sobre cripto."}]}
     assert pt.parse(good, [card])[k]["o"][1] == "Alta de 0,25 p.p."
     assert pt.parse({"itens": [{"id": k, "titulo": "x", "opcoes": ["só uma"]}]}, [card]) == {}      # quantidade de opções diferente: descartado
     assert pt.parse("lixo", [card]) == {}
     pt.save(pt.parse(good, [card]))
     loc = pt.localize([card])[0]
-    assert loc["traduzido"] and loc["titulo"] == "Decisão do Fed em outubro" and loc["explicacao"].startswith("Aposta no que o Fed")
+    assert loc["traduzido"] and loc["titulo"] == "Decisão do Fed em outubro" and loc["explicacao"][0] == ["O que é", "Aposta no que o Fed fará com os juros."]
+    assert [r for r, _ in loc["explicacao"]] == ["O que é", "Contexto", "Por que importa"]
+    assert pt._sections("texto antigo") == [["O que é", "texto antigo"]]                  # formato antigo ainda lido
     assert pt.pending([card]) == []
-    assert "geopolitica" in events.CATEGORIES and events.AI_PICK["geopolitica"] == 2
+    assert "geopolitica" in events.CATEGORIES and events.AI_PICK["geopolitica"] == 3
     assert events.card({"id": "9", "title": "US-Iran ceasefire continues through...?", "endDate": "2099-10-31T00:00:00Z", "volume24hr": 1e6,
                         "markets": [{"question": "q", "groupItemTitle": "October 22", "outcomes": '["Yes","No"]', "outcomePrices": '["0.99","0.01"]'}]}, "geopolitica") is not None
+
+
+def test_events_for_ai_are_balanced_and_by_importance():
+    """A IA recebe um calendário equilibrado (macro, geopolítica, política, commodities), sem assuntos repetidos e priorizando o que pesa no mercado."""
+    from datetime import datetime, timezone
+    from core import events
+
+    now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
+    mk = lambda cat, title, vol, days, esc=False: {"id": title, "titulo": title, "categoria": cat, "escada": esc, "volume_24h": vol,  # noqa: E731
+                                                  "vence": (datetime(2026, 10, 25 + days, 12, tzinfo=timezone.utc)).isoformat() if days < 6 else "2026-12-01T00:00:00+00:00",
+                                                  "opcoes": [{"nome": "Sim", "pct": 50.0}, {"nome": "Não", "pct": 50.0}], "slug": "", "liquidez": 0}
+    evs = [mk("politica", "Brazil Presidential Election", 4_000_000, 1), mk("politica", "Brazil Presidential Election Second Round: Margin", 1_600_000, 1),
+           mk("politica", "Which party will win the House in 2026?", 400_000, 5), mk("macro", "Fed Decision in October?", 2_000_000, 3),
+           mk("macro", "Fed Decision in December?", 1_500_000, 5), mk("macro", "US recession by end of 2026?", 3_000, 5),
+           mk("geopolitica", "US-Iran ceasefire continues through...?", 1_200_000, 5), mk("geopolitica", "Will China invade Taiwan by end of 2026?", 200_000, 5),
+           mk("geopolitica", "NATO x Russia military clash by...?", 70_000, 5), mk("geopolitica", "Russia x Ukraine ceasefire agreement by...?", 60_000, 5),
+           mk("commodities", "What will WTI Crude Oil (WTI) hit in October 2026?", 90_000, 5), mk("cripto", "What price will Bitcoin hit in October?", 400_000, 5, True)]
+    ctx = events.ai_context(evs, now)
+    cats = [c["categoria"] for c in ctx]
+    assert cats.count("Macro e juros") == 2 and cats.count("Guerra e geopolítica") == 3 and cats.count("Política e eleições") == 2 and cats.count("Commodities e índices") == 1
+    titles = [c["evento"] for c in ctx]
+    assert sum(t.startswith("Fed Decision") for t in titles) == 1 and sum(t.startswith("Brazil Presidential") for t in titles) == 1   # um por assunto
+    assert not any("Bitcoin" in t for t in titles) and [c["vence_em_dias"] for c in ctx] == sorted(c["vence_em_dias"] for c in ctx)  # escada fora; por vencimento

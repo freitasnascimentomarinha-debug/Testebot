@@ -8,6 +8,7 @@ sem esperar a rede.
 from __future__ import annotations
 
 import json
+import math
 import re
 import threading
 import time
@@ -37,7 +38,12 @@ KEYWORDS = {
     "cripto": ("bitcoin", "btc", "ethereum", "eth ", "solana", "crypto", "xrp", "dogecoin", "etf", "coinbase", "stablecoin", "microstrategy"),
 }
 NOISE = re.compile(r"\b(say|says|mention|tweet|post)\b|earnings call|vs\.", re.I)
-AI_PICK = {"macro": 2, "geopolitica": 2, "politica": 2, "commodities": 1, "cripto": 1}   # quantos eventos de cada categoria resumem para a IA
+AI_PICK = {"macro": 2, "geopolitica": 3, "politica": 2, "commodities": 1, "cripto": 1}
+# O que mais pesa para o mercado de cripto/dólar: macro e geopolítica primeiro; política e commodities depois. Dentro da categoria,
+# vence quem tem mais volume, mais perto do vencimento e com palavras de risco (Fed, guerra, tarifas, ETF...).
+IMPORTANCE = {"macro": 1.0, "geopolitica": 1.0, "politica": 0.8, "cripto": 0.8, "commodities": 0.7}
+BOOST = ("fed", "fomc", "rate", "cpi", "recession", "tariff", "war", "ceasefire", "iran", "taiwan", "hormuz", "russia", "nato", "nuclear", "etf",
+         "sec ", "regulation", "shutdown", "midterm", "senate", "house", "invade", "yield", "brazil", "brasil", "lula")   # quantos eventos de cada categoria resumem para a IA
 MIN_VOL24 = 300.0
 MIN_LIQ = 50_000.0
 _state: dict = {"at": 0.0, "events": []}
@@ -100,7 +106,8 @@ def card(e: dict, category: str, now: datetime | None = None) -> dict | None:
         opts = [(_label(m), p) for p, m in sorted(rows, key=lambda r: -r[0])[:4]]
     return {"id": str(e.get("id")), "titulo": e.get("title", ""), "categoria": category, "slug": e.get("slug", ""), "vence": end.isoformat(),
             "volume_24h": round(float(e.get("volume24hr") or 0)), "liquidez": round(float(e.get("liquidity") or 0)),
-            "escada": ladder, "desc": re.sub(r"\s+", " ", e.get("description") or "")[:600], "opcoes": [{"nome": n, "pct": round(p * 100, 1)} for n, p in opts]}
+            "escada": ladder, "desc": re.sub(r"\s+", " ", e.get("description") or "")[:900],
+            "tags": [t.get("label") for t in (e.get("tags") or []) if t.get("label")][:6], "opcoes": [{"nome": n, "pct": round(p * 100, 1)} for n, p in opts]}
 
 
 def _search(q: str) -> list[dict]:
@@ -189,22 +196,38 @@ def ensure() -> None:
         warm()
 
 
+def _series(title: str) -> str:
+    """Chave para não mandar duas versões do mesmo assunto ("Fed Decision in October" e "…in December")."""
+    return " ".join(re.sub(r"[\d,$%?]", "", title.lower()).split()[:3])
+
+
+def importance(c: dict, now: datetime | None = None) -> float:
+    now = now or _now()
+    end = _end({"endDate": c["vence"]})
+    days = max(0.0, (end - now).total_seconds() / 86400) if end else 99
+    prox = 1.0 if days <= 14 else 0.8 if days <= 45 else 0.5
+    t = c["titulo"].lower() + " "
+    boost = 1.3 if any(k in t for k in BOOST) else 1.0
+    return IMPORTANCE.get(c["categoria"], 0.5) * boost * prox * math.log10(c["volume_24h"] + 10)
+
+
 def ai_context(events: list[dict] | None = None, now: datetime | None = None) -> list[dict]:
-    """Resumo curto para a IA: os eventos de maior volume de cada categoria (sem escadas de preço de cripto, que já viram o sentimento)."""
+    """Resumo curto para a IA, equilibrado entre categorias: macro 2, geopolítica 3, política 2, commodities 1, cripto 1 (só os que não são
+    escadas de preço, que já viram o sentimento). Escolhidos por importância (volume, proximidade e risco), sem assuntos repetidos, e
+    mostrados em ordem de vencimento — um calendário do que vem aí."""
     events = peek() if events is None else events
     now = now or _now()
-    out, taken = [], {c: 0 for c in AI_PICK}
-    for c in events:   # já vem por volume
-        if c["escada"] and c["categoria"] == "cripto":
+    picked, taken, series = [], {c: 0 for c in AI_PICK}, set()
+    for c in sorted(events, key=lambda c: -importance(c, now)):
+        if (c["escada"] and c["categoria"] == "cripto") or taken.get(c["categoria"], 99) >= AI_PICK.get(c["categoria"], 0) or _series(c["titulo"]) in series:
             continue
-        if taken.get(c["categoria"], 99) >= AI_PICK.get(c["categoria"], 0):
-            continue
-        end = _end({"endDate": c["vence"]})
         taken[c["categoria"]] += 1
-        out.append({"evento": c["titulo"], "categoria": CATEGORIES[c["categoria"]][0].split(" ", 1)[1],
-                    "vence_em_dias": max(0, (end - now).days) if end else None,
-                    "probabilidades": [{"opcao": o["nome"], "pct": o["pct"]} for o in c["opcoes"][:3]]})
-    return out
+        series.add(_series(c["titulo"]))
+        picked.append(c)
+    picked.sort(key=lambda c: c["vence"])
+    return [{"evento": c["titulo"], "categoria": CATEGORIES[c["categoria"]][0].split(" ", 1)[1],
+             "vence_em_dias": max(0, ((_end({"endDate": c["vence"]}) or now) - now).days),
+             "probabilidades": [{"opcao": o["nome"], "pct": o["pct"]} for o in c["opcoes"][:3]]} for c in picked]
 
 
 def ids_for_ai(events: list[dict]) -> set[str]:

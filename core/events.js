@@ -12,7 +12,7 @@ export default function (component) {
   const money = (v) => v >= 1e6 ? "US$ " + nf(v / 1e6, 1) + " mi" : v >= 1e3 ? "US$ " + nf(v / 1e3, 0) + " mil" : "US$ " + nf(v);
   const card = (e) => `<article class="card ${e.ia ? "ia" : ""}">
     <header><span class="chip c-${e.categoria}">${esc(cats[e.categoria] || e.categoria)}</span>${e.ia ? `<span class="chip ai" title="Este evento é enviado como contexto para a IA nas análises">🤖 enviado à IA</span>` : ""}</header>
-    <h3><span class="q" tabindex="0" aria-label="O que é esta aposta?">?<span class="tip">${esc(e.explicacao)}</span></span><a href="https://polymarket.com/event/${esc(e.slug)}" target="_blank" rel="noopener noreferrer">${esc(e.titulo)}</a></h3>
+    <h3><span class="q" tabindex="0" aria-label="O que é esta aposta?">?<span class="tip">${e.explicacao.map(([r, t]) => `<b>${esc(r)}</b>${esc(t)}`).join("")}</span></span><a href="https://polymarket.com/event/${esc(e.slug)}" target="_blank" rel="noopener noreferrer">${esc(e.titulo)}</a></h3>
     <div class="opts">${e.opcoes.map((o) => `<div class="o"><span class="n">${esc(o.nome)}</span><span class="b"><i style="width:${Math.max(1, o.pct)}%"></i></span><b>${nf(o.pct, o.pct < 10 ? 1 : 0)}%</b></div>`).join("")}</div>
     <footer><span title="${esc(when(e.vence))}">⏳ vence ${left(e.vence)} · ${esc(when(e.vence))}</span><span>${money(e.volume_24h)} em 24 h</span></footer></article>`;
   const draw = () => {
