@@ -75,6 +75,8 @@ def default_settings(profile: BotProfile) -> dict:
         "ai_instructions": "",
         # Varredura: o bot procura oportunidades sozinho em vários ativos a cada candle fechado
         "scan_on": True,
+        "scan_minutes": 15,          # de quantos em quantos minutos o bot varre o mercado atrás de oportunidades
+        "ai_exit": False,            # a IA pode ser consultada para decidir se encerra uma posição aberta do bot
         "scan_count": 15,            # quantas moedas analisar a cada varredura (sorteadas entre as de maior volume do mercado)
         "scan_bots": 3,              # quantos dos melhores bots do ranking testar, em ordem, em cada moeda até um dar sinal
         "scan_pool": 60,             # sorteio entre as N moedas de maior volume de 24 h

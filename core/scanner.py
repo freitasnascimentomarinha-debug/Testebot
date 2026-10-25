@@ -1,4 +1,4 @@
-"""Varredura automática: a cada candle fechado o bot procura oportunidades em vários ativos, sozinho.
+"""Varredura automática: de tempos em tempos (padrão 15 min, configurável) o bot procura oportunidades em vários ativos, sozinho.
 
 Para cada ativo da lista: baixa os candles, escolhe o bot do ranking para o contexto dele, aplica as regras e (sem gastar IA) vê se
 há sinal. As melhores oportunidades — e só elas — passam pela IA (no máximo uma consulta por varredura, a não ser que a IA esteja
@@ -10,11 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from core import engine, execution
+from core import ai_exit, advisor, engine, execution
+from core.storage import get_secret, current_user
 from core.broker import get_broker
 from core.profiles import BotProfile
+from core.storage import locked_update, load_json
 
 import random
+import time
 
 from core import data as market_data
 
@@ -24,15 +27,53 @@ WARMUP = 210      # candles anteriores só para os indicadores "esquentarem" (m�
 DEFAULT_COUNT = 15
 
 
+SCAN_STATE = "scan_state.json"
+DEFAULT_MINUTES = 15
+
+
+def last_scan(bot: str) -> float | None:
+    return (load_json(SCAN_STATE, {}) or {}).get(bot)
+
+
+def claim(bot: str, minutes: float, now: float | None = None) -> bool:
+    """Reserva a próxima varredura: True se já passaram ``minutes`` desde a anterior (e marca a hora agora). Guardado em disco/nuvem para
+    que a página e o worker nunca varram ao mesmo tempo, e para abrir a página ou trocar de ativo/tempo gráfico não disparar nada."""
+    now = time.time() if now is None else now
+    got = []
+
+    def _apply(data):
+        if now - float(data.get(bot, 0) or 0) >= max(1.0, float(minutes)) * 60:
+            data[bot] = now
+            got.append(True)
+
+    locked_update(SCAN_STATE, {}, _apply)
+    return bool(got)
+
+
+def reset(bot: str) -> None:
+    """A próxima verificação varre na hora (usado ao ligar o bot)."""
+    def _apply(data):
+        data.pop(bot, None)
+
+    locked_update(SCAN_STATE, {}, _apply)
+
+
+def next_scan(bot: str, minutes: float) -> float | None:
+    last = last_scan(bot)
+    return None if last is None else last + max(1.0, float(minutes)) * 60
+
+
 @dataclass
 class ScanReport:
     time: str
     interval: str
+    scan_time: str = ""                                    # hora da última varredura de verdade (todas as moedas)
     scanned: int = 0
     viewed: engine.AnalysisResult | None = None            # leitura do ativo que está na tela
     opportunities: list = field(default_factory=list)       # AnalysisResult de cada oportunidade (BUY/SELL) encontrada
     executed: list = field(default_factory=list)            # {"symbol", "action", "status"}
     notes: list = field(default_factory=list)
+    exit_views: list = field(default_factory=list)          # respostas da IA sobre posições abertas ({"symbol","acao","confianca","motivo"})
 
 
 def symbols_for(cfg: dict, market: str, pool=None, rng: random.Random | None = None, extra=()) -> list[str]:
@@ -76,6 +117,7 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
     """Uma varredura completa. ``klines(sym, interval, n, market)`` e ``ticker(sym, market)`` vêm da interface (cache) ou do worker."""
     broker = get_broker(profile.key)
     report = ScanReport(time=datetime.now(timezone.utc).isoformat(timespec="seconds"), interval=cfg["interval"])
+    report.scan_time = report.time
     acct_positions = broker.account()["positions"]
     mine = [p["symbol"] for p in acct_positions if p.get("market") == profile.market and p.get("source") != "manual"
             and p.get("bot", profile.key) == profile.key]
@@ -99,7 +141,9 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
         report.scanned += 1
         if sym == symbols[0]:
             report.viewed = res
-        if res.decision.decision == "CLOSE":
+        if cfg.get("ai_exit") and api_key and sym in mine and res.decision.decision != "CLOSE":
+            _ai_exit(profile, cfg_s, df, price, api_key, report, execute, res)
+        elif res.decision.decision == "CLOSE":
             if execute:
                 _run_close(profile, cfg_s, res, price, report)
         elif res.decision.decision in ("BUY", "SELL") and res.check and res.check.allowed:
@@ -150,6 +194,33 @@ def _best_signal(profile: BotProfile, cfg_s: dict, df, price: float, top: int = 
         if res.decision.decision in ("BUY", "SELL", "CLOSE"):
             return res
     return first or engine.run_analysis(profile, cfg_s, df, price, None, log=False)
+
+
+def _ai_exit(profile: BotProfile, cfg_s: dict, df, price: float, api_key: str, report: ScanReport, execute: bool, res) -> None:
+    """Consulta a IA sobre cada posição do bot neste ativo; só ela decide se a saída é antecipada (stop e alvo seguem valendo)."""
+    from core import quota
+    from core.strategy import market_snapshot
+
+    platform_key = api_key == get_secret("OPENROUTER_API_KEY") and bool(current_user())
+    broker = get_broker(profile.key)
+    sym = cfg_s["symbol"]
+    positions = [p for p in broker.account()["positions"] if p["symbol"] == sym and p.get("market", profile.market) == profile.market
+                 and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
+    if not positions:
+        return
+    sc = advisor.scenario(df, cfg_s)
+    snap = market_snapshot(df.iloc[:-1], min(int(cfg_s.get("ai_candles_context") or 60), 40))
+    for pos in positions:
+        if platform_key and not quota.allow():
+            report.notes.append(f"{sym}: limite diário de consultas da IA atingido; posição mantida.")
+            return
+        if platform_key:
+            quota.consume()
+        ans = ai_exit.consult(ai_exit.build_context(pos, price, sc, snap, res.personality, cfg_s), api_key=api_key, model=cfg_s["ai_model"])
+        report.exit_views.append({"symbol": sym, "id": pos["id"], **ans})
+        if ans["acao"] == "CLOSE" and ans["confianca"] >= 50 and execute:
+            broker.close_position(pos["id"], price, "IA: " + ans["motivo"][:120])
+            report.executed.append({"symbol": sym, "action": "CLOSE", "status": "ENCERRADA pela IA"})
 
 
 def _run_close(profile, cfg_s, res, price, report: ScanReport) -> None:

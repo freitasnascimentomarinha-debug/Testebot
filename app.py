@@ -93,10 +93,14 @@ def _binance_required() -> bool:
 # A navegação é criada antes do login (oculta) para preservar a página pedida na URL.
 _authed = is_authenticated()
 _gated = _authed and _binance_required()
-nav = st.navigation(pages, position="sidebar" if _authed and not _gated else "hidden", expanded=True)
+nav = st.navigation(pages, position="hidden")
 require_login()
 
 with st.sidebar:
+    if _authed and not _gated:
+        from core import nav as sidebar_nav
+
+        sidebar_nav.render(pages, nav)
     st.divider()
     if _authed and not _gated:
         st.caption(f"Conta de operação: {execution.MODES[execution.get_mode()]}")

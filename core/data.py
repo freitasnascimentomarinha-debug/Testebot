@@ -258,6 +258,46 @@ _volume_cache: dict = {}
 VOLUME_TTL = 3600
 
 
+_watch_cache: dict[str, tuple[float, dict]] = {}
+WATCH_TTL = 15
+
+
+def watch_prices(market: str, symbols) -> dict[str, tuple[float, float]]:
+    """Preço e variação de 24 h (%) de vários pares de uma vez ({símbolo: (preço, %)}), para a lista de moedas da barra lateral.
+    Uma só chamada ao mercado inteiro, guardada por 15 s; vazio quando nenhuma fonte responde."""
+    hit = _watch_cache.get(market)
+    if not hit or time.time() - hit[0] >= WATCH_TTL:
+        table: dict[str, tuple[float, float]] = {}
+        try:
+            if market == "futures":
+                for r in _get(BINANCE_FUT + "/fapi/v1/ticker/24hr"):
+                    table[r["symbol"]] = (float(r["lastPrice"]), float(r["priceChangePercent"]))
+            else:
+                for base in BINANCE_SPOT:
+                    try:
+                        for r in _get(base + "/api/v3/ticker/24hr", {"type": "MINI"}):
+                            o = float(r["openPrice"])
+                            table[r["symbol"]] = (float(r["lastPrice"]), (float(r["lastPrice"]) / o - 1) * 100 if o else 0.0)
+                        break
+                    except Exception:  # noqa: BLE001
+                        continue
+        except Exception:  # noqa: BLE001
+            table = {}
+        if not table:
+            try:
+                for d in _get(OKX + "/api/v5/market/tickers", {"instType": "SWAP" if market == "futures" else "SPOT"})["data"]:
+                    if "-USDT" in d["instId"]:
+                        last, o = float(d["last"]), float(d.get("open24h") or 0)
+                        table[d["instId"].split("-")[0] + "USDT"] = (last, (last / o - 1) * 100 if o else 0.0)
+            except Exception:  # noqa: BLE001
+                table = {}
+        if table:
+            _watch_cache[market] = hit = (time.time(), table)
+        elif hit is None:
+            return {}
+    return {s: hit[1][s] for s in symbols if s in hit[1]}
+
+
 def volume_ranking(market: str) -> list[str]:
     """Pares em USDT do mercado (futuros ou spot) do maior para o menor volume negociado em 24 h, sem moedas estáveis.
     Guarda o resultado por 1 hora."""

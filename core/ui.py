@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import ai as ai_mod, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
+from core import ai as ai_mod, analysis_view, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
 from core.broker import get_broker
 from core import leverage as lev_rules
 from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
@@ -196,7 +196,6 @@ def chart_bridge(profile: BotProfile, cfg: dict) -> None:
         sym = str(ev.get("value", "")).upper().strip()
         if sym in cached_symbols(profile.market) and sym != cfg["symbol"]:
             set_setting(bot, "symbol", sym)
-            st.session_state.pop(f"{bot}__scan_marker", None)
             st.rerun()
         return
     ok, msg = chart_actions.handle(profile, cfg, ev, st.session_state.get(f"{bot}__last_price"), st.session_state.get(f"{bot}__atr"))
@@ -275,7 +274,6 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
             st.session_state[f"{bot}__hdr_uid"] = ev.get("uid")
             if ev.get("value") in profile.intervals:
                 set_setting(bot, "interval", ev["value"])
-                st.session_state.pop(f"{bot}__scan_marker", None)
                 st.rerun(scope="app")
 
         # Posições abertas em outros ativos (abertas pela varredura) também precisam de stop e alvo conferidos
@@ -323,35 +321,44 @@ def realtime_lines(bot: str, cfg: dict) -> list[dict]:
 
 
 def auto_scan(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float) -> None:
-    """No fechamento de cada candle: com o bot ligado faz a varredura (procura oportunidades e opera); desligado, só atualiza a
-    leitura do ativo da tela, sem gastar IA."""
+    """Varredura por tempo: com o bot ligado, a cada ``scan_minutes`` (padrão 15) procura oportunidades em várias moedas e opera.
+    Abrir a página ou trocar de moeda/tempo gráfico não varre nada: só atualiza a leitura do ativo da tela (regras, sem IA)."""
     from core.data import last_closed_candle_time
 
     bot = profile.key
     on = bool(cfg.get("autopilot"))
-    marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(df, cfg['interval'])}-{int(on)}"
-    if st.session_state.get(f"{bot}__scan_marker") == marker:
-        return
-    st.session_state[f"{bot}__scan_marker"] = marker
     if on and (why := execution.orders_problem()):
         st.caption("🤖 Bot em espera: " + why)
+        on = False
     if on and not personalities.allowed(profile.market, cfg["interval"]):
         st.warning("Bot em espera: nenhum bot foi treinado e testado neste tempo gráfico. Troque o tempo gráfico.")
         on = False
-    if on and not execution.orders_problem():
+    minutes = float(cfg.get("scan_minutes") or scanner.DEFAULT_MINUTES)
+    if on and scanner.claim(bot, minutes):
         if ranking.is_stale(profile.market, cfg["interval"]):  # a cada 7 dias o ranking é refeito com o mercado recente
             with st.spinner("Atualizando o ranking semanal dos bots…"):
                 if engine.ensure_ranking(profile, cfg):
                     st.toast("Ranking semanal dos bots atualizado.", icon="🏆")
         with st.spinner("Procurando oportunidades…"):
-            report = scanner.run(profile, cfg, api_key(), klines=cached_klines, ticker=cached_ticker,
-                                 funding=cached_funding)
+            report = scanner.run(profile, cfg, api_key(), klines=cached_klines, ticker=cached_ticker, funding=cached_funding)
         for ex in report.executed:
             word = {"BUY": "Comprou", "SELL": "Vendeu", "CLOSE": "Encerrou"}[ex["action"]]
             st.toast(f"{word} {ex['symbol']} ({ex['status']})", icon="🤖")
-    else:  # bot desligado: só a leitura do ativo da tela (regras, sem IA)
-        res = engine.run_analysis(profile, cfg, df, price, None, log=False)
-        report = scanner.ScanReport(time=res.time, interval=cfg["interval"], scanned=1, viewed=res)
+        st.session_state[f"{bot}__scan"] = report
+        st.session_state[f"{bot}__view_marker"] = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(df, cfg['interval'])}"
+        st.session_state[f"{bot}__need_rerun"] = True
+        return
+    # sem varredura agora: a leitura do ativo da tela se renova a cada candle fechado ou ao trocar de moeda/tempo (só regras)
+    marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(df, cfg['interval'])}"
+    if st.session_state.get(f"{bot}__view_marker") == marker and st.session_state.get(f"{bot}__scan") is not None:
+        return
+    st.session_state[f"{bot}__view_marker"] = marker
+    res = engine.run_analysis(profile, cfg, df, price, None, log=False)
+    old = st.session_state.get(f"{bot}__scan")
+    report = scanner.ScanReport(time=res.time, interval=cfg["interval"], scanned=1, viewed=res)
+    if old is not None and old.interval == cfg["interval"]:   # mantém o resultado da última varredura de verdade
+        report.scanned, report.opportunities, report.executed, report.notes = old.scanned, old.opportunities, old.executed, old.notes
+        report.scan_time, report.exit_views = getattr(old, "scan_time", ""), getattr(old, "exit_views", [])
     st.session_state[f"{bot}__scan"] = report
     st.session_state[f"{bot}__need_rerun"] = True
 
@@ -433,65 +440,30 @@ def bot_power(profile: BotProfile, cfg: dict) -> None:
                  key=f"{bot}__power", disabled=blocked and not on,
                  help="Ligado, o bot analisa os ativos da varredura a cada candle fechado e opera sozinho."):
         set_setting(bot, "autopilot", not on)
-        st.session_state.pop(f"{bot}__scan_marker", None)
+        if not on:
+            scanner.reset(bot)   # ao ligar, a primeira varredura é na hora; depois, a cada scan_minutes
         st.rerun()
     if blocked:
         trained = personalities.trained_intervals(profile.market)
         st.caption(f"Nenhum bot treinado no {cfg['interval']}. Tempos com bots: {', '.join(trained) or '—'}.")
 
 
+_AN_JS = Path(__file__).with_name("analysis.js").read_text(encoding="utf-8")
+_AN_CSS = Path(__file__).with_name("analysis.css").read_text(encoding="utf-8")
+
+
+@st.cache_resource(show_spinner=False)
+def _analysis_component():
+    return st.components.v2.component("tb_analysis", css=_AN_CSS, js=_AN_JS)
+
+
 def analysis_panel(profile: BotProfile, cfg: dict) -> None:
-    """Resumo automático do que o bot enxerga: um único bloco simples, com os detalhes técnicos recolhidos."""
+    """O que o bot enxerga agora: placar e fatos medidos, o que falta para agir, decisões da IA sobre saídas e a varredura."""
     bot = profile.key
-    rep = st.session_state.get(f"{bot}__scan")
-    if rep is None or rep.viewed is None:
-        st.info("A leitura aparece em instantes, no fechamento do candle.")
-        return
-    res, d = rep.viewed, rep.viewed.decision
-    adv = d.advice or {}
-    on = bool(cfg.get("autopilot"))
-    with st.container(border=True):
-        head = {"BUY": "🟢 Oportunidade de compra", "SELL": "🔴 Oportunidade de venda", "HOLD": "⚪ Sem oportunidade agora",
-                "CLOSE": "🟠 Sinal contrário: encerrando a posição"}[d.decision]
-        bot_name = (res.personality or {}).get("name")
-        st.markdown(f"### {head} em {res.symbol} · {res.interval}")
-        if bot_name:
-            st.caption(f"Bot do momento: {bot_name}")
-        st.markdown(adv.get("resumo") or adv.get("cenario") or d.reasoning)
-        if adv.get("dica"):
-            st.info("💡 " + adv["dica"])
-        if d.decision in ("BUY", "SELL") and res.check and res.check.calc:
-            c = res.check.calc
-            st.caption(f"Entrada {fmt_price(d.entry or res.price)} · stop {fmt_price(d.stop_loss)} · alvo {fmt_price(d.take_profit)} · "
-                       f"{c.qty:g} unidades · risco {fmt(c.risk_usdt)} USDT")
-        for ex in rep.executed:
-            word = {"BUY": "Comprou", "SELL": "Vendeu", "CLOSE": "Encerrou posição em"}[ex["action"]]
-            st.success(f"✅ {word} {ex['symbol']} ({ex['status']})")
-    when = res.time[11:16] + " UTC" if res.time else ""
-    if on:
-        names = ", ".join(sorted({o.symbol for o in rep.opportunities})) or "nenhuma"
-        st.caption(f"Última varredura {when}: {rep.scanned} ativo(s) analisados no {rep.interval} · oportunidades: {names}.")
-    else:
-        st.caption(f"Bot desligado: leitura só do ativo na tela ({when}), sem usar a IA. Ligue o bot para ele procurar oportunidades sozinho.")
-    for note in rep.notes[:3]:
-        st.caption("⚠️ " + note)
-    with st.expander("Detalhes técnicos"):
-        st.write(d.reasoning)
-        if adv.get("leitura_tecnica"):
-            st.markdown("\n".join(f"- {x}" for x in adv["leitura_tecnica"]))
-        persona = personalities.get((res.personality or {}).get("id"))
-        weights = (persona or {}).get("skills") or profile.skill_weights
-        skills = res.plan.get("skills")
-        if skills:
-            st.dataframe(pd.DataFrame([{"Habilidade": sk["name"], "Voto": round(sk["vote"], 2), "Peso": weights.get(sk["key"], 1.0),
-                                        "Leitura": sk["detail"]} for sk in skills]), hide_index=True,
-                         column_config={"Voto": st.column_config.ProgressColumn(min_value=-1, max_value=1, format="%.2f")})
-    if rep.opportunities:
-        st.markdown("**Oportunidades da última varredura**")
-        st.dataframe(pd.DataFrame([{"Ativo": o.symbol, "Lado": "Compra" if o.decision.decision == "BUY" else "Venda",
-                                    "Bot": (o.personality or {}).get("name", ""), "Entrada": o.decision.entry or o.price,
-                                    "Stop": o.decision.stop_loss, "Alvo": o.decision.take_profit} for o in rep.opportunities]),
-                     hide_index=True)
+    minutes = float(cfg.get("scan_minutes") or scanner.DEFAULT_MINUTES)
+    data = analysis_view.view(profile, cfg, st.session_state.get(f"{bot}__scan"), on=bool(cfg.get("autopilot")),
+                              next_at=scanner.next_scan(bot, minutes))
+    _analysis_component()(key=f"{bot}-analysis", data={"analysis": data})
 
 
 # ------------------------------------------------------------- carteira
@@ -682,6 +654,9 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                        "escolhe sozinho o melhor bot do ranking para o contexto de cada uma e entra nas melhores oportunidades. "
                        "Desligado, opera só a moeda da tela.")
         off = not st.session_state[k("scan_on")]
+        st.number_input("Varrer a cada (minutos)", 1, 240, key=k("scan_minutes"),
+                        help="Padrão 15. Com o bot ligado, a varredura roda de tempos em tempos — não ao abrir a página nem ao trocar de "
+                             "moeda ou tempo gráfico. Também vale para o worker 24/7.")
         c = st.columns(4)
         c[0].number_input("Moedas por varredura", 1, 100, key=k("scan_count"), disabled=off,
                           help="Padrão 15. A moeda da tela entra sempre; as demais são sorteadas. Mais moedas = mais oportunidades, "
@@ -761,6 +736,10 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                        "contexto; o bot entra quando as regras do bot do momento dão sinal. Ligado: no fechamento do candle a IA "
                        "também confirma ou veta o sinal — se discordar, o bot não entra naquele momento. Sem sinal das regras, "
                        "a IA nunca abre operação sozinha.")
+        st.toggle("IA decide saídas das posições abertas", key=k("ai_exit"),
+                  help="A cada varredura a IA lê o contexto atual e decide se mantém ou encerra cada posição aberta pelo bot (a manual "
+                       "nunca é tocada). Stop e alvo continuam valendo; a IA só pode antecipar a saída, e só com confiança de 50% ou mais. "
+                       "Gasta uma consulta por posição a cada varredura.")
         c[1].slider("Temperatura", 0.0, 1.0, step=0.05, key=k("ai_temperature"))
         st.slider("Candles enviados como contexto", 20, 200, step=10, key=k("ai_candles_context"))
         st.text_area("Instruções da sua estratégia para a IA", key=k("ai_instructions"), height=110,
