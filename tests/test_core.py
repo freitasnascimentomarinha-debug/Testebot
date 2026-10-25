@@ -1381,3 +1381,41 @@ def test_cached_objects_do_not_need_pickle(monkeypatch):
     assert ui.cached_ticker("BTCUSDT", "futures").last == 1.0
     assert ui.cached_brackets("BTCUSDT")[0][0].last == 2.0
     assert data.Ticker  # os demais valores em cache_data são DataFrame, lista e número: serializáveis
+
+
+def test_each_market_page_only_shows_and_syncs_its_own_positions(monkeypatch):
+    """O mesmo par existe em futuros e no spot: a posição de futuros não aparece nem é conferida no gráfico do spot."""
+    from streamlit.testing.v1 import AppTest
+
+    from core.broker import get_broker
+
+    _offline_market(monkeypatch)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    fut = get_broker("day").place_order(symbol="BTCUSDT", market="futures", side="BUY", qty=0.01, price=100.0, stop_loss=95.0,
+                                         take_profit=110.0, leverage=5, fee_pct=0.0, source="regras")["position"]
+    candles = make_df(5)
+    candles["time"] = pd.Timestamp.now(tz="UTC").floor("min")
+    candles["low"], candles["high"] = 90, 101                      # perderia o stop de 95 se fosse conferida com este preço
+    assert get_broker("swing").sync("BTCUSDT", candles, 94.0) == []   # spot não mexe na posição de futuros
+    assert [p["id"] for p in paper.get_account(paper.SHARED_ACCOUNT)["positions"]] == [fut["id"]]
+    assert get_broker("day").sync("BTCUSDT", candles, 94.0)           # futuros confere (stop atingido)
+
+    get_broker("day").place_order(symbol="BTCUSDT", market="futures", side="BUY", qty=0.01, price=100.0, stop_loss=95.0, leverage=5,
+                                  fee_pct=0.0, source="regras")
+
+    def page():
+        import streamlit as st
+
+        st.page_link = lambda *a, **k: None
+        from core.ui import render_bot_page
+
+        render_bot_page("swing")
+
+    at = AppTest.from_function(page, default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
+    assert "Nenhuma posição aberta" in text and "COMPRA BTCUSDT" not in text
+    from core.ui import realtime_lines
+
+    assert realtime_lines("swing", {"symbol": "BTCUSDT", "sr_on": False, "pivots_on": False, "fib_on": False}) == []

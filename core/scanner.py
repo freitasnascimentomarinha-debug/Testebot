@@ -38,7 +38,8 @@ def sync_open(profile: BotProfile, klines, ticker, funding=None, skip: set | Non
     """Confere stops, alvos e ordens limitadas dos ativos com posição aberta (exceto ``skip``, que a tela já conferiu)."""
     broker = get_broker(profile.key)
     acct = broker.account()
-    symbols = ({p["symbol"] for p in acct["positions"]} | {o["symbol"] for o in acct["orders"]}) - (skip or set())
+    symbols = ({p["symbol"] for p in acct["positions"] if p.get("market") == profile.market}
+               | {o["symbol"] for o in acct["orders"] if o.get("market") == profile.market}) - (skip or set())
     events = []
     for sym in sorted(symbols):
         try:
