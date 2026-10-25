@@ -1395,8 +1395,11 @@ def test_cached_objects_do_not_need_pickle(monkeypatch):
     monkeypatch.setattr(ui, "get_ticker", lambda s, m: Local(1.0))
     monkeypatch.setattr(ui.lev_rules, "brackets", lambda s: ((Local(2.0),), "x"))
     st.cache_resource.clear()
-    assert ui.cached_ticker("BTCUSDT", "futures").last == 1.0
-    assert ui.cached_brackets("BTCUSDT")[0][0].last == 2.0
+    try:
+        assert ui.cached_ticker("BTCUSDT", "futures").last == 1.0
+        assert ui.cached_brackets("BTCUSDT")[0][0].last == 2.0
+    finally:
+        st.cache_resource.clear()                                # não deixa os objetos falsos no cache dos outros testes
     assert data.Ticker  # os demais valores em cache_data são DataFrame, lista e número: serializáveis
 
 
@@ -1836,3 +1839,71 @@ def test_realtime_chart_has_tools_and_sends_requests_to_the_page():
     demo = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="spot", cfg=default_settings(PROFILES["swing"]), lines=[],
                                         positions=[], height=700, demo=[[1, 1, 2, 0.5, 1.5, 10]])
     assert '"demo": [[1, 1, 2, 0.5, 1.5, 10]]' in demo
+
+
+def test_position_summary_spot_and_futures_numbers():
+    from datetime import datetime, timedelta, timezone
+
+    from core import positions_view as pv
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    spot = paper.place_order(paper.SHARED_ACCOUNT, symbol="SOLUSDT", market="spot", side="BUY", qty=10, price=100.0, stop_loss=95.0, take_profit=110.0,
+                             leverage=1, fee_pct=0.1, source="ia", personality={"id": "x", "name": "Tendência EMA 15m"}, margin_mode="Isolada")["position"]
+    v = pv.summarize(spot, 104.0, now=datetime.fromisoformat(spot["opened"]) + timedelta(minutes=135))
+    assert v["spot"] and v["base_asset"] == "SOL" and v["cost"] == pytest.approx(1000.0) and v["qty"] == 10
+    assert v["net"] == pytest.approx(40 - 1.0 - 1.04) and v["net_pct"] == pytest.approx(v["net"] / 1000 * 100)       # % sobre o valor investido
+    assert v["target"]["price"] == 110 and v["target"]["per_coin"] == pytest.approx(10.0) and v["target"]["net"] == pytest.approx(100 - 1.0 - 1.1)
+    assert v["stop"]["per_coin"] == pytest.approx(-5.0) and v["stop"]["net"] == pytest.approx(-50 - 1.0 - 0.95) and v["rr"] == pytest.approx(2.0)
+    assert v["who"] == "🤖 Tendência EMA 15m" and v["opened_ago"] == "há 2 h 15 min"
+    manual = paper.place_order(paper.SHARED_ACCOUNT, symbol="ETHUSDT", market="spot", side="BUY", qty=1, price=50.0, leverage=1, fee_pct=0.1)["position"]
+    vm = pv.summarize(manual, 50.0)
+    assert vm["who"].startswith("✋") and vm["stop"] is None and vm["target"] is None and vm["rr"] is None
+    fut = paper.place_order(paper.SHARED_ACCOUNT, symbol="BTCUSDT", market="futures", side="SELL", qty=0.1, price=1000.0, stop_loss=1020.0, take_profit=950.0,
+                            leverage=10, fee_pct=0.05, source="ia", personality={"id": "y", "name": "Reversão 1h"})["position"]
+    vf = pv.summarize(fut, 990.0)
+    assert not vf["spot"] and vf["cost"] == pytest.approx(100.0) and vf["margin"] == pytest.approx(10.0) and vf["leverage"] == 10
+    assert vf["net_pct"] == pytest.approx(vf["net"] / 10 * 100)                                                          # % sobre a margem
+    assert vf["target"]["per_coin"] == pytest.approx(50.0 * 1) and vf["stop"]["per_coin"] == pytest.approx(-20.0)       # venda ganha quando cai
+
+
+def test_open_position_cards_spot_has_no_margin_and_shows_who_entered(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from core.broker import get_broker
+
+    _offline_market(monkeypatch)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    get_broker("swing").place_order(symbol="BTCUSDT", market="spot", side="BUY", qty=0.5, price=100.0, stop_loss=95.0, take_profit=112.0, leverage=1,
+                                    fee_pct=0.1, source="ia", personality={"id": "x", "name": "Rompimento 4h"}, margin_mode="Isolada")
+    get_broker("day").place_order(symbol="BTCUSDT", market="futures", side="BUY", qty=1, price=100.0, stop_loss=95.0, take_profit=112.0, leverage=5,
+                                  fee_pct=0.05, source="ia", personality={"id": "y", "name": "Tendência 15m"}, margin_mode="Isolada")
+
+    def page(bot):
+        import streamlit as st
+
+        st.page_link = lambda *a, **k: None
+        from core.ui import render_bot_page
+
+        render_bot_page(bot)
+
+    def card_text(at):
+        labels = [m.label for m in at.metric]
+        return labels, " ".join(m.value for m in at.markdown)
+
+    spot = AppTest.from_function(page, args=("swing",), default_timeout=120).run()
+    assert not spot.exception, [e.value for e in spot.exception]
+    labels, md = card_text(spot)
+    for want in ("Valor investido", "Moedas compradas", "Preço de entrada", "Preço agora", "Resultado agora (líquido)", "Se bater o alvo", "Se bater o stop"):
+        assert want in labels, want
+    assert any("Venda esperada" in l for l in labels) and "Rompimento 4h" in md and "Spot" in md
+    for gone in ("Margem", "Alavancagem", "Preço de liquidação", "Funding pago"):
+        assert gone not in labels, gone
+    assert "Isolada" not in " ".join(str(m.value) for m in spot.metric) + md
+    fut = AppTest.from_function(page, args=("day",), default_timeout=120).run()
+    assert not fut.exception, [e.value for e in fut.exception]
+    labels, md = card_text(fut)
+    for want in ("Valor da posição", "Margem", "Alavancagem", "Preço de liquidação", "Funding pago"):
+        assert want in labels, want
+    assert "Tendência 15m" in md and "Futuros" in md
