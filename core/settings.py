@@ -10,7 +10,7 @@ from core.profiles import PROFILES, BotProfile
 from core.storage import load_json, locked_update
 
 SETTINGS_FILE = "settings.json"
-DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 
 # Par de médias móveis exibido por padrão em cada estilo (rápida, lenta)
 EMA_PAIRS = {"day": (9, 21), "swing": (21, 50), "long": (50, 200)}
