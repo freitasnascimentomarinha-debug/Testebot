@@ -297,6 +297,56 @@ const BY_IV = {"1m":"1","3m":"3","5m":"5","15m":"15","30m":"30","1h":"60","2h":"
 if (C.prefer === "bybit" && BY_IV) SOURCES.unshift({name: fut ? "Bybit Perpétuo" : "Bybit Spot", kind: "bybit"});
 if (C.prefer === "okx") SOURCES.unshift(SOURCES.splice(SOURCES.findIndex(x => x.kind === "okx"), 1)[0]);
 if (C.demo) SOURCES.unshift(SOURCES.splice(SOURCES.findIndex(x => x.kind === "demo"), 1)[0]);
+
+// Corretoras sem WebSocket de candles aqui: histórico pela API pública (REST) e atualização da vela a cada 2,5 s. Cada adaptador devolve
+// linhas [ms, abertura, máxima, mínima, fechamento, volume]; se a corretora não tem o par ou o tempo gráfico, o gráfico passa à fonte seguinte.
+const BASE = C.symbol.replace(/USDT$/, "");
+const getJ = async url => { const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
+const asc = rows => rows.sort((a, b) => a[0] - b[0]);
+const IV = C.interval, NOW = () => Math.floor(Date.now() / 1000), STEP = SEC;
+const pick = m => m[IV];
+const ADAPT = {
+  coinbase: () => { const g = pick({"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "6h": 21600, "1d": 86400}); if (!g || fut) return null;
+    return {name: "Coinbase Spot", fetch: async n => asc((await getJ(`https://api.exchange.coinbase.com/products/${BASE}-USD/candles?granularity=${g}`)).slice(0, Math.min(n, 300))
+      .map(k => [k[0] * 1000, k[3], k[2], k[1], k[4], k[5]]))}; },
+  kraken: () => { const i = pick({"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080}); if (!i || fut) return null;
+    const pair = (BASE === "BTC" ? "XBT" : BASE) + "USDT";
+    return {name: "Kraken Spot", fetch: async n => { const j = await getJ(`https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${i}`);
+      if (j.error && j.error.length) throw new Error(j.error[0]); const key = Object.keys(j.result).find(x => x !== "last");
+      return j.result[key].slice(-n).map(k => [k[0] * 1000, k[1], k[2], k[3], k[4], k[6]]); }}; },
+  kucoin: () => {
+    if (fut) { const g = pick({"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "12h": 720, "1d": 1440, "1w": 10080}); if (!g) return null;
+      return {name: "KuCoin Perpétuo", fetch: async n => { const to = Date.now(); const j = await getJ(`https://api-futures.kucoin.com/api/v1/kline/query?symbol=${BASE === "BTC" ? "XBT" : BASE}USDTM&granularity=${g}&from=${to - n * STEP * 1000}&to=${to}`);
+        return j.data.map(k => [k[0], k[1], k[2], k[3], k[4], k[5]]); }}; }
+    const t = pick({"1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1hour", "2h": "2hour", "4h": "4hour", "6h": "6hour", "12h": "12hour", "1d": "1day", "1w": "1week"}); if (!t) return null;
+    return {name: "KuCoin Spot", fetch: async n => { const e = NOW(); const j = await getJ(`https://api.kucoin.com/api/v1/market/candles?type=${t}&symbol=${BASE}-USDT&startAt=${e - Math.min(n, 1500) * STEP}&endAt=${e}`);
+      return asc(j.data.map(k => [k[0] * 1000, k[1], k[3], k[4], k[2], k[5]])); }}; },
+  bitget: () => {
+    const g = fut ? pick({"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "6h": "6H", "12h": "12H", "1d": "1D", "1w": "1W"})
+      : pick({"1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "6h": "6h", "12h": "12h", "1d": "1day", "1w": "1week"}); if (!g) return null;
+    const url = fut ? `https://api.bitget.com/api/v2/mix/market/candles?symbol=${C.symbol}&productType=USDT-FUTURES&granularity=${g}&limit=` : `https://api.bitget.com/api/v2/spot/market/candles?symbol=${C.symbol}&granularity=${g}&limit=`;
+    return {name: fut ? "Bitget Perpétuo" : "Bitget Spot", fetch: async n => asc((await getJ(url + Math.min(n, 1000))).data.map(k => [+k[0], k[1], k[2], k[3], k[4], k[5]]))}; },
+  gate: () => { const i = pick(fut ? {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "12h": "12h", "1d": "1d", "1w": "7d"}
+      : {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "4h", "1d": "1d", "1w": "7d"}); if (!i) return null;
+    return {name: fut ? "Gate Perpétuo" : "Gate Spot", fetch: async n => { const lim = Math.min(n, 1000);
+      if (fut) return asc((await getJ(`https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${BASE}_USDT&interval=${i}&limit=${lim}`)).map(k => [k.t * 1000, k.o, k.h, k.l, k.c, k.v]));
+      return asc((await getJ(`https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${BASE}_USDT&interval=${i}&limit=${lim}`)).map(k => [k[0] * 1000, k[5], k[3], k[4], k[2], k[6]])); }}; },
+  mexc: () => {
+    if (fut) { const i = pick({"1m": "Min1", "5m": "Min5", "15m": "Min15", "30m": "Min30", "1h": "Min60", "4h": "Hour4", "8h": "Hour8", "1d": "Day1", "1w": "Week1"}); if (!i) return null;
+      return {name: "MEXC Perpétuo", fetch: async n => { const e = NOW(); const d = (await getJ(`https://contract.mexc.com/api/v1/contract/kline/${BASE}_USDT?interval=${i}&start=${e - n * STEP}&end=${e}`)).data;
+        return d.time.map((t, x) => [t * 1000, d.open[x], d.high[x], d.low[x], d.close[x], d.vol[x]]); }}; }
+    const i = pick({"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "60m", "4h": "4h", "1d": "1d", "1w": "1W"}); if (!i) return null;
+    return {name: "MEXC Spot", fetch: async n => asc((await getJ(`https://api.mexc.com/api/v3/klines?symbol=${C.symbol}&interval=${i}&limit=${Math.min(n, 1000)}`)).map(k => [k[0], k[1], k[2], k[3], k[4], k[5]]))}; },
+  htx: () => { const p = pick({"1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "60min", "4h": "4hour", "1d": "1day", "1w": "1week"}); if (!p) return null;
+    const url = fut ? `https://api.hbdm.com/linear-swap-ex/market/history/kline?contract_code=${BASE}-USDT&period=${p}&size=` : `https://api.huobi.pro/market/history/kline?symbol=${BASE.toLowerCase()}usdt&period=${p}&size=`;
+    return {name: fut ? "HTX Perpétuo" : "HTX Spot", fetch: async n => { const j = await getJ(url + Math.min(n, 1000)); if (j.status && j.status !== "ok") throw new Error("HTX sem dados");
+      return asc(j.data.map(k => [k.id * 1000, k.open, k.high, k.low, k.close, k.amount != null ? k.amount : k.vol])); }}; },
+  bingx: () => { const i = pick({"1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "8h": "8h", "12h": "12h", "1d": "1d", "3d": "3d", "1w": "1w", "1M": "1M"}); if (!i) return null;
+    const url = fut ? `https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=${BASE}-USDT&interval=${i}&limit=` : `https://open-api.bingx.com/openApi/spot/v2/market/kline?symbol=${BASE}-USDT&interval=${i}&limit=`;
+    return {name: fut ? "BingX Perpétuo" : "BingX Spot", fetch: async n => asc((await getJ(url + Math.min(n, 1000))).data.map(k => Array.isArray(k) ? [+k[0], k[1], k[2], k[3], k[4], k[5]] : [+k.time, k.open, k.high, k.low, k.close, k.volume]))}; },
+};
+if (ADAPT[C.prefer]) { const a = ADAPT[C.prefer](); if (a) SOURCES.unshift({kind: "poll", ...a}); }
+if (C.demo) SOURCES.unshift(SOURCES.splice(SOURCES.findIndex(x => x.kind === "demo"), 1)[0]);
 const byCat = fut ? "linear" : "spot";
 const byRow = k => row(+k[0], k[1], k[2], k[3], k[4], k[5]);
 async function bybitHistory() {
@@ -320,6 +370,11 @@ async function history(src) {
   if (src.kind === "demo") return C.demo.map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
   if (src.kind === "okx") return okxHistory();
   if (src.kind === "bybit") return bybitHistory();
+  if (src.kind === "poll") {
+    const rows = await src.fetch(1000); if (!rows.length) throw new Error(src.name + " sem dados");
+    const ref = rows.filter(k => k[0] <= rows[rows.length - 1][0] - 86400000).pop(); if (ref) open24 = +ref[4];   // variação de 24 h pelo fechamento de um dia antes
+    return rows.map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
+  }
   const r = await fetch(src.rest); if (!r.ok) throw new Error("HTTP " + r.status);
   try { open24 = +(await (await fetch(src.t24)).json()).openPrice; } catch (e) {}
   return (await r.json()).map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
@@ -329,6 +384,11 @@ let ws = null, retry = 0, pingTimer = null;
 function stream(i) {
   const src = SOURCES[i]; if (!src) { status("sem fluxo ao vivo — recarregue a página", "err"); return; }
   if (src.kind === "demo") { status("demonstração (sem fluxo ao vivo)", "live"); return; }
+  if (src.kind === "poll") {   // sem WebSocket: confere as últimas velas a cada 2,5 s
+    status("ao vivo · " + src.name + " (atualiza a cada 2,5 s)", "live"); clearInterval(pingTimer);
+    pingTimer = setInterval(async () => { try { (await src.fetch(4)).forEach(k => upsert(row(k[0], k[1], k[2], k[3], k[4], k[5]))); } catch (e) {} }, 2500);
+    return;
+  }
   let opened = false;
   status("conectando a " + src.name + "…");
   ws = new WebSocket(src.kind === "okx" ? "wss://ws.okx.com/ws/v5/business" : src.kind === "bybit" ? "wss://stream.bybit.com/v5/public/" + byCat : src.ws);

@@ -2066,3 +2066,16 @@ def test_exchanges_via_ccxt_and_fallback(monkeypatch):
     exchanges._sel_cache.clear()
     assert exchanges.selected() == exchanges.DEFAULT
     exchanges._clients.clear(); exchanges._sel_cache.clear(); data._volume_cache.clear(); data._watch_cache.clear()
+
+
+def test_chart_has_a_live_source_for_every_exchange():
+    """O gráfico ao vivo segue a corretora escolhida: toda corretora da lista tem fonte própria (WebSocket ou consulta periódica)."""
+    from core import exchanges
+    from core.realtime import realtime_chart_html
+
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "BTCUSDT"}
+    html = realtime_chart_html(symbol="BTCUSDT", interval="15m", market="futures", cfg=cfg, lines=[], positions=[], height=600, prefer="kucoin")
+    assert '"prefer": "kucoin"' in html
+    native = {"binance", "bybit", "okx"}                       # com WebSocket próprio
+    for ex in exchanges.EXCHANGES:
+        assert ex in native or f"  {ex}: () =>" in html, ex      # as demais têm adaptador REST
