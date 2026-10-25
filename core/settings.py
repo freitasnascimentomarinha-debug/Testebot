@@ -89,7 +89,16 @@ def default_settings(profile: BotProfile) -> dict:
     }
 
 
-FORCED = {"auto_bot": True, "ai_intervene": True, "ai_exit": True, "ai_model": DEFAULT_MODEL}
+def ai_model() -> str:
+    """Modelo da IA: o do segredo ``AI_MODEL`` (Secrets do Streamlit ou variável de ambiente), ou o padrão."""
+    from core.storage import get_secret
+
+    return (get_secret("AI_MODEL") or "").strip() or DEFAULT_MODEL
+
+
+def forced() -> dict:
+    """Configurações que não são mais escolha do usuário: bot automático, IA interferindo e decidindo saídas, e o modelo vindo do Secrets."""
+    return {"auto_bot": True, "ai_intervene": True, "ai_exit": True, "ai_model": ai_model()}
 
 
 def load_settings(bot: str) -> dict:
@@ -98,7 +107,7 @@ def load_settings(bot: str) -> dict:
     if stored and "ema_trend_on" not in stored:  # configuração anterior ao padrão enxuto
         stored = {k: v for k, v in stored.items() if k not in INDICATOR_KEYS}
     cfg = {**defaults, **{k: v for k, v in stored.items() if k in defaults}}
-    cfg.update(FORCED)   # o bot do momento é escolhido sozinho; a IA escolhe o modelo, interfere nas entradas e decide saídas
+    cfg.update(forced())   # o bot do momento é escolhido sozinho; a IA escolhe o modelo, interfere nas entradas e decide saídas
     if PROFILES[bot].market == "spot":  # spot não tem alavancagem, margem nem venda a descoberto
         cfg.update(leverage_on=False, leverage=1, margin_mode="Isolada", allow_short=False)
     return cfg

@@ -1166,6 +1166,11 @@ def test_ai_role_explains_or_intervenes(monkeypatch):
     assert cfg["ai_intervene"] is True and cfg["ai_persona"] in ai.AI_PERSONAS             # padrão: a IA interfere
     from core.settings import load_settings
     assert load_settings("day")["ai_intervene"] and load_settings("day")["ai_exit"]         # e não é mais uma escolha do usuário
+    import core.settings as cs
+    monkeypatch.setenv("AI_MODEL", "meu/modelo")
+    assert cs.load_settings("day")["ai_model"] == "meu/modelo"                              # o modelo vem dos Secrets
+    monkeypatch.delenv("AI_MODEL")
+    assert cs.load_settings("day")["ai_model"] == cs.DEFAULT_MODEL
     cfg["ai_intervene"] = False                                                              # (aqui, o caminho "só explica")
     df = ind.compute(make_df(400, trend=0.4, seed=21), cfg)
     plan = analyze(df, cfg, PROFILES["day"], Pm.get("esp_15m_ema_3x1"))
