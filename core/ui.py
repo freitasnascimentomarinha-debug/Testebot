@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import ai as ai_mod, analysis_view, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
+from core import nav as nav_mod, ai as ai_mod, analysis_view, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
 from core.broker import get_broker
 from core import leverage as lev_rules
 from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
@@ -127,6 +127,7 @@ def render_bot_page(bot: str) -> None:
     cfg = init_settings(profile)
     broker = get_broker(bot)
 
+    nav_mod.ticker_strip(bot, profile.market, str(cfg["symbol"]).upper())
     header_slot = st.container()   # o cabeçalho é desenhado pelo fragmento ao vivo, mas ocupa o topo da página
     execution_banner()
 

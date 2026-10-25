@@ -19,6 +19,30 @@ def _component():
     return st.components.v2.component("tb_sidebar", css=_CSS, js=_JS)
 
 
+_TJS = Path(__file__).with_name("ticker.js").read_text(encoding="utf-8")
+_TCSS = Path(__file__).with_name("ticker.css").read_text(encoding="utf-8")
+
+
+@st.cache_resource(show_spinner=False)
+def _ticker_component():
+    return st.components.v2.component("tb_ticker", css=_TCSS, js=_TJS)
+
+
+def ticker_strip(bot: str, market: str, current: str) -> None:
+    """Faixa de cotações em movimento no topo das páginas de mercado. Clicar numa moeda troca o ativo da página."""
+    quotes = market_data.watch_prices(market, SYMBOLS)
+    res = _ticker_component()(key=f"{bot}-ticker", data={"symbols": list(SYMBOLS), "market": market, "current": current,
+                                                          "quotes": {s: list(q) for s, q in quotes.items()}}, on_pick_change=lambda: None)
+    ev = getattr(res, "pick", None)
+    if ev and ev.get("uid") != st.session_state.get(f"{bot}__tick_uid"):
+        st.session_state[f"{bot}__tick_uid"] = ev.get("uid")
+        if ev.get("symbol") in SYMBOLS:
+            from core.ui import set_setting
+
+            set_setting(bot, "symbol", ev["symbol"])
+            st.rerun()
+
+
 def market_of(path: str | None, last: str = "futures") -> str:
     """Mercado da lista de moedas: o da página aberta (Futuros/Spot) ou, em outras páginas, o último que foi usado."""
     return next((m for m, (p, _) in MARKET_PAGE.items() if p == path), last)
@@ -44,7 +68,7 @@ def render(pages: dict, current) -> None:
         st.session_state["_wl_market"] = market
         quotes = market_data.watch_prices(market, WATCH)
         watch = [{"symbol": s, "price": quotes[s][0], "pct": quotes[s][1]} for s in WATCH if s in quotes]
-        payload = {"groups": groups(pages, path), "watch": watch,
+        payload = {"groups": groups(pages, path), "watch": watch, "market": market, "symbols": list(WATCH),
                    "watch_title": "Moedas · " + ("Futuros" if market == "futures" else "Spot") + " · 24 h"}
         res = _component()(key="tb-sidebar", data=payload, on_go_change=lambda: None)
         ev = getattr(res, "go", None)

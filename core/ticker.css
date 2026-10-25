@@ -1,0 +1,8 @@
+.tk { overflow: hidden; background: #141824; border: 1px solid #262b3a; border-radius: 10px; font-family: var(--st-font, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); color: #d1d4dc;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.track { display: flex; width: max-content; animation: slide linear infinite; } .tk:hover .track { animation-play-state: paused; }
+@keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.it { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; font-size: .86rem; cursor: pointer; white-space: nowrap; border-right: 1px solid #1e2433; }
+.it:hover { background: rgba(255,255,255,.06); } .it.cur { background: rgba(66,165,245,.12); } .it span { font-variant-numeric: tabular-nums; color: #e6e8ee; }
+.it i { font-style: normal; font-weight: 700; font-size: .8rem; font-variant-numeric: tabular-nums; } .up { color: #26a69a; } .dn { color: #ef5350; }
+@media (prefers-reduced-motion: reduce) { .track { animation: none; } .tk { overflow-x: auto; } }
