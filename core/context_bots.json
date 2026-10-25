@@ -1,0 +1,3367 @@
+{
+ "generated": "2026-10-25T04:11:42+00:00",
+ "bots": [
+  {
+   "id": "ctx_futures_4h_lateralidade_long",
+   "name": "↔️ Lateralidade · Compra 4h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Lateralidade · compra 4h · 1:1",
+   "tip": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "summary": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "description": "Compra o fundo e vende o topo da faixa quando o preço anda de lado. Só opera compra e só quando o gráfico está em lateralidade (lateral), no 4h de futuros. Stop 5 ATR, alvo 5 ATR. Provado em busca, validação e moedas inéditas (R médio +0.22 / +0.19 / +0.08).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 5.0,
+   "tp_atr": 5.0,
+   "skills": {
+    "momentum": 1.5,
+    "bollinger": 1.0
+   },
+   "filters": {
+    "contexts": [
+     "lateral"
+    ]
+   },
+   "context_group": "lateralidade",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.215,
+    "validacao_r": 0.192,
+    "inedito_r": 0.076,
+    "busca_n": 35,
+    "validacao_n": 26,
+    "inedito_n": 23
+   }
+  },
+  {
+   "id": "ctx_futures_4h_tendencia_long",
+   "name": "📈 Tendência · Compra 4h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Tendência · compra 4h · 1.5:1",
+   "tip": "Entra a favor da tendência forte, nos recuos.",
+   "summary": "Entra a favor da tendência forte, nos recuos.",
+   "description": "Entra a favor da tendência forte, nos recuos. Só opera compra e só quando o gráfico está em tendência (tendencia_alta, pullback_alta), no 4h de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.17 / +0.21 / +0.09).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "supertrend": 1.5,
+    "estocastico": 2.0
+   },
+   "filters": {
+    "adx_min": 20,
+    "contexts": [
+     "tendencia_alta",
+     "pullback_alta"
+    ]
+   },
+   "context_group": "tendencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.167,
+    "validacao_r": 0.214,
+    "inedito_r": 0.093,
+    "busca_n": 103,
+    "validacao_n": 68,
+    "inedito_n": 89
+   }
+  },
+  {
+   "id": "ctx_futures_4h_tendencia_short",
+   "name": "📈 Tendência · Venda 4h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Tendência · venda 4h · 2:1",
+   "tip": "Entra a favor da tendência forte, nos recuos.",
+   "summary": "Entra a favor da tendência forte, nos recuos.",
+   "description": "Entra a favor da tendência forte, nos recuos. Só opera venda e só quando o gráfico está em tendência (tendencia_baixa, pullback_baixa), no 4h de futuros. Stop 2 ATR, alvo 4 ATR. Provado em busca, validação e moedas inéditas (R médio +0.27 / +0.09 / +0.16).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "venda",
+   "threshold": 45,
+   "sl_atr": 2.0,
+   "tp_atr": 4.0,
+   "skills": {
+    "supertrend": 1.5,
+    "estocastico": 2.0
+   },
+   "filters": {
+    "volume_confirm": true,
+    "contexts": [
+     "tendencia_baixa",
+     "pullback_baixa"
+    ]
+   },
+   "context_group": "tendencia",
+   "side": "short",
+   "selection": {
+    "busca_r": 0.27,
+    "validacao_r": 0.09,
+    "inedito_r": 0.16,
+    "busca_n": 77,
+    "validacao_n": 40,
+    "inedito_n": 79
+   }
+  },
+  {
+   "id": "ctx_futures_4h_rompimento_long",
+   "name": "🚀 Rompimento · Compra 4h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Rompimento · compra 4h · 1.5:1",
+   "tip": "Entra quando o preço rompe a faixa com volume.",
+   "summary": "Entra quando o preço rompe a faixa com volume.",
+   "description": "Entra quando o preço rompe a faixa com volume. Só opera compra e só quando o gráfico está em rompimento (rompimento_alta), no 4h de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.14 / +0.20 / +0.09).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "rompimento": 1.5,
+    "adx": 1.0,
+    "bollinger": 0.5
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "rompimento_alta"
+    ]
+   },
+   "context_group": "rompimento",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.142,
+    "validacao_r": 0.198,
+    "inedito_r": 0.095,
+    "busca_n": 107,
+    "validacao_n": 65,
+    "inedito_n": 84
+   }
+  },
+  {
+   "id": "ctx_futures_4h_rompimento_short",
+   "name": "🚀 Rompimento · Venda 4h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Rompimento · venda 4h · 1:1",
+   "tip": "Entra quando o preço rompe a faixa com volume.",
+   "summary": "Entra quando o preço rompe a faixa com volume.",
+   "description": "Entra quando o preço rompe a faixa com volume. Só opera venda e só quando o gráfico está em rompimento (rompimento_baixa), no 4h de futuros. Stop 3 ATR, alvo 3 ATR. Provado em busca, validação e moedas inéditas (R médio +0.07 / +0.08 / +0.14).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "venda",
+   "threshold": 45,
+   "sl_atr": 3.0,
+   "tp_atr": 3.0,
+   "skills": {
+    "rompimento": 1.5,
+    "adx": 1.0,
+    "bollinger": 0.5
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "rompimento_baixa"
+    ]
+   },
+   "context_group": "rompimento",
+   "side": "short",
+   "selection": {
+    "busca_r": 0.072,
+    "validacao_r": 0.083,
+    "inedito_r": 0.136,
+    "busca_n": 115,
+    "validacao_n": 47,
+    "inedito_n": 81
+   }
+  },
+  {
+   "id": "ctx_futures_1h_lateralidade_long",
+   "name": "↔️ Lateralidade · Compra 1h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Lateralidade · compra 1h · 2:1",
+   "tip": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "summary": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "description": "Compra o fundo e vende o topo da faixa quando o preço anda de lado. Só opera compra e só quando o gráfico está em lateralidade (lateral), no 1h de futuros. Stop 1.5 ATR, alvo 3 ATR. Provado em busca, validação e moedas inéditas (R médio +0.25 / +0.17 / +0.11).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 1.5,
+   "tp_atr": 3.0,
+   "skills": {
+    "momentum": 1.5,
+    "bollinger": 1.0
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "lateral"
+    ]
+   },
+   "context_group": "lateralidade",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.246,
+    "validacao_r": 0.168,
+    "inedito_r": 0.113,
+    "busca_n": 76,
+    "validacao_n": 68,
+    "inedito_n": 70
+   }
+  },
+  {
+   "id": "ctx_futures_1h_tendencia_long",
+   "name": "📈 Tendência · Compra 1h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Tendência · compra 1h · 1.5:1",
+   "tip": "Entra a favor da tendência forte, nos recuos.",
+   "summary": "Entra a favor da tendência forte, nos recuos.",
+   "description": "Entra a favor da tendência forte, nos recuos. Só opera compra e só quando o gráfico está em tendência (tendencia_alta, pullback_alta), no 1h de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.14 / +0.29 / +0.16).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "supertrend": 1.5,
+    "estocastico": 2.0
+   },
+   "filters": {
+    "adx_min": 20,
+    "contexts": [
+     "tendencia_alta",
+     "pullback_alta"
+    ]
+   },
+   "context_group": "tendencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.139,
+    "validacao_r": 0.285,
+    "inedito_r": 0.158,
+    "busca_n": 137,
+    "validacao_n": 78,
+    "inedito_n": 121
+   }
+  },
+  {
+   "id": "ctx_futures_1h_reversao_long",
+   "name": "🔄 Reversão · Compra 1h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Reversão · compra 1h · 1.5:1",
+   "tip": "Aposta no repique quando o preço esticou demais.",
+   "summary": "Aposta no repique quando o preço esticou demais.",
+   "description": "Aposta no repique quando o preço esticou demais. Só opera compra e só quando o gráfico está em reversão (reversao_alta), no 1h de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.15 / +0.32 / +0.18).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "momentum": 1.5,
+    "estocastico": 1.5,
+    "fibonacci": 1.0
+   },
+   "filters": {
+    "volume_confirm": true,
+    "contexts": [
+     "reversao_alta"
+    ]
+   },
+   "context_group": "reversao",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.151,
+    "validacao_r": 0.323,
+    "inedito_r": 0.18,
+    "busca_n": 65,
+    "validacao_n": 16,
+    "inedito_n": 49
+   }
+  },
+  {
+   "id": "ctx_futures_1h_rompimento_long",
+   "name": "🚀 Rompimento · Compra 1h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Rompimento · compra 1h · 1.5:1",
+   "tip": "Entra quando o preço rompe a faixa com volume.",
+   "summary": "Entra quando o preço rompe a faixa com volume.",
+   "description": "Entra quando o preço rompe a faixa com volume. Só opera compra e só quando o gráfico está em rompimento (rompimento_alta), no 1h de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.15 / +0.15 / +0.09).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "rompimento": 1.5,
+    "adx": 1.0,
+    "bollinger": 0.5
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "rompimento_alta"
+    ]
+   },
+   "context_group": "rompimento",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.146,
+    "validacao_r": 0.153,
+    "inedito_r": 0.087,
+    "busca_n": 181,
+    "validacao_n": 119,
+    "inedito_n": 150
+   }
+  },
+  {
+   "id": "ctx_futures_1h_suporte_resistencia_long",
+   "name": "🧱 Suporte e resistência · Compra 1h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Suporte e resistência · compra 1h · 1:1",
+   "tip": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "summary": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "description": "Opera a reação do preço ao tocar suporte ou resistência. Só opera compra e só quando o gráfico está em suporte e resistência (suporte_teste), no 1h de futuros. Stop 5 ATR, alvo 5 ATR. Provado em busca, validação e moedas inéditas (R médio +0.18 / +0.47 / +0.07).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 5.0,
+   "tp_atr": 5.0,
+   "skills": {
+    "suporte_resistencia": 2.0,
+    "momentum": 1.0
+   },
+   "filters": {
+    "contexts": [
+     "suporte_teste"
+    ]
+   },
+   "context_group": "suporte_resistencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.177,
+    "validacao_r": 0.467,
+    "inedito_r": 0.074,
+    "busca_n": 34,
+    "validacao_n": 13,
+    "inedito_n": 27
+   }
+  },
+  {
+   "id": "ctx_futures_1h_suporte_resistencia_short",
+   "name": "🧱 Suporte e resistência · Venda 1h",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Suporte e resistência · venda 1h · 1.5:1",
+   "tip": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "summary": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "description": "Opera a reação do preço ao tocar suporte ou resistência. Só opera venda e só quando o gráfico está em suporte e resistência (resistencia_teste), no 1h de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.26 / +0.34 / +0.13).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "venda",
+   "threshold": 10,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "estrutura": 1.5,
+    "suporte_resistencia": 1.5
+   },
+   "filters": {
+    "volume_confirm": true,
+    "contexts": [
+     "resistencia_teste"
+    ]
+   },
+   "context_group": "suporte_resistencia",
+   "side": "short",
+   "selection": {
+    "busca_r": 0.265,
+    "validacao_r": 0.339,
+    "inedito_r": 0.126,
+    "busca_n": 25,
+    "validacao_n": 14,
+    "inedito_n": 27
+   }
+  },
+  {
+   "id": "ctx_futures_15m_lateralidade_long",
+   "name": "↔️ Lateralidade · Compra 15m",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Lateralidade · compra 15m · 1.5:1",
+   "tip": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "summary": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "description": "Compra o fundo e vende o topo da faixa quando o preço anda de lado. Só opera compra e só quando o gráfico está em lateralidade (lateral), no 15m de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.14 / +0.55 / +0.18).",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "15m",
+   "timeframes": "15m (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "estocastico": 2.0,
+    "bollinger": 1.0
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "lateral"
+    ]
+   },
+   "context_group": "lateralidade",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.141,
+    "validacao_r": 0.55,
+    "inedito_r": 0.177,
+    "busca_n": 52,
+    "validacao_n": 19,
+    "inedito_n": 49
+   }
+  },
+  {
+   "id": "ctx_futures_15m_tendencia_long",
+   "name": "📈 Tendência · Compra 15m",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Tendência · compra 15m · 1:1",
+   "tip": "Entra a favor da tendência forte, nos recuos.",
+   "summary": "Entra a favor da tendência forte, nos recuos.",
+   "description": "Entra a favor da tendência forte, nos recuos. Só opera compra e só quando o gráfico está em tendência (tendencia_alta, pullback_alta), no 15m de futuros. Stop 5 ATR, alvo 5 ATR. Provado em busca, validação e moedas inéditas (R médio +0.04 / +0.03 / +0.07); margem pequena — selo ressalva.",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "15m",
+   "timeframes": "15m (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 5.0,
+   "tp_atr": 5.0,
+   "skills": {
+    "tendencia": 1.0,
+    "adx": 1.5,
+    "volume": 0.5
+   },
+   "filters": {
+    "volume_confirm": true,
+    "contexts": [
+     "tendencia_alta",
+     "pullback_alta"
+    ]
+   },
+   "context_group": "tendencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.04,
+    "validacao_r": 0.026,
+    "inedito_r": 0.07,
+    "busca_n": 407,
+    "validacao_n": 190,
+    "inedito_n": 282
+   }
+  },
+  {
+   "id": "ctx_futures_15m_reversao_long",
+   "name": "🔄 Reversão · Compra 15m",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Reversão · compra 15m · 2:1",
+   "tip": "Aposta no repique quando o preço esticou demais.",
+   "summary": "Aposta no repique quando o preço esticou demais.",
+   "description": "Aposta no repique quando o preço esticou demais. Só opera compra e só quando o gráfico está em reversão (reversao_alta), no 15m de futuros. Stop 2 ATR, alvo 4 ATR. Provado em busca, validação e moedas inéditas (R médio +0.50 / +0.16 / +0.22); margem pequena — selo ressalva.",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "15m",
+   "timeframes": "15m (testado)",
+   "direction": "compra",
+   "threshold": 45,
+   "sl_atr": 2.0,
+   "tp_atr": 4.0,
+   "skills": {
+    "momentum": 1.5,
+    "estocastico": 1.5,
+    "fibonacci": 1.0
+   },
+   "filters": {
+    "contexts": [
+     "reversao_alta"
+    ]
+   },
+   "context_group": "reversao",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.496,
+    "validacao_r": 0.156,
+    "inedito_r": 0.218,
+    "busca_n": 33,
+    "validacao_n": 23,
+    "inedito_n": 24
+   }
+  },
+  {
+   "id": "ctx_futures_15m_rompimento_long",
+   "name": "🚀 Rompimento · Compra 15m",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Rompimento · compra 15m · 1.5:1",
+   "tip": "Entra quando o preço rompe a faixa com volume.",
+   "summary": "Entra quando o preço rompe a faixa com volume.",
+   "description": "Entra quando o preço rompe a faixa com volume. Só opera compra e só quando o gráfico está em rompimento (rompimento_alta), no 15m de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.06 / +0.12 / +0.04); margem pequena — selo ressalva.",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "15m",
+   "timeframes": "15m (testado)",
+   "direction": "compra",
+   "threshold": 45,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "rompimento": 1.5,
+    "adx": 1.0,
+    "bollinger": 0.5
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "rompimento_alta"
+    ]
+   },
+   "context_group": "rompimento",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.062,
+    "validacao_r": 0.115,
+    "inedito_r": 0.037,
+    "busca_n": 324,
+    "validacao_n": 161,
+    "inedito_n": 248
+   }
+  },
+  {
+   "id": "ctx_futures_15m_fluxo_ordens_long",
+   "name": "🌊 Fluxo de ordens · Compra 15m",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Fluxo de ordens · compra 15m · 2:1",
+   "tip": "Segue a agressão compradora ou vendedora (volume taker) com volume forte.",
+   "summary": "Segue a agressão compradora ou vendedora (volume taker) com volume forte.",
+   "description": "Segue a agressão compradora ou vendedora (volume taker) com volume forte. Só opera compra e só quando o gráfico está em fluxo de ordens (fluxo_comprador), no 15m de futuros. Stop 2 ATR, alvo 4 ATR. Provado em busca, validação e moedas inéditas (R médio +0.03 / +0.22 / +0.08); margem pequena — selo ressalva.",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "15m",
+   "timeframes": "15m (testado)",
+   "direction": "compra",
+   "threshold": 45,
+   "sl_atr": 2.0,
+   "tp_atr": 4.0,
+   "skills": {
+    "volume": 2.0,
+    "estrutura": 1.0
+   },
+   "filters": {
+    "contexts": [
+     "fluxo_comprador"
+    ]
+   },
+   "context_group": "fluxo_ordens",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.029,
+    "validacao_r": 0.222,
+    "inedito_r": 0.084,
+    "busca_n": 58,
+    "validacao_n": 24,
+    "inedito_n": 42
+   }
+  },
+  {
+   "id": "ctx_futures_5m_suporte_resistencia_long",
+   "name": "🧱 Suporte e resistência · Compra 5m",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Suporte e resistência · compra 5m · 1.5:1",
+   "tip": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "summary": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "description": "Opera a reação do preço ao tocar suporte ou resistência. Só opera compra e só quando o gráfico está em suporte e resistência (suporte_teste), no 5m de futuros. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.04 / +0.05 / +0.33); margem pequena — selo ressalva.",
+   "bot": "day",
+   "markets": [
+    "futures"
+   ],
+   "tested_interval": "5m",
+   "timeframes": "5m (testado)",
+   "direction": "compra",
+   "threshold": 20,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "suporte_resistencia": 2.0,
+    "momentum": 1.0
+   },
+   "filters": {
+    "adx_min": 20,
+    "contexts": [
+     "suporte_teste"
+    ]
+   },
+   "context_group": "suporte_resistencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.041,
+    "validacao_r": 0.05,
+    "inedito_r": 0.326,
+    "busca_n": 42,
+    "validacao_n": 26,
+    "inedito_n": 36
+   }
+  },
+  {
+   "id": "ctx_spot_4h_lateralidade_long",
+   "name": "↔️ Lateralidade · Compra 4h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Lateralidade · compra 4h · 1:1",
+   "tip": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "summary": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "description": "Compra o fundo e vende o topo da faixa quando o preço anda de lado. Só opera compra e só quando o gráfico está em lateralidade (lateral), no 4h de spot. Stop 5 ATR, alvo 5 ATR. Provado em busca, validação e moedas inéditas (R médio +0.26 / +0.08 / +0.02); margem pequena — selo ressalva.",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 5.0,
+   "tp_atr": 5.0,
+   "skills": {
+    "estocastico": 2.0,
+    "bollinger": 1.0
+   },
+   "filters": {
+    "contexts": [
+     "lateral"
+    ]
+   },
+   "context_group": "lateralidade",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.263,
+    "validacao_r": 0.076,
+    "inedito_r": 0.023,
+    "busca_n": 33,
+    "validacao_n": 15,
+    "inedito_n": 38
+   }
+  },
+  {
+   "id": "ctx_spot_4h_tendencia_long",
+   "name": "📈 Tendência · Compra 4h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Tendência · compra 4h · 1.5:1",
+   "tip": "Entra a favor da tendência forte, nos recuos.",
+   "summary": "Entra a favor da tendência forte, nos recuos.",
+   "description": "Entra a favor da tendência forte, nos recuos. Só opera compra e só quando o gráfico está em tendência (tendencia_alta, pullback_alta), no 4h de spot. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.14 / +0.27 / +0.15).",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "supertrend": 1.5,
+    "estocastico": 2.0
+   },
+   "filters": {
+    "contexts": [
+     "tendencia_alta",
+     "pullback_alta"
+    ]
+   },
+   "context_group": "tendencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.141,
+    "validacao_r": 0.27,
+    "inedito_r": 0.146,
+    "busca_n": 100,
+    "validacao_n": 68,
+    "inedito_n": 90
+   }
+  },
+  {
+   "id": "ctx_spot_4h_rompimento_long",
+   "name": "🚀 Rompimento · Compra 4h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Rompimento · compra 4h · 1:1",
+   "tip": "Entra quando o preço rompe a faixa com volume.",
+   "summary": "Entra quando o preço rompe a faixa com volume.",
+   "description": "Entra quando o preço rompe a faixa com volume. Só opera compra e só quando o gráfico está em rompimento (rompimento_alta), no 4h de spot. Stop 5 ATR, alvo 5 ATR. Provado em busca, validação e moedas inéditas (R médio +0.15 / +0.13 / +0.03); margem pequena — selo ressalva.",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 5.0,
+   "tp_atr": 5.0,
+   "skills": {
+    "rompimento": 1.5,
+    "adx": 1.0,
+    "bollinger": 0.5
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "rompimento_alta"
+    ]
+   },
+   "context_group": "rompimento",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.152,
+    "validacao_r": 0.132,
+    "inedito_r": 0.027,
+    "busca_n": 108,
+    "validacao_n": 69,
+    "inedito_n": 99
+   }
+  },
+  {
+   "id": "ctx_spot_4h_suporte_resistencia_long",
+   "name": "🧱 Suporte e resistência · Compra 4h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Suporte e resistência · compra 4h · 1.5:1",
+   "tip": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "summary": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "description": "Opera a reação do preço ao tocar suporte ou resistência. Só opera compra e só quando o gráfico está em suporte e resistência (suporte_teste), no 4h de spot. Stop 2 ATR, alvo 3 ATR. Provado em busca, validação e moedas inéditas (R médio +0.12 / +0.07 / +0.11).",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "4h",
+   "timeframes": "4h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 2.0,
+   "tp_atr": 3.0,
+   "skills": {
+    "suporte_resistencia": 2.0,
+    "momentum": 1.0
+   },
+   "filters": {
+    "adx_min": 20,
+    "contexts": [
+     "suporte_teste"
+    ]
+   },
+   "context_group": "suporte_resistencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.115,
+    "validacao_r": 0.07,
+    "inedito_r": 0.11,
+    "busca_n": 15,
+    "validacao_n": 11,
+    "inedito_n": 24
+   }
+  },
+  {
+   "id": "ctx_spot_1h_lateralidade_long",
+   "name": "↔️ Lateralidade · Compra 1h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Lateralidade · compra 1h · 1.5:1",
+   "tip": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "summary": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "description": "Compra o fundo e vende o topo da faixa quando o preço anda de lado. Só opera compra e só quando o gráfico está em lateralidade (lateral), no 1h de spot. Stop 2 ATR, alvo 3 ATR. Provado em busca, validação e moedas inéditas (R médio +0.15 / +0.07 / +0.11).",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 2.0,
+   "tp_atr": 3.0,
+   "skills": {
+    "estocastico": 2.0,
+    "bollinger": 1.0
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "lateral"
+    ]
+   },
+   "context_group": "lateralidade",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.155,
+    "validacao_r": 0.07,
+    "inedito_r": 0.114,
+    "busca_n": 86,
+    "validacao_n": 70,
+    "inedito_n": 90
+   }
+  },
+  {
+   "id": "ctx_spot_1h_tendencia_long",
+   "name": "📈 Tendência · Compra 1h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Tendência · compra 1h · 1.5:1",
+   "tip": "Entra a favor da tendência forte, nos recuos.",
+   "summary": "Entra a favor da tendência forte, nos recuos.",
+   "description": "Entra a favor da tendência forte, nos recuos. Só opera compra e só quando o gráfico está em tendência (tendencia_alta, pullback_alta), no 1h de spot. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.17 / +0.06 / +0.06).",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 45,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "supertrend": 1.5,
+    "estocastico": 2.0
+   },
+   "filters": {
+    "volume_confirm": true,
+    "contexts": [
+     "tendencia_alta",
+     "pullback_alta"
+    ]
+   },
+   "context_group": "tendencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.167,
+    "validacao_r": 0.058,
+    "inedito_r": 0.062,
+    "busca_n": 87,
+    "validacao_n": 57,
+    "inedito_n": 90
+   }
+  },
+  {
+   "id": "ctx_spot_1h_suporte_resistencia_long",
+   "name": "🧱 Suporte e resistência · Compra 1h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Suporte e resistência · compra 1h · 1:1",
+   "tip": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "summary": "Opera a reação do preço ao tocar suporte ou resistência.",
+   "description": "Opera a reação do preço ao tocar suporte ou resistência. Só opera compra e só quando o gráfico está em suporte e resistência (suporte_teste), no 1h de spot. Stop 5 ATR, alvo 5 ATR. Provado em busca, validação e moedas inéditas (R médio +0.18 / +0.34 / +0.05).",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 10,
+   "sl_atr": 5.0,
+   "tp_atr": 5.0,
+   "skills": {
+    "suporte_resistencia": 1.5,
+    "reversao": 1.0,
+    "fibonacci": 1.0
+   },
+   "filters": {
+    "adx_min": 20,
+    "contexts": [
+     "suporte_teste"
+    ]
+   },
+   "context_group": "suporte_resistencia",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.183,
+    "validacao_r": 0.336,
+    "inedito_r": 0.051,
+    "busca_n": 48,
+    "validacao_n": 12,
+    "inedito_n": 40
+   }
+  },
+  {
+   "id": "ctx_spot_1h_fluxo_ordens_long",
+   "name": "🌊 Fluxo de ordens · Compra 1h (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Fluxo de ordens · compra 1h · 1.5:1",
+   "tip": "Segue a agressão compradora ou vendedora (volume taker) com volume forte.",
+   "summary": "Segue a agressão compradora ou vendedora (volume taker) com volume forte.",
+   "description": "Segue a agressão compradora ou vendedora (volume taker) com volume forte. Só opera compra e só quando o gráfico está em fluxo de ordens (fluxo_comprador), no 1h de spot. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.10 / +0.12 / +0.21).",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "1h",
+   "timeframes": "1h (testado)",
+   "direction": "compra",
+   "threshold": 30,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "volume": 2.0,
+    "momentum": 1.0
+   },
+   "filters": {
+    "contexts": [
+     "fluxo_comprador"
+    ]
+   },
+   "context_group": "fluxo_ordens",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.096,
+    "validacao_r": 0.121,
+    "inedito_r": 0.211,
+    "busca_n": 40,
+    "validacao_n": 13,
+    "inedito_n": 51
+   }
+  },
+  {
+   "id": "ctx_spot_15m_lateralidade_long",
+   "name": "↔️ Lateralidade · Compra 15m (Spot)",
+   "author": "Pesquisa por contexto · out/2026",
+   "specialty": "Lateralidade · compra 15m · 1.5:1",
+   "tip": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "summary": "Compra o fundo e vende o topo da faixa quando o preço anda de lado.",
+   "description": "Compra o fundo e vende o topo da faixa quando o preço anda de lado. Só opera compra e só quando o gráfico está em lateralidade (lateral), no 15m de spot. Stop 4 ATR, alvo 6 ATR. Provado em busca, validação e moedas inéditas (R médio +0.05 / +0.16 / +0.08); margem pequena — selo ressalva.",
+   "bot": "swing",
+   "markets": [
+    "spot"
+   ],
+   "tested_interval": "15m",
+   "timeframes": "15m (testado)",
+   "direction": "compra",
+   "threshold": 20,
+   "sl_atr": 4.0,
+   "tp_atr": 6.0,
+   "skills": {
+    "estocastico": 2.0,
+    "bollinger": 1.0
+   },
+   "filters": {
+    "trend_ema": true,
+    "contexts": [
+     "lateral"
+    ]
+   },
+   "context_group": "lateralidade",
+   "side": "long",
+   "selection": {
+    "busca_r": 0.055,
+    "validacao_r": 0.163,
+    "inedito_r": 0.084,
+    "busca_n": 39,
+    "validacao_n": 16,
+    "inedito_n": 33
+   }
+  }
+ ],
+ "research": {
+  "ctx_futures_4h_lateralidade_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 1.42,
+   "monthly_pct": 0.08,
+   "ret_seen": 2.09,
+   "ret_new": 0.42,
+   "win_pct": 58.3,
+   "dd_pct": 4.0,
+   "trades_month": 0.5,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 0.46,
+    "ETHUSDT": 2.61,
+    "SOLUSDT": 3.54,
+    "ZECUSDT": 6.03,
+    "NEARUSDT": -0.83,
+    "XRPUSDT": 0.73,
+    "BNBUSDT": 3.05,
+    "AIUSDT": -1.0,
+    "BMTUSDT": 0.72,
+    "WLDUSDT": -1.07
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "lateral": {
+     "n": 84,
+     "win_pct": 58.3,
+     "avg_r": 0.17,
+     "seen_n": 61,
+     "seen_avg_r": 0.205,
+     "new_n": 23,
+     "new_avg_r": 0.076,
+     "ret_pct": 1.42,
+     "monthly_pct": 0.08,
+     "ret_seen": 2.09,
+     "ret_new": 0.42,
+     "dd_pct": 4.0,
+     "pos_coins": "7/10",
+     "trades_month": 0.5
+    }
+   },
+   "best_contexts": [
+    "lateral"
+   ]
+  },
+  "ctx_futures_4h_tendencia_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 4.21,
+   "monthly_pct": 0.23,
+   "ret_seen": 5.49,
+   "ret_new": 2.29,
+   "win_pct": 48.5,
+   "dd_pct": 7.3,
+   "trades_month": 1.4,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 6.35,
+    "ETHUSDT": 2.26,
+    "SOLUSDT": 2.66,
+    "ZECUSDT": 21.93,
+    "NEARUSDT": 2.27,
+    "XRPUSDT": -2.51,
+    "BNBUSDT": 16.82,
+    "AIUSDT": -3.46,
+    "BMTUSDT": -4.29,
+    "WLDUSDT": 0.08
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "tendencia_alta": {
+     "n": 216,
+     "win_pct": 48.6,
+     "avg_r": 0.166,
+     "seen_n": 144,
+     "seen_avg_r": 0.222,
+     "new_n": 72,
+     "new_avg_r": 0.053,
+     "ret_pct": 3.72,
+     "monthly_pct": 0.2,
+     "ret_seen": 5.53,
+     "ret_new": 0.99,
+     "dd_pct": 6.9,
+     "pos_coins": "7/10",
+     "trades_month": 1.2
+    },
+    "pullback_alta": {
+     "n": 44,
+     "win_pct": 47.7,
+     "avg_r": 0.095,
+     "seen_n": 27,
+     "seen_avg_r": -0.011,
+     "new_n": 17,
+     "new_avg_r": 0.262,
+     "ret_pct": 0.43,
+     "monthly_pct": 0.02,
+     "ret_seen": -0.06,
+     "ret_new": 1.16,
+     "dd_pct": 3.6,
+     "pos_coins": "5/10",
+     "trades_month": 0.2
+    }
+   },
+   "best_contexts": [
+    "tendencia_alta",
+    "pullback_alta"
+   ]
+  },
+  "ctx_futures_4h_tendencia_short": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 3.75,
+   "monthly_pct": 0.2,
+   "ret_seen": 4.07,
+   "ret_new": 3.26,
+   "win_pct": 41.8,
+   "dd_pct": 8.1,
+   "trades_month": 1.1,
+   "pos_coins": "6/10",
+   "per_symbol": {
+    "BTCUSDT": -3.76,
+    "ETHUSDT": 6.59,
+    "SOLUSDT": 14.16,
+    "ZECUSDT": 2.72,
+    "NEARUSDT": -0.08,
+    "XRPUSDT": 4.83,
+    "BNBUSDT": 14.0,
+    "AIUSDT": 5.23,
+    "BMTUSDT": -5.36,
+    "WLDUSDT": -0.82
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "tendencia_baixa": {
+     "n": 130,
+     "win_pct": 41.5,
+     "avg_r": 0.172,
+     "seen_n": 79,
+     "seen_avg_r": 0.272,
+     "new_n": 51,
+     "new_avg_r": 0.017,
+     "ret_pct": 2.2,
+     "monthly_pct": 0.12,
+     "ret_seen": 3.56,
+     "ret_new": 0.17,
+     "dd_pct": 7.1,
+     "pos_coins": "5/10",
+     "trades_month": 0.7
+    },
+    "pullback_baixa": {
+     "n": 66,
+     "win_pct": 42.4,
+     "avg_r": 0.223,
+     "seen_n": 38,
+     "seen_avg_r": 0.076,
+     "new_n": 28,
+     "new_avg_r": 0.422,
+     "ret_pct": 1.47,
+     "monthly_pct": 0.08,
+     "ret_seen": 0.46,
+     "ret_new": 2.99,
+     "dd_pct": 6.1,
+     "pos_coins": "6/10",
+     "trades_month": 0.4
+    }
+   },
+   "best_contexts": [
+    "tendencia_baixa",
+    "pullback_baixa"
+   ]
+  },
+  "ctx_futures_4h_rompimento_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 3.66,
+   "monthly_pct": 0.2,
+   "ret_seen": 4.81,
+   "ret_new": 1.94,
+   "win_pct": 47.3,
+   "dd_pct": 8.7,
+   "trades_month": 1.4,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 2.09,
+    "ETHUSDT": 9.53,
+    "SOLUSDT": 2.18,
+    "ZECUSDT": 12.59,
+    "NEARUSDT": 10.44,
+    "XRPUSDT": -7.97,
+    "BNBUSDT": 8.68,
+    "AIUSDT": -0.15,
+    "BMTUSDT": 1.5,
+    "WLDUSDT": -2.27
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "rompimento_alta": {
+     "n": 256,
+     "win_pct": 47.3,
+     "avg_r": 0.141,
+     "seen_n": 172,
+     "seen_avg_r": 0.163,
+     "new_n": 84,
+     "new_avg_r": 0.095,
+     "ret_pct": 3.66,
+     "monthly_pct": 0.2,
+     "ret_seen": 4.81,
+     "ret_new": 1.94,
+     "dd_pct": 8.7,
+     "pos_coins": "7/10",
+     "trades_month": 1.4
+    }
+   },
+   "best_contexts": [
+    "rompimento_alta"
+   ]
+  },
+  "ctx_futures_4h_rompimento_short": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 2.26,
+   "monthly_pct": 0.12,
+   "ret_seen": 1.96,
+   "ret_new": 2.7,
+   "win_pct": 56.0,
+   "dd_pct": 5.0,
+   "trades_month": 1.3,
+   "pos_coins": "8/10",
+   "per_symbol": {
+    "BTCUSDT": 1.09,
+    "ETHUSDT": 8.6,
+    "SOLUSDT": 2.23,
+    "ZECUSDT": -0.31,
+    "NEARUSDT": 1.7,
+    "XRPUSDT": -1.52,
+    "BNBUSDT": 2.02,
+    "AIUSDT": 2.09,
+    "BMTUSDT": 4.23,
+    "WLDUSDT": 2.44
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "rompimento_baixa": {
+     "n": 243,
+     "win_pct": 56.0,
+     "avg_r": 0.095,
+     "seen_n": 162,
+     "seen_avg_r": 0.075,
+     "new_n": 81,
+     "new_avg_r": 0.136,
+     "ret_pct": 2.26,
+     "monthly_pct": 0.12,
+     "ret_seen": 1.96,
+     "ret_new": 2.7,
+     "dd_pct": 5.0,
+     "pos_coins": "8/10",
+     "trades_month": 1.3
+    }
+   },
+   "best_contexts": [
+    "rompimento_baixa"
+   ]
+  },
+  "ctx_futures_1h_lateralidade_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 3.98,
+   "monthly_pct": 0.49,
+   "ret_seen": 5.37,
+   "ret_new": 1.88,
+   "win_pct": 42.5,
+   "dd_pct": 17.0,
+   "trades_month": 2.7,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 7.71,
+    "ETHUSDT": 16.29,
+    "SOLUSDT": 5.08,
+    "ZECUSDT": 4.85,
+    "NEARUSDT": 13.13,
+    "XRPUSDT": -14.83,
+    "BNBUSDT": 3.84,
+    "AIUSDT": -0.35,
+    "BMTUSDT": -3.32,
+    "WLDUSDT": 7.37
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "lateral": {
+     "n": 214,
+     "win_pct": 42.5,
+     "avg_r": 0.178,
+     "seen_n": 144,
+     "seen_avg_r": 0.209,
+     "new_n": 70,
+     "new_avg_r": 0.113,
+     "ret_pct": 3.98,
+     "monthly_pct": 0.49,
+     "ret_seen": 5.37,
+     "ret_new": 1.88,
+     "dd_pct": 17.0,
+     "pos_coins": "7/10",
+     "trades_month": 2.7
+    }
+   },
+   "best_contexts": [
+    "lateral"
+   ]
+  },
+  "ctx_futures_1h_tendencia_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 6.17,
+   "monthly_pct": 0.75,
+   "ret_seen": 7.14,
+   "ret_new": 4.71,
+   "win_pct": 49.1,
+   "dd_pct": 6.9,
+   "trades_month": 4.2,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 5.46,
+    "ETHUSDT": -2.07,
+    "SOLUSDT": 6.21,
+    "ZECUSDT": 20.47,
+    "NEARUSDT": 13.08,
+    "XRPUSDT": -0.34,
+    "BNBUSDT": -0.02,
+    "AIUSDT": 4.46,
+    "BMTUSDT": 7.11,
+    "WLDUSDT": 7.31
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "tendencia_alta": {
+     "n": 271,
+     "win_pct": 50.2,
+     "avg_r": 0.208,
+     "seen_n": 174,
+     "seen_avg_r": 0.268,
+     "new_n": 97,
+     "new_avg_r": 0.1,
+     "ret_pct": 5.8,
+     "monthly_pct": 0.71,
+     "ret_seen": 8.14,
+     "ret_new": 2.29,
+     "dd_pct": 7.2,
+     "pos_coins": "7/10",
+     "trades_month": 3.4
+    },
+    "pullback_alta": {
+     "n": 65,
+     "win_pct": 44.6,
+     "avg_r": 0.065,
+     "seen_n": 41,
+     "seen_avg_r": -0.128,
+     "new_n": 24,
+     "new_avg_r": 0.394,
+     "ret_pct": 0.42,
+     "monthly_pct": 0.05,
+     "ret_seen": -0.9,
+     "ret_new": 2.4,
+     "dd_pct": 6.7,
+     "pos_coins": "5/10",
+     "trades_month": 0.8
+    }
+   },
+   "best_contexts": [
+    "tendencia_alta",
+    "pullback_alta"
+   ]
+  },
+  "ctx_futures_1h_reversao_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 2.38,
+   "monthly_pct": 0.29,
+   "ret_seen": 2.53,
+   "ret_new": 2.16,
+   "win_pct": 50.8,
+   "dd_pct": 5.0,
+   "trades_month": 1.6,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 7.46,
+    "ETHUSDT": 2.86,
+    "SOLUSDT": -3.47,
+    "ZECUSDT": 3.71,
+    "NEARUSDT": -1.78,
+    "XRPUSDT": 6.38,
+    "BNBUSDT": 1.86,
+    "AIUSDT": -0.57,
+    "BMTUSDT": 4.7,
+    "WLDUSDT": 2.65
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "reversao_alta": {
+     "n": 130,
+     "win_pct": 50.8,
+     "avg_r": 0.183,
+     "seen_n": 81,
+     "seen_avg_r": 0.185,
+     "new_n": 49,
+     "new_avg_r": 0.18,
+     "ret_pct": 2.38,
+     "monthly_pct": 0.29,
+     "ret_seen": 2.53,
+     "ret_new": 2.16,
+     "dd_pct": 5.0,
+     "pos_coins": "7/10",
+     "trades_month": 1.6
+    }
+   },
+   "best_contexts": [
+    "reversao_alta"
+   ]
+  },
+  "ctx_futures_1h_rompimento_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 5.79,
+   "monthly_pct": 0.71,
+   "ret_seen": 7.57,
+   "ret_new": 3.13,
+   "win_pct": 47.8,
+   "dd_pct": 7.1,
+   "trades_month": 5.6,
+   "pos_coins": "8/10",
+   "per_symbol": {
+    "BTCUSDT": 2.39,
+    "ETHUSDT": 10.29,
+    "SOLUSDT": 10.04,
+    "ZECUSDT": 14.27,
+    "NEARUSDT": 13.2,
+    "XRPUSDT": -4.78,
+    "BNBUSDT": 5.24,
+    "AIUSDT": -3.1,
+    "BMTUSDT": 1.01,
+    "WLDUSDT": 9.38
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "rompimento_alta": {
+     "n": 450,
+     "win_pct": 47.8,
+     "avg_r": 0.128,
+     "seen_n": 300,
+     "seen_avg_r": 0.149,
+     "new_n": 150,
+     "new_avg_r": 0.087,
+     "ret_pct": 5.79,
+     "monthly_pct": 0.71,
+     "ret_seen": 7.57,
+     "ret_new": 3.13,
+     "dd_pct": 7.1,
+     "pos_coins": "8/10",
+     "trades_month": 5.6
+    }
+   },
+   "best_contexts": [
+    "rompimento_alta"
+   ]
+  },
+  "ctx_futures_1h_suporte_resistencia_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 1.41,
+   "monthly_pct": 0.18,
+   "ret_seen": 2.03,
+   "ret_new": 0.49,
+   "win_pct": 62.2,
+   "dd_pct": 3.4,
+   "trades_month": 0.9,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 4.15,
+    "ETHUSDT": 5.99,
+    "SOLUSDT": 0.18,
+    "ZECUSDT": 1.84,
+    "NEARUSDT": -0.36,
+    "XRPUSDT": 0.4,
+    "BNBUSDT": -2.16,
+    "AIUSDT": 1.98,
+    "BMTUSDT": -0.23,
+    "WLDUSDT": 2.35
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "suporte_teste": {
+     "n": 74,
+     "win_pct": 62.2,
+     "avg_r": 0.19,
+     "seen_n": 47,
+     "seen_avg_r": 0.258,
+     "new_n": 27,
+     "new_avg_r": 0.074,
+     "ret_pct": 1.41,
+     "monthly_pct": 0.18,
+     "ret_seen": 2.03,
+     "ret_new": 0.49,
+     "dd_pct": 3.4,
+     "pos_coins": "7/10",
+     "trades_month": 0.9
+    }
+   },
+   "best_contexts": [
+    "suporte_teste"
+   ]
+  },
+  "ctx_futures_1h_suporte_resistencia_short": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 1.47,
+   "monthly_pct": 0.18,
+   "ret_seen": 1.9,
+   "ret_new": 0.82,
+   "win_pct": 57.6,
+   "dd_pct": 3.0,
+   "trades_month": 0.8,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": -1.74,
+    "ETHUSDT": 5.08,
+    "SOLUSDT": 0.43,
+    "ZECUSDT": 1.2,
+    "NEARUSDT": 0.65,
+    "XRPUSDT": 5.8,
+    "BNBUSDT": -0.45,
+    "AIUSDT": 0.89,
+    "BMTUSDT": -0.0,
+    "WLDUSDT": 2.83
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "resistencia_teste": {
+     "n": 66,
+     "win_pct": 57.6,
+     "avg_r": 0.224,
+     "seen_n": 39,
+     "seen_avg_r": 0.291,
+     "new_n": 27,
+     "new_avg_r": 0.126,
+     "ret_pct": 1.47,
+     "monthly_pct": 0.18,
+     "ret_seen": 1.9,
+     "ret_new": 0.82,
+     "dd_pct": 3.0,
+     "pos_coins": "7/10",
+     "trades_month": 0.8
+    }
+   },
+   "best_contexts": [
+    "resistencia_teste"
+   ]
+  },
+  "ctx_futures_15m_lateralidade_long": {
+   "period_label": "120 dias",
+   "period_days": 120,
+   "ret_pct": 2.67,
+   "monthly_pct": 0.66,
+   "ret_seen": 2.99,
+   "ret_new": 2.19,
+   "win_pct": 52.5,
+   "dd_pct": 6.5,
+   "trades_month": 3.0,
+   "pos_coins": "6/10",
+   "per_symbol": {
+    "BTCUSDT": 9.26,
+    "ETHUSDT": 1.06,
+    "SOLUSDT": 7.37,
+    "ZECUSDT": 0.52,
+    "NEARUSDT": 2.29,
+    "XRPUSDT": -2.53,
+    "BNBUSDT": 9.57,
+    "AIUSDT": 0.0,
+    "WLDUSDT": -0.69,
+    "BMTUSDT": -0.13
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "15m",
+   "status": "aprovado",
+   "contexts": {
+    "lateral": {
+     "n": 120,
+     "win_pct": 52.5,
+     "avg_r": 0.22,
+     "seen_n": 71,
+     "seen_avg_r": 0.25,
+     "new_n": 49,
+     "new_avg_r": 0.177,
+     "ret_pct": 2.67,
+     "monthly_pct": 0.66,
+     "ret_seen": 2.99,
+     "ret_new": 2.19,
+     "dd_pct": 6.5,
+     "pos_coins": "6/10",
+     "trades_month": 3.0
+    }
+   },
+   "best_contexts": [
+    "lateral"
+   ]
+  },
+  "ctx_futures_15m_tendencia_long": {
+   "period_label": "120 dias",
+   "period_days": 120,
+   "ret_pct": 4.22,
+   "monthly_pct": 1.04,
+   "ret_seen": 3.75,
+   "ret_new": 4.92,
+   "win_pct": 53.0,
+   "dd_pct": 13.4,
+   "trades_month": 22.0,
+   "pos_coins": "5/10",
+   "per_symbol": {
+    "BTCUSDT": -10.1,
+    "ETHUSDT": -4.87,
+    "SOLUSDT": 5.05,
+    "ZECUSDT": 17.14,
+    "NEARUSDT": 18.8,
+    "XRPUSDT": -3.53,
+    "BNBUSDT": -1.5,
+    "AIUSDT": 0.0,
+    "WLDUSDT": 6.56,
+    "BMTUSDT": 14.63
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "15m",
+   "status": "ressalva",
+   "contexts": {
+    "tendencia_alta": {
+     "n": 637,
+     "win_pct": 53.8,
+     "avg_r": 0.06,
+     "seen_n": 426,
+     "seen_avg_r": 0.029,
+     "new_n": 211,
+     "new_avg_r": 0.124,
+     "ret_pct": 3.83,
+     "monthly_pct": 0.94,
+     "ret_seen": 1.97,
+     "ret_new": 6.62,
+     "dd_pct": 12.1,
+     "pos_coins": "6/10",
+     "trades_month": 15.9
+    },
+    "pullback_alta": {
+     "n": 242,
+     "win_pct": 50.8,
+     "avg_r": 0.01,
+     "seen_n": 171,
+     "seen_avg_r": 0.052,
+     "new_n": 71,
+     "new_avg_r": -0.092,
+     "ret_pct": 0.27,
+     "monthly_pct": 0.07,
+     "ret_seen": 1.53,
+     "ret_new": -1.62,
+     "dd_pct": 10.4,
+     "pos_coins": "5/10",
+     "trades_month": 6.0
+    }
+   },
+   "best_contexts": [
+    "tendencia_alta",
+    "pullback_alta"
+   ]
+  },
+  "ctx_futures_15m_reversao_long": {
+   "period_label": "120 dias",
+   "period_days": 120,
+   "ret_pct": 2.63,
+   "monthly_pct": 0.65,
+   "ret_seen": 3.45,
+   "ret_new": 1.4,
+   "win_pct": 50.0,
+   "dd_pct": 7.5,
+   "trades_month": 2.0,
+   "pos_coins": "5/10",
+   "per_symbol": {
+    "BTCUSDT": -3.45,
+    "ETHUSDT": 11.47,
+    "SOLUSDT": -3.89,
+    "ZECUSDT": 1.54,
+    "NEARUSDT": 5.03,
+    "XRPUSDT": 9.97,
+    "BNBUSDT": -4.76,
+    "AIUSDT": 0.0,
+    "WLDUSDT": 10.44,
+    "BMTUSDT": -0.08
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "15m",
+   "status": "ressalva",
+   "contexts": {
+    "reversao_alta": {
+     "n": 80,
+     "win_pct": 50.0,
+     "avg_r": 0.315,
+     "seen_n": 56,
+     "seen_avg_r": 0.356,
+     "new_n": 24,
+     "new_avg_r": 0.218,
+     "ret_pct": 2.63,
+     "monthly_pct": 0.65,
+     "ret_seen": 3.45,
+     "ret_new": 1.4,
+     "dd_pct": 7.5,
+     "pos_coins": "5/10",
+     "trades_month": 2.0
+    }
+   },
+   "best_contexts": [
+    "reversao_alta"
+   ]
+  },
+  "ctx_futures_15m_rompimento_long": {
+   "period_label": "120 dias",
+   "period_days": 120,
+   "ret_pct": 4.83,
+   "monthly_pct": 1.19,
+   "ret_seen": 6.58,
+   "ret_new": 2.21,
+   "win_pct": 46.5,
+   "dd_pct": 13.7,
+   "trades_month": 18.3,
+   "pos_coins": "6/10",
+   "per_symbol": {
+    "BTCUSDT": -3.21,
+    "ETHUSDT": 1.03,
+    "SOLUSDT": -1.29,
+    "ZECUSDT": 25.97,
+    "NEARUSDT": 16.62,
+    "XRPUSDT": 0.35,
+    "BNBUSDT": -9.06,
+    "AIUSDT": 0.0,
+    "WLDUSDT": 4.73,
+    "BMTUSDT": 13.16
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "15m",
+   "status": "ressalva",
+   "contexts": {
+    "rompimento_alta": {
+     "n": 733,
+     "win_pct": 46.5,
+     "avg_r": 0.065,
+     "seen_n": 485,
+     "seen_avg_r": 0.079,
+     "new_n": 248,
+     "new_avg_r": 0.037,
+     "ret_pct": 4.83,
+     "monthly_pct": 1.19,
+     "ret_seen": 6.58,
+     "ret_new": 2.21,
+     "dd_pct": 13.7,
+     "pos_coins": "6/10",
+     "trades_month": 18.3
+    }
+   },
+   "best_contexts": [
+    "rompimento_alta"
+   ]
+  },
+  "ctx_futures_15m_fluxo_ordens_long": {
+   "period_label": "120 dias",
+   "period_days": 120,
+   "ret_pct": 1.08,
+   "monthly_pct": 0.27,
+   "ret_seen": 1.25,
+   "ret_new": 0.82,
+   "win_pct": 41.1,
+   "dd_pct": 10.6,
+   "trades_month": 3.1,
+   "pos_coins": "5/10",
+   "per_symbol": {
+    "BTCUSDT": -0.73,
+    "ETHUSDT": 2.92,
+    "SOLUSDT": -9.29,
+    "ZECUSDT": 4.95,
+    "NEARUSDT": 12.31,
+    "XRPUSDT": -2.68,
+    "BNBUSDT": -2.78,
+    "AIUSDT": 0.0,
+    "WLDUSDT": 0.04,
+    "BMTUSDT": 6.02
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "15m",
+   "status": "ressalva",
+   "contexts": {
+    "fluxo_comprador": {
+     "n": 124,
+     "win_pct": 41.1,
+     "avg_r": 0.085,
+     "seen_n": 82,
+     "seen_avg_r": 0.085,
+     "new_n": 42,
+     "new_avg_r": 0.084,
+     "ret_pct": 1.08,
+     "monthly_pct": 0.27,
+     "ret_seen": 1.25,
+     "ret_new": 0.82,
+     "dd_pct": 10.6,
+     "pos_coins": "5/10",
+     "trades_month": 3.1
+    }
+   },
+   "best_contexts": [
+    "fluxo_comprador"
+   ]
+  },
+  "ctx_futures_5m_suporte_resistencia_long": {
+   "period_label": "60 dias",
+   "period_days": 60,
+   "ret_pct": 1.48,
+   "monthly_pct": 0.74,
+   "ret_seen": 0.5,
+   "ret_new": 2.96,
+   "win_pct": 53.8,
+   "dd_pct": 5.0,
+   "trades_month": 5.2,
+   "pos_coins": "5/10",
+   "per_symbol": {
+    "BTCUSDT": -2.05,
+    "ETHUSDT": -1.09,
+    "SOLUSDT": 3.02,
+    "ZECUSDT": 3.27,
+    "NEARUSDT": 4.71,
+    "XRPUSDT": -4.86,
+    "BNBUSDT": -0.81,
+    "AIUSDT": 0.0,
+    "WLDUSDT": 4.9,
+    "BMTUSDT": 7.76
+   },
+   "tested_at": "25/10/2026",
+   "market": "futures",
+   "interval": "5m",
+   "status": "ressalva",
+   "contexts": {
+    "suporte_teste": {
+     "n": 104,
+     "win_pct": 53.8,
+     "avg_r": 0.142,
+     "seen_n": 68,
+     "seen_avg_r": 0.044,
+     "new_n": 36,
+     "new_avg_r": 0.326,
+     "ret_pct": 1.48,
+     "monthly_pct": 0.74,
+     "ret_seen": 0.5,
+     "ret_new": 2.96,
+     "dd_pct": 5.0,
+     "pos_coins": "5/10",
+     "trades_month": 5.2
+    }
+   },
+   "best_contexts": [
+    "suporte_teste"
+   ]
+  },
+  "ctx_spot_4h_lateralidade_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 1.06,
+   "monthly_pct": 0.06,
+   "ret_seen": 1.65,
+   "ret_new": 0.18,
+   "win_pct": 55.8,
+   "dd_pct": 5.0,
+   "trades_month": 0.5,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": -0.52,
+    "ETHUSDT": 1.9,
+    "SOLUSDT": 0.15,
+    "ZECUSDT": 5.85,
+    "NEARUSDT": -1.4,
+    "XRPUSDT": 3.91,
+    "BNBUSDT": 0.74,
+    "AIUSDT": 1.1,
+    "PEPEUSDT": -2.16,
+    "WLDUSDT": 1.04
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "4h",
+   "status": "ressalva",
+   "contexts": {
+    "lateral": {
+     "n": 86,
+     "win_pct": 55.8,
+     "avg_r": 0.124,
+     "seen_n": 48,
+     "seen_avg_r": 0.205,
+     "new_n": 38,
+     "new_avg_r": 0.023,
+     "ret_pct": 1.06,
+     "monthly_pct": 0.06,
+     "ret_seen": 1.65,
+     "ret_new": 0.18,
+     "dd_pct": 5.0,
+     "pos_coins": "7/10",
+     "trades_month": 0.5
+    }
+   },
+   "best_contexts": [
+    "lateral"
+   ]
+  },
+  "ctx_spot_4h_tendencia_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 4.81,
+   "monthly_pct": 0.26,
+   "ret_seen": 5.72,
+   "ret_new": 3.44,
+   "win_pct": 50.4,
+   "dd_pct": 7.1,
+   "trades_month": 1.4,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 2.19,
+    "ETHUSDT": 6.28,
+    "SOLUSDT": 2.17,
+    "ZECUSDT": 25.48,
+    "NEARUSDT": -0.46,
+    "XRPUSDT": -1.34,
+    "BNBUSDT": 14.44,
+    "AIUSDT": -4.9,
+    "PEPEUSDT": 0.4,
+    "WLDUSDT": 3.81
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "tendencia_alta": {
+     "n": 198,
+     "win_pct": 51.5,
+     "avg_r": 0.212,
+     "seen_n": 132,
+     "seen_avg_r": 0.238,
+     "new_n": 66,
+     "new_avg_r": 0.16,
+     "ret_pct": 4.37,
+     "monthly_pct": 0.24,
+     "ret_seen": 5.49,
+     "ret_new": 2.68,
+     "dd_pct": 5.7,
+     "pos_coins": "7/10",
+     "trades_month": 1.1
+    },
+    "pullback_alta": {
+     "n": 60,
+     "win_pct": 46.7,
+     "avg_r": 0.061,
+     "seen_n": 36,
+     "seen_avg_r": 0.029,
+     "new_n": 24,
+     "new_avg_r": 0.11,
+     "ret_pct": 0.35,
+     "monthly_pct": 0.02,
+     "ret_seen": 0.15,
+     "ret_new": 0.65,
+     "dd_pct": 4.0,
+     "pos_coins": "5/10",
+     "trades_month": 0.3
+    }
+   },
+   "best_contexts": [
+    "tendencia_alta",
+    "pullback_alta"
+   ]
+  },
+  "ctx_spot_4h_rompimento_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 2.9,
+   "monthly_pct": 0.16,
+   "ret_seen": 4.41,
+   "ret_new": 0.63,
+   "win_pct": 55.4,
+   "dd_pct": 7.0,
+   "trades_month": 1.5,
+   "pos_coins": "5/10",
+   "per_symbol": {
+    "BTCUSDT": -0.51,
+    "ETHUSDT": 8.86,
+    "SOLUSDT": -1.2,
+    "ZECUSDT": 10.72,
+    "NEARUSDT": 12.35,
+    "XRPUSDT": -3.77,
+    "BNBUSDT": 6.13,
+    "AIUSDT": 1.16,
+    "PEPEUSDT": -3.95,
+    "WLDUSDT": -0.8
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "4h",
+   "status": "ressalva",
+   "contexts": {
+    "rompimento_alta": {
+     "n": 276,
+     "win_pct": 55.4,
+     "avg_r": 0.102,
+     "seen_n": 177,
+     "seen_avg_r": 0.144,
+     "new_n": 99,
+     "new_avg_r": 0.027,
+     "ret_pct": 2.9,
+     "monthly_pct": 0.16,
+     "ret_seen": 4.41,
+     "ret_new": 0.63,
+     "dd_pct": 7.0,
+     "pos_coins": "5/10",
+     "trades_month": 1.5
+    }
+   },
+   "best_contexts": [
+    "rompimento_alta"
+   ]
+  },
+  "ctx_spot_4h_suporte_resistencia_long": {
+   "period_label": "540 dias",
+   "period_days": 540,
+   "ret_pct": 0.52,
+   "monthly_pct": 0.03,
+   "ret_seen": 0.42,
+   "ret_new": 0.67,
+   "win_pct": 46.0,
+   "dd_pct": 6.0,
+   "trades_month": 0.3,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 0.88,
+    "ETHUSDT": -3.18,
+    "SOLUSDT": -2.71,
+    "ZECUSDT": 4.9,
+    "NEARUSDT": 2.26,
+    "XRPUSDT": 0.38,
+    "BNBUSDT": 2.87,
+    "AIUSDT": 3.16,
+    "PEPEUSDT": -4.64,
+    "WLDUSDT": 1.29
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "4h",
+   "status": "aprovado",
+   "contexts": {
+    "suporte_teste": {
+     "n": 50,
+     "win_pct": 46.0,
+     "avg_r": 0.103,
+     "seen_n": 26,
+     "seen_avg_r": 0.096,
+     "new_n": 24,
+     "new_avg_r": 0.11,
+     "ret_pct": 0.52,
+     "monthly_pct": 0.03,
+     "ret_seen": 0.42,
+     "ret_new": 0.67,
+     "dd_pct": 6.0,
+     "pos_coins": "7/10",
+     "trades_month": 0.3
+    }
+   },
+   "best_contexts": [
+    "suporte_teste"
+   ]
+  },
+  "ctx_spot_1h_lateralidade_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 2.76,
+   "monthly_pct": 0.34,
+   "ret_seen": 2.95,
+   "ret_new": 2.49,
+   "win_pct": 49.6,
+   "dd_pct": 9.4,
+   "trades_month": 3.1,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 4.15,
+    "ETHUSDT": 10.52,
+    "SOLUSDT": -0.49,
+    "ZECUSDT": 2.35,
+    "NEARUSDT": 3.4,
+    "XRPUSDT": -2.24,
+    "BNBUSDT": -2.16,
+    "AIUSDT": 0.23,
+    "PEPEUSDT": 7.06,
+    "WLDUSDT": 4.81
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "lateral": {
+     "n": 246,
+     "win_pct": 49.6,
+     "avg_r": 0.116,
+     "seen_n": 156,
+     "seen_avg_r": 0.117,
+     "new_n": 90,
+     "new_avg_r": 0.114,
+     "ret_pct": 2.76,
+     "monthly_pct": 0.34,
+     "ret_seen": 2.95,
+     "ret_new": 2.49,
+     "dd_pct": 9.4,
+     "pos_coins": "7/10",
+     "trades_month": 3.1
+    }
+   },
+   "best_contexts": [
+    "lateral"
+   ]
+  },
+  "ctx_spot_1h_tendencia_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 2.35,
+   "monthly_pct": 0.29,
+   "ret_seen": 3.06,
+   "ret_new": 1.28,
+   "win_pct": 45.7,
+   "dd_pct": 9.9,
+   "trades_month": 2.9,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": -0.45,
+    "ETHUSDT": -7.28,
+    "SOLUSDT": -1.79,
+    "ZECUSDT": 7.01,
+    "NEARUSDT": 10.71,
+    "XRPUSDT": 10.16,
+    "BNBUSDT": 0.61,
+    "AIUSDT": 4.08,
+    "PEPEUSDT": 0.02,
+    "WLDUSDT": 0.42
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "tendencia_alta": {
+     "n": 159,
+     "win_pct": 44.7,
+     "avg_r": 0.075,
+     "seen_n": 98,
+     "seen_avg_r": 0.049,
+     "new_n": 61,
+     "new_avg_r": 0.117,
+     "ret_pct": 1.2,
+     "monthly_pct": 0.15,
+     "ret_seen": 0.86,
+     "ret_new": 1.7,
+     "dd_pct": 7.3,
+     "pos_coins": "7/10",
+     "trades_month": 2.0
+    },
+    "pullback_alta": {
+     "n": 75,
+     "win_pct": 48.0,
+     "avg_r": 0.153,
+     "seen_n": 46,
+     "seen_avg_r": 0.283,
+     "new_n": 29,
+     "new_avg_r": -0.053,
+     "ret_pct": 1.14,
+     "monthly_pct": 0.14,
+     "ret_seen": 2.17,
+     "ret_new": -0.41,
+     "dd_pct": 3.2,
+     "pos_coins": "6/10",
+     "trades_month": 0.9
+    }
+   },
+   "best_contexts": [
+    "tendencia_alta",
+    "pullback_alta"
+   ]
+  },
+  "ctx_spot_1h_suporte_resistencia_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 1.49,
+   "monthly_pct": 0.19,
+   "ret_seen": 2.15,
+   "ret_new": 0.5,
+   "win_pct": 61.0,
+   "dd_pct": 3.2,
+   "trades_month": 1.2,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": 3.55,
+    "ETHUSDT": 5.48,
+    "SOLUSDT": 2.64,
+    "ZECUSDT": 0.74,
+    "NEARUSDT": -2.12,
+    "XRPUSDT": 2.6,
+    "BNBUSDT": 0.17,
+    "AIUSDT": 4.53,
+    "PEPEUSDT": -0.69,
+    "WLDUSDT": -2.0
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "suporte_teste": {
+     "n": 100,
+     "win_pct": 61.0,
+     "avg_r": 0.149,
+     "seen_n": 60,
+     "seen_avg_r": 0.214,
+     "new_n": 40,
+     "new_avg_r": 0.051,
+     "ret_pct": 1.49,
+     "monthly_pct": 0.19,
+     "ret_seen": 2.15,
+     "ret_new": 0.5,
+     "dd_pct": 3.2,
+     "pos_coins": "7/10",
+     "trades_month": 1.2
+    }
+   },
+   "best_contexts": [
+    "suporte_teste"
+   ]
+  },
+  "ctx_spot_1h_fluxo_ordens_long": {
+   "period_label": "240 dias",
+   "period_days": 240,
+   "ret_pct": 1.59,
+   "monthly_pct": 0.2,
+   "ret_seen": 0.85,
+   "ret_new": 2.7,
+   "win_pct": 48.1,
+   "dd_pct": 4.4,
+   "trades_month": 1.3,
+   "pos_coins": "7/10",
+   "per_symbol": {
+    "BTCUSDT": -0.12,
+    "ETHUSDT": 2.56,
+    "SOLUSDT": 1.58,
+    "ZECUSDT": -2.03,
+    "NEARUSDT": 2.09,
+    "XRPUSDT": 1.05,
+    "BNBUSDT": 2.19,
+    "AIUSDT": 6.78,
+    "PEPEUSDT": 4.49,
+    "WLDUSDT": -2.66
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "1h",
+   "status": "aprovado",
+   "contexts": {
+    "fluxo_comprador": {
+     "n": 104,
+     "win_pct": 48.1,
+     "avg_r": 0.156,
+     "seen_n": 53,
+     "seen_avg_r": 0.102,
+     "new_n": 51,
+     "new_avg_r": 0.211,
+     "ret_pct": 1.59,
+     "monthly_pct": 0.2,
+     "ret_seen": 0.85,
+     "ret_new": 2.7,
+     "dd_pct": 4.4,
+     "pos_coins": "7/10",
+     "trades_month": 1.3
+    }
+   },
+   "best_contexts": [
+    "fluxo_comprador"
+   ]
+  },
+  "ctx_spot_15m_lateralidade_long": {
+   "period_label": "120 dias",
+   "period_days": 120,
+   "ret_pct": 0.77,
+   "monthly_pct": 0.19,
+   "ret_seen": 0.84,
+   "ret_new": 0.67,
+   "win_pct": 48.9,
+   "dd_pct": 9.2,
+   "trades_month": 2.2,
+   "pos_coins": "6/10",
+   "per_symbol": {
+    "BTCUSDT": 8.35,
+    "ETHUSDT": -4.4,
+    "SOLUSDT": -4.12,
+    "ZECUSDT": 2.12,
+    "NEARUSDT": 4.36,
+    "XRPUSDT": -1.3,
+    "BNBUSDT": 1.67,
+    "AIUSDT": 1.13,
+    "PEPEUSDT": 2.89,
+    "WLDUSDT": -3.04
+   },
+   "tested_at": "25/10/2026",
+   "market": "spot",
+   "interval": "15m",
+   "status": "ressalva",
+   "contexts": {
+    "lateral": {
+     "n": 88,
+     "win_pct": 48.9,
+     "avg_r": 0.085,
+     "seen_n": 55,
+     "seen_avg_r": 0.086,
+     "new_n": 33,
+     "new_avg_r": 0.084,
+     "ret_pct": 0.77,
+     "monthly_pct": 0.19,
+     "ret_seen": 0.84,
+     "ret_new": 0.67,
+     "dd_pct": 9.2,
+     "pos_coins": "6/10",
+     "trades_month": 2.2
+    }
+   },
+   "best_contexts": [
+    "lateral"
+   ]
+  }
+ },
+ "report": [
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 128,
+   "passed": 7,
+   "status": "aprovado",
+   "avg_r": [
+    0.2151220157856415,
+    0.19216825364802803,
+    0.07563378579067223
+   ],
+   "n": [
+    35,
+    26,
+    23
+   ],
+   "monthly_pct": 0.08,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "lateralidade",
+   "side": "short",
+   "tested": 128,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 79,
+   "status": "aprovado",
+   "avg_r": [
+    0.1666736790602978,
+    0.21365915052250675,
+    0.09337364438855625
+   ],
+   "n": [
+    103,
+    68,
+    89
+   ],
+   "monthly_pct": 0.23,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "tendencia",
+   "side": "short",
+   "tested": 384,
+   "passed": 33,
+   "status": "aprovado",
+   "avg_r": [
+    0.2697900800898755,
+    0.08985264006861451,
+    0.16038062349955778
+   ],
+   "n": [
+    77,
+    40,
+    79
+   ],
+   "monthly_pct": 0.2,
+   "pos_coins": "6/10"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "reversao",
+   "side": "long",
+   "tested": 184,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "reversao",
+   "side": "short",
+   "tested": 208,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 37,
+   "status": "aprovado",
+   "avg_r": [
+    0.14198422847113387,
+    0.19755946747318087,
+    0.09493206723232481
+   ],
+   "n": [
+    107,
+    65,
+    84
+   ],
+   "monthly_pct": 0.2,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "rompimento",
+   "side": "short",
+   "tested": 384,
+   "passed": 25,
+   "status": "aprovado",
+   "avg_r": [
+    0.07192900183121546,
+    0.08284088909564528,
+    0.13565316458882073
+   ],
+   "n": [
+    115,
+    47,
+    81
+   ],
+   "monthly_pct": 0.12,
+   "pos_coins": "8/10"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 136,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "suporte_resistencia",
+   "side": "short",
+   "tested": 120,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 0,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "4h",
+   "context": "fluxo_ordens",
+   "side": "short",
+   "tested": 0,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 128,
+   "passed": 6,
+   "status": "aprovado",
+   "avg_r": [
+    0.24559249733913616,
+    0.16820970341202215,
+    0.1126449210850745
+   ],
+   "n": [
+    76,
+    68,
+    70
+   ],
+   "monthly_pct": 0.49,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "lateralidade",
+   "side": "short",
+   "tested": 128,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 30,
+   "status": "aprovado",
+   "avg_r": [
+    0.1393429824960666,
+    0.2851736102797412,
+    0.15801569159807413
+   ],
+   "n": [
+    137,
+    78,
+    121
+   ],
+   "monthly_pct": 0.75,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "tendencia",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "reversao",
+   "side": "long",
+   "tested": 232,
+   "passed": 6,
+   "status": "aprovado",
+   "avg_r": [
+    0.15123560281716203,
+    0.3227577804477932,
+    0.17980522993076406
+   ],
+   "n": [
+    65,
+    16,
+    49
+   ],
+   "monthly_pct": 0.29,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "reversao",
+   "side": "short",
+   "tested": 208,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 132,
+   "status": "aprovado",
+   "avg_r": [
+    0.14609980140618506,
+    0.1530130395500942,
+    0.08672631415305254
+   ],
+   "n": [
+    181,
+    119,
+    150
+   ],
+   "monthly_pct": 0.71,
+   "pos_coins": "8/10"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "rompimento",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 176,
+   "passed": 4,
+   "status": "aprovado",
+   "avg_r": [
+    0.17741090996562048,
+    0.46712466887609616,
+    0.07357771608803249
+   ],
+   "n": [
+    34,
+    13,
+    27
+   ],
+   "monthly_pct": 0.18,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "suporte_resistencia",
+   "side": "short",
+   "tested": 168,
+   "passed": 4,
+   "status": "aprovado",
+   "avg_r": [
+    0.26473772948404006,
+    0.33865649675966314,
+    0.12562800783604894
+   ],
+   "n": [
+    25,
+    14,
+    27
+   ],
+   "monthly_pct": 0.18,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 0,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "1h",
+   "context": "fluxo_ordens",
+   "side": "short",
+   "tested": 0,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 128,
+   "passed": 13,
+   "status": "aprovado",
+   "avg_r": [
+    0.14066540195448857,
+    0.5495497603144546,
+    0.17664830030391962
+   ],
+   "n": [
+    52,
+    19,
+    49
+   ],
+   "monthly_pct": 0.66,
+   "pos_coins": "6/10"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "lateralidade",
+   "side": "short",
+   "tested": 128,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 4,
+   "status": "ressalva",
+   "avg_r": [
+    0.040004969994363995,
+    0.02598906371908154,
+    0.06952718181228718
+   ],
+   "n": [
+    407,
+    190,
+    282
+   ],
+   "monthly_pct": 1.04,
+   "pos_coins": "5/10"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "tendencia",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "reversao",
+   "side": "long",
+   "tested": 216,
+   "passed": 2,
+   "status": "ressalva",
+   "avg_r": [
+    0.4956721666298881,
+    0.15647457030587317,
+    0.2184474161246547
+   ],
+   "n": [
+    33,
+    23,
+    24
+   ],
+   "monthly_pct": 0.65,
+   "pos_coins": "5/10"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "reversao",
+   "side": "short",
+   "tested": 224,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 2,
+   "status": "ressalva",
+   "avg_r": [
+    0.061783689699658834,
+    0.11507730973654558,
+    0.03689360181008502
+   ],
+   "n": [
+    324,
+    161,
+    248
+   ],
+   "monthly_pct": 1.19,
+   "pos_coins": "6/10"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "rompimento",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 184,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "suporte_resistencia",
+   "side": "short",
+   "tested": 192,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 384,
+   "passed": 3,
+   "status": "ressalva",
+   "avg_r": [
+    0.02877543936978018,
+    0.22168172357246754,
+    0.08371174204298186
+   ],
+   "n": [
+    58,
+    24,
+    42
+   ],
+   "monthly_pct": 0.27,
+   "pos_coins": "5/10"
+  },
+  {
+   "market": "futures",
+   "interval": "15m",
+   "context": "fluxo_ordens",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 144,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "lateralidade",
+   "side": "short",
+   "tested": 136,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "tendencia",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "reversao",
+   "side": "long",
+   "tested": 216,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "reversao",
+   "side": "short",
+   "tested": 200,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "rompimento",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 200,
+   "passed": 2,
+   "status": "ressalva",
+   "avg_r": [
+    0.04129416979334014,
+    0.04964459611417646,
+    0.3256192332149186
+   ],
+   "n": [
+    42,
+    26,
+    36
+   ],
+   "monthly_pct": 0.74,
+   "pos_coins": "5/10"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "suporte_resistencia",
+   "side": "short",
+   "tested": 232,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "futures",
+   "interval": "5m",
+   "context": "fluxo_ordens",
+   "side": "short",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "4h",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 112,
+   "passed": 1,
+   "status": "ressalva",
+   "avg_r": [
+    0.2631634823230446,
+    0.07617219826616933,
+    0.02281521984122857
+   ],
+   "n": [
+    33,
+    15,
+    38
+   ],
+   "monthly_pct": 0.06,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "4h",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 84,
+   "status": "aprovado",
+   "avg_r": [
+    0.14098133714841843,
+    0.2699265393082188,
+    0.14646860339208212
+   ],
+   "n": [
+    100,
+    68,
+    90
+   ],
+   "monthly_pct": 0.26,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "4h",
+   "context": "reversao",
+   "side": "long",
+   "tested": 184,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "4h",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 12,
+   "status": "ressalva",
+   "avg_r": [
+    0.15202997799604107,
+    0.13217884410131184,
+    0.02723083400396912
+   ],
+   "n": [
+    108,
+    69,
+    99
+   ],
+   "monthly_pct": 0.16,
+   "pos_coins": "5/10"
+  },
+  {
+   "market": "spot",
+   "interval": "4h",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 144,
+   "passed": 1,
+   "status": "aprovado",
+   "avg_r": [
+    0.11507415696123255,
+    0.06988751129003568,
+    0.11033087179872052
+   ],
+   "n": [
+    15,
+    11,
+    24
+   ],
+   "monthly_pct": 0.03,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "4h",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 0,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "1h",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 128,
+   "passed": 7,
+   "status": "aprovado",
+   "avg_r": [
+    0.15490245107425746,
+    0.06978637619012287,
+    0.1141709599570337
+   ],
+   "n": [
+    86,
+    70,
+    90
+   ],
+   "monthly_pct": 0.34,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "1h",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 8,
+   "status": "aprovado",
+   "avg_r": [
+    0.16675687113298024,
+    0.057887023054766576,
+    0.061884346961453715
+   ],
+   "n": [
+    87,
+    57,
+    90
+   ],
+   "monthly_pct": 0.29,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "1h",
+   "context": "reversao",
+   "side": "long",
+   "tested": 224,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "1h",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "1h",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 168,
+   "passed": 1,
+   "status": "aprovado",
+   "avg_r": [
+    0.18316313639926265,
+    0.3362031819386908,
+    0.051096347199343715
+   ],
+   "n": [
+    48,
+    12,
+    40
+   ],
+   "monthly_pct": 0.19,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "1h",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 384,
+   "passed": 16,
+   "status": "aprovado",
+   "avg_r": [
+    0.09550560670246751,
+    0.12111112183958747,
+    0.2113597867382596
+   ],
+   "n": [
+    40,
+    13,
+    51
+   ],
+   "monthly_pct": 0.2,
+   "pos_coins": "7/10"
+  },
+  {
+   "market": "spot",
+   "interval": "15m",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 136,
+   "passed": 1,
+   "status": "ressalva",
+   "avg_r": [
+    0.054688995190800026,
+    0.16273730450194263,
+    0.08409893971386109
+   ],
+   "n": [
+    39,
+    16,
+    33
+   ],
+   "monthly_pct": 0.19,
+   "pos_coins": "6/10"
+  },
+  {
+   "market": "spot",
+   "interval": "15m",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "15m",
+   "context": "reversao",
+   "side": "long",
+   "tested": 216,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "15m",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "15m",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 208,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "15m",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "5m",
+   "context": "lateralidade",
+   "side": "long",
+   "tested": 136,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "5m",
+   "context": "tendencia",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "5m",
+   "context": "reversao",
+   "side": "long",
+   "tested": 216,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "5m",
+   "context": "rompimento",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "5m",
+   "context": "suporte_resistencia",
+   "side": "long",
+   "tested": 216,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  },
+  {
+   "market": "spot",
+   "interval": "5m",
+   "context": "fluxo_ordens",
+   "side": "long",
+   "tested": 384,
+   "passed": 0,
+   "status": "sem bot aprovado"
+  }
+ ]
+}
