@@ -14,7 +14,7 @@ from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker,
 from core.profiles import PROFILES, SYMBOLS, BotProfile, style_of
 from core import indicators as ind
 from core.realtime import chart_height, realtime_chart_html
-from core.settings import DEFAULT_MODEL, default_settings, load_settings, save_settings
+from core.settings import DEFAULT_MODEL, FORCED as FORCED_SETTINGS, default_settings, load_settings, save_settings
 from core.storage import get_secret, load_json
 
 # Seletor rápido de indicadores → chaves de configuração (as mesmas da aba Indicadores)
@@ -26,7 +26,6 @@ INDICATOR_FLAGS = {
     "Ichimoku (só na análise técnica)": "ichimoku_on",
 }
 
-AI_MODELS = (DEFAULT_MODEL, "deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v3.2")
 
 
 # ----------------------------------------------------------------- dados (cache)
@@ -98,6 +97,8 @@ def init_settings(profile: BotProfile) -> dict:
         st.session_state[_k(bot, name)] = value
     for name, value in stored.items():
         st.session_state.setdefault(_k(bot, name), value)
+    for name, value in FORCED_SETTINGS.items():   # não são mais escolhas do usuário (vale também para sessões abertas antes)
+        st.session_state[_k(bot, name)] = value
     cfg = {name: st.session_state[_k(bot, name)] for name in stored}
     if cfg != stored:
         save_settings(bot, cfg)
@@ -649,9 +650,9 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     k = lambda n: _k(bot, n)  # noqa: E731
     futures = profile.market == "futures"
-    labels = ["Gráfico", "Varredura", "Indicadores", "IA", "Níveis do usuário", "Conta"]
+    labels = ["Gráfico", "Varredura", "Indicadores", "IA", "Conta"]
     tabs = dict(zip(labels, st.tabs(labels)))
-    t_scan, t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[1:])
+    t_scan, t_ind, t_ai, t_acct = (tabs[n] for n in labels[1:])
 
     with tabs["Gráfico"]:
         c = st.columns(2)
@@ -730,10 +731,6 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
             st.checkbox("Fibonacci automático", key=k("fib_on"))
 
     with t_ai:
-        c = st.columns(3)
-        if cfg["ai_model"] not in AI_MODELS:
-            st.session_state[k("ai_model")] = DEFAULT_MODEL
-        c[0].selectbox("Modelo (OpenRouter)", AI_MODELS, key=k("ai_model"), accept_new_options=True)
         if not get_secret("OPENROUTER_API_KEY"):  # sem chave nos Secrets: informe aqui (vale para todas as páginas, só nesta sessão)
             def _save_key():
                 st.session_state["_or_key"] = st.session_state[f"{bot}__or_key_w"]
@@ -741,57 +738,19 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
             st.text_input("Chave da OpenRouter (somente nesta sessão)", type="password", key=f"{bot}__or_key_w",
                           value=st.session_state.get("_or_key", ""), on_change=_save_key,
                           help="Para não digitar sempre, defina OPENROUTER_API_KEY nos Secrets do Streamlit.")
-        st.selectbox("Personalidade da IA (tom das explicações)", list(ai_mod.AI_PERSONAS), key=k("ai_persona"),
-                     format_func=lambda i: ai_mod.AI_PERSONAS[i][0], help=None)
+        st.caption("A IA escolhe o modelo sozinha, confirma ou veta as entradas do bot e decide se encerra posições abertas. "
+                   "Stop e alvo continuam valendo, e sem sinal das regras ela nunca abre operação sozinha.")
+        c = st.columns(2)
+        c[0].selectbox("Personalidade da IA (tom das explicações)", list(ai_mod.AI_PERSONAS), key=k("ai_persona"),
+                       format_func=lambda i: ai_mod.AI_PERSONAS[i][0])
+        c[1].slider("Temperatura", 0.0, 1.0, step=0.05, key=k("ai_temperature"),
+                    help="Quanto a IA varia as respostas. Perto de 0, ela responde de forma estável e repetível (melhor para decisões de "
+                         "trade). Perto de 1, fica mais criativa e imprevisível. Recomendado: 0,1 a 0,3.")
         st.caption(ai_mod.AI_PERSONAS[st.session_state.get(k("ai_persona"), ai_mod.DEFAULT_PERSONA)][1])
-        st.toggle("Deixar a IA interferir na decisão de ativar o bot", key=k("ai_intervene"),
-                  help="Desligado (padrão): a IA só explica resumidamente o que acontece no mercado e dá uma dica útil sobre o "
-                       "contexto; o bot entra quando as regras do bot do momento dão sinal. Ligado: no fechamento do candle a IA "
-                       "também confirma ou veta o sinal — se discordar, o bot não entra naquele momento. Sem sinal das regras, "
-                       "a IA nunca abre operação sozinha.")
-        st.toggle("IA decide saídas das posições abertas", key=k("ai_exit"),
-                  help="A cada varredura a IA lê o contexto atual e decide se mantém ou encerra cada posição aberta pelo bot (a manual "
-                       "nunca é tocada). Stop e alvo continuam valendo; a IA só pode antecipar a saída, e só com confiança de 50% ou mais. "
-                       "Gasta uma consulta por posição a cada varredura.")
-        c[1].slider("Temperatura", 0.0, 1.0, step=0.05, key=k("ai_temperature"))
         st.slider("Candles enviados como contexto", 20, 200, step=10, key=k("ai_candles_context"))
         st.text_area("Instruções da sua estratégia para a IA", key=k("ai_instructions"), height=110,
                      placeholder="Ex.: Só operar a favor da EMA 200. Evitar entradas 30 min antes de notícias dos EUA. "
                                  "Priorizar pullbacks na VWAP.")
-
-    with t_lv:
-        st.caption("Níveis desenhados aqui aparecem no gráfico, persistem entre sessões e são enviados à IA.")
-        price = st.session_state.get(f"{bot}__last_price", 0.0) or 0.0
-        with st.form(f"{bot}_lv_form", clear_on_submit=True, border=False):
-            c = st.columns([1, 1.2, 1.5, 0.8, 1])
-            typ = c[0].selectbox("Tipo", ["Horizontal", "Tendência"])
-            p1 = c[1].number_input("Preço (ou preço 1)", value=float(price), format="%.6f")
-            label_ = c[2].text_input("Rótulo", placeholder="Ex.: zona de demanda")
-            color = c[3].color_picker("Cor", "#e91e63")
-            p2 = c[4].number_input("Preço 2 (tendência)", value=float(price), format="%.6f")
-            c2 = st.columns(2)
-            t1 = c2[0].text_input("Data/hora 1 (tendência, AAAA-MM-DD HH:MM UTC)")
-            t2 = c2[1].text_input("Data/hora 2 (tendência)")
-            if st.form_submit_button("Adicionar nível"):
-                levels = list(cfg["user_levels"])
-                if typ == "Horizontal":
-                    levels.append({"type": "horizontal", "price": p1, "label": label_, "color": color})
-                else:
-                    try:
-                        levels.append({"type": "trend", "p1": p1, "p2": p2, "label": label_, "color": color,
-                                       "t1": pd.Timestamp(t1, tz="UTC").isoformat(), "t2": pd.Timestamp(t2, tz="UTC").isoformat()})
-                    except ValueError:
-                        st.error("Datas inválidas para a linha de tendência.")
-                set_setting(bot, "user_levels", levels)
-                st.rerun()
-        for i, lv in enumerate(cfg["user_levels"]):
-            c = st.columns([5, 1])
-            desc = (f"Horizontal {fmt_price(lv['price'])}" if lv["type"] == "horizontal"
-                    else f"Tendência {fmt_price(lv['p1'])} → {fmt_price(lv['p2'])}")
-            c[0].markdown(f"<span style='color:{lv.get('color')}'>■</span> {desc} — {lv.get('label', '')}", unsafe_allow_html=True)
-            if c[1].button("Remover", key=f"{bot}_lv_rm_{i}"):
-                set_setting(bot, "user_levels", [x for j, x in enumerate(cfg["user_levels"]) if j != i])
-                st.rerun()
 
     with t_acct:
         c = st.columns(2)

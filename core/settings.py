@@ -65,7 +65,7 @@ def default_settings(profile: BotProfile) -> dict:
         "context_mode": "sempre",   # "sempre" ou "favoraveis" (só nos contextos favoráveis da personalidade)
         # IA
         "ai_model": DEFAULT_MODEL,
-        "ai_intervene": False,       # False: a IA só explica e dá dicas · True: ela confirma ou veta a ativação do bot
+        "ai_intervene": True,        # a IA confirma ou veta a ativação do bot (sempre ligado)
         "ai_persona": "professor",   # tom das explicações (core/ai.py: AI_PERSONAS)
         "auto_bot": True,            # no fechamento do candle usa o bot mais recomendado para o contexto (ranking semanal)
         "ai_temperature": 0.2,
@@ -76,7 +76,7 @@ def default_settings(profile: BotProfile) -> dict:
         # Varredura: o bot procura oportunidades sozinho em vários ativos a cada candle fechado
         "scan_on": True,
         "scan_minutes": 15,          # de quantos em quantos minutos o bot varre o mercado atrás de oportunidades
-        "ai_exit": False,            # a IA pode ser consultada para decidir se encerra uma posição aberta do bot
+        "ai_exit": True,             # a IA decide se encerra uma posição aberta do bot (sempre ligado)
         "scan_count": 15,            # quantas moedas analisar a cada varredura (sorteadas entre as de maior volume do mercado)
         "scan_bots": 3,              # quantos dos melhores bots do ranking testar, em ordem, em cada moeda até um dar sinal
         "scan_pool": 60,             # sorteio entre as N moedas de maior volume de 24 h
@@ -89,13 +89,16 @@ def default_settings(profile: BotProfile) -> dict:
     }
 
 
+FORCED = {"auto_bot": True, "ai_intervene": True, "ai_exit": True, "ai_model": DEFAULT_MODEL}
+
+
 def load_settings(bot: str) -> dict:
     defaults = default_settings(PROFILES[bot])
     stored = (load_json(SETTINGS_FILE, {}) or {}).get(bot, {})
     if stored and "ema_trend_on" not in stored:  # configuração anterior ao padrão enxuto
         stored = {k: v for k, v in stored.items() if k not in INDICATOR_KEYS}
     cfg = {**defaults, **{k: v for k, v in stored.items() if k in defaults}}
-    cfg["auto_bot"] = True  # o bot do momento é sempre escolhido sozinho, pelo ranking
+    cfg.update(FORCED)   # o bot do momento é escolhido sozinho; a IA escolhe o modelo, interfere nas entradas e decide saídas
     if PROFILES[bot].market == "spot":  # spot não tem alavancagem, margem nem venda a descoberto
         cfg.update(leverage_on=False, leverage=1, margin_mode="Isolada", allow_short=False)
     return cfg
