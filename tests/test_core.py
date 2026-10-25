@@ -1395,8 +1395,11 @@ def test_cached_objects_do_not_need_pickle(monkeypatch):
     monkeypatch.setattr(ui, "get_ticker", lambda s, m: Local(1.0))
     monkeypatch.setattr(ui.lev_rules, "brackets", lambda s: ((Local(2.0),), "x"))
     st.cache_resource.clear()
-    assert ui.cached_ticker("BTCUSDT", "futures").last == 1.0
-    assert ui.cached_brackets("BTCUSDT")[0][0].last == 2.0
+    try:
+        assert ui.cached_ticker("BTCUSDT", "futures").last == 1.0
+        assert ui.cached_brackets("BTCUSDT")[0][0].last == 2.0
+    finally:
+        st.cache_resource.clear()                                # não deixa os objetos falsos no cache dos outros testes
     assert data.Ticker  # os demais valores em cache_data são DataFrame, lista e número: serializáveis
 
 
