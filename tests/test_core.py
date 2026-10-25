@@ -2127,3 +2127,36 @@ def test_sentiment_peek_and_warm_do_not_block(monkeypatch):
     sentiment._cache["BTC"] = (_t.time(), {"vies": "altista"})
     assert sentiment.peek("BTCUSDT") == {"vies": "altista"}
     sentiment._cache.clear()
+
+
+def test_events_panel_and_ai_context():
+    """Painel de eventos do Polymarket: cartões por categoria, vencidos saem, ruído é filtrado e a IA recebe um resumo curto."""
+    from datetime import datetime, timezone
+    from core import ai, ai_exit, events
+
+    now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
+    mk = lambda title, yes, grp=None: {"question": title, "groupItemTitle": grp, "outcomes": '["Yes","No"]', "outcomePrices": f'["{yes}","{1 - yes}"]'}  # noqa: E731
+    fed = {"id": "1", "title": "Fed Decision in October?", "slug": "fed", "endDate": "2026-10-29T03:59:00Z", "volume24hr": 2_000_000, "liquidity": 7e6,
+           "markets": [mk("a", 0.945, "No change"), mk("b", 0.055, "25 bps increase"), mk("c", 0.001, "50+ bps decrease")]}
+    old = {**fed, "id": "2", "title": "Fed Decision in September?", "endDate": "2026-09-17T18:00:00Z"}            # já venceu
+    noise = {"id": "3", "title": "What will Trump say during his rally?", "endDate": "2026-10-30T00:00:00Z", "volume24hr": 5000, "markets": [mk("x", 0.7, "Canada")]}
+    ladder = {"id": "4", "title": "What price will Bitcoin hit in October?", "slug": "btc", "endDate": "2026-11-01T04:00:00Z", "volume24hr": 400_000,
+              "markets": [mk(f"Will Bitcoin reach ${p:,} in October?", y) for p, y in ((80000, .9), (82500, .62), (85000, .25), (90000, .03))]}
+    quiet = {"id": "5", "title": "Gold above $5000?", "endDate": "2026-12-01T00:00:00Z", "volume24hr": 10, "liquidity": 100, "markets": [mk("g", 0.5)]}
+    assert events.card(old, "macro", now) is None and events.card(quiet, "commodities", now) is None and events.card(noise, "politica", now) is None
+    c = events.card(fed, "macro", now)
+    assert c["opcoes"][0] == {"nome": "No change", "pct": 94.5} and not c["escada"]
+    lad = events.card(ladder, "cripto", now)
+    assert lad["escada"] and lad["opcoes"][0]["pct"] == 62.0                       # escada de preços: os níveis mais incertos (perto de 50%)
+    got = events.build({"Fed decision": ("macro", [fed, old]), "bitcoin": ("cripto", [ladder]), "Fed rate": ("macro", [fed])}, now)
+    assert [e["id"] for e in got] == ["1", "4"]                                    # sem repetidos nem vencidos, por volume
+    ctx = events.ai_context(got, now)
+    assert len(ctx) == 1 and ctx[0]["evento"] == "Fed Decision in October?" and ctx[0]["probabilidades"][0]["pct"] == 94.5   # escada de cripto não entra
+    assert events.ids_for_ai(got) == {"1"}
+    cfg = default_settings(PROFILES["day"])
+    c1 = ai.build_context(profile=PROFILES["day"], cfg=cfg, symbol="BTCUSDT", interval="15m", plan={}, snapshot={}, indicators_now={}, account={},
+                          positions=[], risk_rules={}, events=ctx)
+    assert c1["eventos_externos"] == ctx and "eventos_externos" in ai.SYSTEM_PROMPT and "eventos_externos" in ai_exit.SYSTEM_PROMPT
+    assert "eventos_externos" in ai_exit.build_context({"symbol": "XUSDT", "side": "BUY", "entry": 1.0, "stop_loss": 0.9, "take_profit": 1.2, "opened": "", "qty": 10.0, "fee_pct": 0.05,
+                                                        "leverage": 1, "margin": 10.0, "market": "spot"},
+                                                       1.0, {"atr": 0.01}, {}, None, {"interval": "15m"}, None, ctx)

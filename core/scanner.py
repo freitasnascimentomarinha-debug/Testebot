@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from core import ai_exit, advisor, engine, execution, sentiment
+from core import ai_exit, advisor, engine, events, execution, sentiment
 from core.storage import get_secret, current_user
 from core.broker import get_broker
 from core.profiles import BotProfile
@@ -115,6 +115,8 @@ def sync_open(profile: BotProfile, klines, ticker, funding=None, skip: set | Non
 def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, funding=None, execute: bool = True,
         progress=None, pool=None, rng: random.Random | None = None) -> ScanReport:
     """Uma varredura completa. ``klines(sym, interval, n, market)`` e ``ticker(sym, market)`` vêm da interface (cache) ou do worker."""
+    if api_key:
+        events.ensure()   # a IA lê os eventos do Polymarket guardados (a primeira vez carrega na hora; depois renova em segundo plano)
     broker = get_broker(profile.key)
     report = ScanReport(time=datetime.now(timezone.utc).isoformat(timespec="seconds"), interval=cfg["interval"])
     report.scan_time = report.time
@@ -218,7 +220,7 @@ def _ai_exit(profile: BotProfile, cfg_s: dict, df, price: float, api_key: str, r
             return
         if platform_key:
             quota.consume()
-        ans = ai_exit.consult(ai_exit.build_context(pos, price, sc, snap, res.personality, cfg_s, sentiment.for_symbol(sym, price)), api_key=api_key, model=cfg_s["ai_model"])
+        ans = ai_exit.consult(ai_exit.build_context(pos, price, sc, snap, res.personality, cfg_s, sentiment.for_symbol(sym, price), events.ai_context()), api_key=api_key, model=cfg_s["ai_model"])
         report.exit_views.append({"symbol": sym, "id": pos["id"], **ans})
         if ans["acao"] == "CLOSE" and ans["confianca"] >= 50 and execute:
             broker.close_position(pos["id"], price, "IA: " + ans["motivo"][:120])
