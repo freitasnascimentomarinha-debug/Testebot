@@ -71,11 +71,12 @@ def default_settings(profile: BotProfile) -> dict:
         "ai_temperature": 0.2,
         "ai_auto_execute": False,
         "ai_auto_arm": True,         # piloto automático arma os planos condicionais propostos pela IA
-        "ai_candles_context": 30,
+        "ai_candles_context": 120,
         "ai_instructions": "",
         # Varredura: o bot procura oportunidades sozinho em vários ativos a cada candle fechado
         "scan_on": True,
-        "scan_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT"],
+        "scan_count": 20,            # quantas moedas analisar a cada varredura (sorteadas entre as de maior volume do mercado)
+        "scan_pool": 60,             # sorteio entre as N moedas de maior volume de 24 h
         "scan_max_entries": 2,       # entradas novas por varredura (as melhores oportunidades)
         # Automação
         "refresh_sec": profile.refresh_sec,

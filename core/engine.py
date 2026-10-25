@@ -92,7 +92,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     last = df.iloc[-2]
     indicators_now = {k: _clean(float(last[k])) for k in
                       ("close", "ema_fast", "ema_slow", "ema_trend", "rsi", "macd", "macd_signal", "macd_hist",
-                       "bb_up", "bb_mid", "bb_low", "atr", "adx", "di_plus", "di_minus", "stoch_k", "vwap", "st_line", "st_dir")}
+                       "bb_up", "bb_mid", "bb_low", "atr", "adx", "di_plus", "di_minus", "stoch_k", "stoch_d", "vwap", "st_line", "st_dir",
+                       "obv", "vol_sma", "ichi_tenkan", "ichi_kijun", "ichi_span_a", "ichi_span_b")}
     budget = risk.risk_budget(cfg, st_["equity"])
     risk_rules = {
         "perda_maxima_por_trade_usdt": round(budget, 2), "alavancagem": risk.effective_leverage(cfg),

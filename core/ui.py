@@ -641,6 +641,20 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
             st.caption("Nenhuma análise registrada.")
 
 
+def position_details(p: dict, price_now: float) -> dict:
+    """Números da posição aberta (USDT): margem, liquidação, taxas e resultado líquido no stop e no alvo."""
+    fx, fee = p.get("fx", 1.0), p["fee_pct"] / 100
+    fees_open = float(p.get("fees_paid", 0.0))
+
+    def net_at(price):
+        return paper.pnl_of(p, price) - fees_open - price * p["qty"] * fx * fee
+
+    return {"margin": p["margin"], "liquidation": p.get("liquidation"), "fees_open": fees_open,
+            "fees_close": price_now * p["qty"] * fx * fee, "notional": price_now * p["qty"] * fx,
+            "loss_sl": net_at(p["stop_loss"]) if p.get("stop_loss") else None,
+            "gain_tp": net_at(p["take_profit"]) if p.get("take_profit") else None}
+
+
 def open_positions(profile: BotProfile, cfg: dict) -> None:
     """Cards das posições abertas, com P&L atualizado automaticamente."""
 
@@ -674,6 +688,18 @@ def open_positions(profile: BotProfile, cfg: dict) -> None:
                     tr = broker.close_position(p["id"], p_price, "Manual")
                     st.toast(f"Posição encerrada: {tr['pnl']:+.2f} USDT")
                     st.rerun(scope="app")
+                d = position_details(p, p_price)
+                m = st.columns(6)
+                m[0].metric("Margem", fmt(d["margin"]), help="Valor do seu saldo travado nesta posição (USDT).")
+                m[1].metric("Preço de liquidação", fmt_price(d["liquidation"]) if d["liquidation"] else "—",
+                            help="Se o preço chegar aqui, a margem é perdida. Sem alavancagem não há liquidação.")
+                m[2].metric("Taxas", fmt(d["fees_open"] + d["fees_close"]),
+                            help=f"Já paga na entrada: {fmt(d['fees_open'])} USDT · estimada na saída: {fmt(d['fees_close'])} USDT.")
+                m[3].metric("Perda no stop", fmt(d["loss_sl"]) if d["loss_sl"] is not None else "sem stop",
+                            help="Resultado líquido (já com as taxas) se o stop for atingido.")
+                m[4].metric("Ganho no alvo", fmt(d["gain_tp"]) if d["gain_tp"] is not None else "sem alvo",
+                            help="Resultado líquido (já com as taxas) se o alvo for atingido.")
+                m[5].metric("Valor da posição", fmt(d["notional"]), help="Quantidade × preço atual (USDT).")
 
     _cards()
 
@@ -695,37 +721,25 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
     t_scan, t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[-5:])
 
     with t_scan:
-        st.toggle("🔎 Procurar oportunidades em vários ativos", key=k("scan_on"),
-                  help="Com o bot ligado, a cada candle fechado ele analisa todos os ativos da lista (só com regras, sem gastar IA), escolhe "
-                       "sozinho o melhor bot do ranking para o contexto de cada um e entra nas melhores oportunidades. "
-                       "Desligado, opera só o ativo da tela.")
-        all_syms = cached_symbols(profile.market)
-        st.multiselect("Ativos da varredura", list(dict.fromkeys(list(cfg["scan_symbols"]) + all_syms)), key=k("scan_symbols"),
-                       disabled=not st.session_state[k("scan_on")])
-        st.number_input("Entradas novas por varredura", 1, 10, key=k("scan_max_entries"), disabled=not st.session_state[k("scan_on")],
-                        help="Quantas das melhores oportunidades o bot abre a cada candle fechado. O bot mantém no máximo uma posição por ativo.")
+        st.toggle("🔎 Procurar oportunidades em várias moedas", key=k("scan_on"),
+                  help="Com o bot ligado, a cada candle fechado ele sorteia moedas de maior volume do mercado (futuros ou spot, conforme esta "
+                       "página), analisa os últimos 120 candles fechados de cada uma no tempo gráfico atual (só com regras, sem gastar IA), "
+                       "escolhe sozinho o melhor bot do ranking para o contexto de cada uma e entra nas melhores oportunidades. "
+                       "Desligado, opera só a moeda da tela.")
+        off = not st.session_state[k("scan_on")]
+        c = st.columns(3)
+        c[0].number_input("Moedas analisadas por varredura", scanner.MIN_COUNT, 100, key=k("scan_count"), disabled=off,
+                          help="Mínimo de 20. A moeda da tela entra sempre; as demais são sorteadas.")
+        c[1].number_input("Sorteio entre as N de maior volume", 20, 200, step=10, key=k("scan_pool"), disabled=off,
+                          help="Volume negociado nas últimas 24 h neste mercado (moedas estáveis ficam de fora).")
+        c[2].number_input("Entradas novas por varredura", 1, 10, key=k("scan_max_entries"), disabled=off,
+                          help="Quantas das melhores oportunidades o bot abre a cada candle fechado. No máximo uma posição por moeda.")
         st.caption("A IA é consultada só para a melhor oportunidade de cada varredura (e só quando o bot encontra uma), "
                    "para economizar tokens. Sem oportunidade, nada é enviado à IA.")
 
-    if futures:
-        with tabs["Alavancagem"]:
-            st.caption("Liga/desliga, modo de margem e nível de alavancagem ficam na aba **Entrada do bot**, ao lado do gráfico.")
-            tiers, source = cached_brackets(cfg["symbol"])
-            st.markdown(f"**Faixas de alavancagem de {cfg['symbol']}** (fonte: {source}) — quanto maior a posição, "
-                        "menor a alavancagem máxima e maior a margem de manutenção:")
-            st.dataframe(pd.DataFrame([{"Posição até (USDT)": f"{t.cap:,.0f}".replace(",", "."),
-                                        "Alavancagem máx.": f"{t.max_leverage}×",
-                                        "Margem de manutenção": f"{t.mmr * 100:.2f}%"} for t in tiers[:8]]),
-                         hide_index=True)
-            if cfg["leverage_on"]:
-                liq = lev_rules.liquidation_price(side="BUY", entry=100.0, qty=1.0, leverage=cfg["leverage"],
-                                                  market="futures", symbol=cfg["symbol"])
-                st.caption(f"Com {cfg['leverage']}× (isolada) uma posição comprada pequena é liquidada com queda de "
-                           f"≈{100 - (liq or 0):.2f}%. A conta simulada usa a fórmula oficial da Binance e cobra o "
-                           "financiamento (funding) a cada 8 h.")
-
     with t_ind:
-        st.caption("Ligue/desligue a exibição no gráfico. As habilidades da IA usam todos os indicadores calculados.")
+        st.caption("Ligue/desligue só a **exibição no gráfico**. O bot e a IA leem **todos** os indicadores (médias, RSI, MACD, Bollinger, "
+                   "ADX, Estocástico, OBV, VWAP, SuperTrend, Ichimoku, suportes/resistências, pivôs e Fibonacci) mesmo desligados aqui.")
         c = st.columns(4)
         with c[0]:
             st.markdown("**Tendência**")

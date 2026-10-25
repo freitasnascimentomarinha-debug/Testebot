@@ -80,7 +80,7 @@ def get_api_key(explicit: str | None = None) -> str | None:
     return explicit or get_secret("OPENROUTER_API_KEY")
 
 
-def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: list[dict],
+def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: dict,
                   indicators_now: dict, account: dict, positions: list[dict], risk_rules: dict,
                   funding_rate: float | None = None, personality: dict | None = None, scenario: dict | None = None,
                   candidates: list | None = None, armed_plan: dict | None = None) -> dict:

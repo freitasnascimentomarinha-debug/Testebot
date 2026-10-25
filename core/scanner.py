@@ -14,7 +14,14 @@ from core import engine, execution
 from core.broker import get_broker
 from core.profiles import BotProfile
 
-DEFAULT_SCAN = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT"]
+import random
+
+from core import data as market_data
+
+DEFAULT_SCAN = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "LTCUSDT"]
+WINDOW = 120      # candles fechados analisados em cada moeda
+WARMUP = 210      # candles anteriores só para os indicadores "esquentarem" (médias de 200 períodos etc.)
+MIN_COUNT = 20
 
 
 @dataclass
@@ -28,10 +35,22 @@ class ScanReport:
     notes: list = field(default_factory=list)
 
 
-def symbols_for(cfg: dict) -> list[str]:
-    """Ativo da tela primeiro, depois a lista de varredura (se ligada)."""
-    base = [str(s).upper() for s in (cfg.get("scan_symbols") or DEFAULT_SCAN)] if cfg.get("scan_on", True) else []
-    return list(dict.fromkeys([str(cfg["symbol"]).upper(), *base]))
+def symbols_for(cfg: dict, market: str, pool=None, rng: random.Random | None = None, extra=()) -> list[str]:
+    """Moedas da varredura: a da tela primeiro, depois um sorteio entre as de maior volume do mercado (futuros ou spot) até completar
+    ``scan_count`` (mínimo 20), mais as que têm posição aberta do bot (para o sinal contrário poder encerrá-las)."""
+    first = str(cfg["symbol"]).upper()
+    if not cfg.get("scan_on", True):
+        return [first]
+    count = max(MIN_COUNT, int(cfg.get("scan_count") or MIN_COUNT))
+    try:
+        ranked = (pool or market_data.volume_ranking)(market)
+    except Exception:  # noqa: BLE001
+        ranked = []
+    top = list(dict.fromkeys(ranked[:max(count, int(cfg.get("scan_pool") or 60))])) or list(DEFAULT_SCAN)
+    rng = rng or random.Random()
+    others = [x for x in top if x != first]
+    picked = rng.sample(others, min(count - 1, len(others)))
+    return list(dict.fromkeys([first, *picked, *[str(e).upper() for e in extra]]))
 
 
 def sync_open(profile: BotProfile, klines, ticker, funding=None, skip: set | None = None) -> list[dict]:
@@ -53,21 +72,26 @@ def sync_open(profile: BotProfile, klines, ticker, funding=None, skip: set | Non
 
 
 def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, funding=None, execute: bool = True,
-        progress=None) -> ScanReport:
+        progress=None, pool=None, rng: random.Random | None = None) -> ScanReport:
     """Uma varredura completa. ``klines(sym, interval, n, market)`` e ``ticker(sym, market)`` vêm da interface (cache) ou do worker."""
+    broker = get_broker(profile.key)
     report = ScanReport(time=datetime.now(timezone.utc).isoformat(timespec="seconds"), interval=cfg["interval"])
-    symbols = symbols_for(cfg)
+    acct_positions = broker.account()["positions"]
+    mine = [p["symbol"] for p in acct_positions if p.get("market") == profile.market and p.get("source") != "manual"
+            and p.get("bot", profile.key) == profile.key]
+    symbols = symbols_for(cfg, profile.market, pool, rng, extra=mine)
     execute = execute and execution.orders_enabled()
     found: list[tuple] = []
     for k, sym in enumerate(symbols, start=1):
         cfg_s = {**cfg, "symbol": sym}
         try:
-            raw = klines(sym, cfg["interval"], int(cfg["candles"]), profile.market)
+            raw = klines(sym, cfg["interval"], WINDOW + WARMUP + 1, profile.market)
             price = ticker(sym, profile.market).last
             htf_raw = mtf_raw = None
             if engine.needs_htf(cfg_s):
                 htf_raw, mtf_raw = engine.htf_frames(klines, cfg_s, len(raw), profile.market)
-            df = engine.prepare(raw, cfg_s, htf_raw, mtf_raw)
+            # indicadores calculados com o aquecimento; a análise olha os últimos 120 candles fechados (+ o candle em formação)
+            df = engine.prepare(raw, cfg_s, htf_raw, mtf_raw).tail(WINDOW + 1).reset_index(drop=True)
             res = engine.run_analysis(profile, cfg_s, df, price, None, log=False)   # só regras: não gasta IA
         except Exception as exc:  # noqa: BLE001 - um ativo sem dados não derruba a varredura
             report.notes.append(f"{sym}: sem dados ({str(exc)[:60]})")
