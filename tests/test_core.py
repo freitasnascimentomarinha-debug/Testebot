@@ -1712,3 +1712,28 @@ def test_archive_klines_monthly_daily_fallback_and_formats(monkeypatch, tmp_path
     assert us["time"].iloc[-1].year == 2026                                      # microssegundos convertidos
     with pytest.raises(RuntimeError):
         archive.klines("ZZZUSDT", "1d", 10, "spot", now=now)
+
+
+def test_context_research_two_tiers_aprovado_and_ressalva():
+    from core import context_research as cr
+
+    cell = _fake_cell()
+    thin = [0.03] * 40                                                    # R médio +0,03: positivo, mas abaixo do corte de aprovado
+    strong = [1.5, -1.0, 1.5, -1.0, 1.5, 1.5, -1.0, 1.5] * 5
+    v = cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, thin)), "15m")
+    assert v["ok"] and v["tier"] == "ressalva"
+    v = cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, strong)), "15m")
+    assert v["tier"] == "aprovado"
+    zero = [0.0] * 40                                                    # R médio 0: nem ressalva
+    assert cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, zero)), "15m")["tier"] is None
+    res = cr.search_cell(cell, "tendencia", "long", fast=True, simulate=lambda vt, cfg, p: _fake_trades(vt, thin))
+    assert res["research"]["status"] == "ressalva" and "ressalva" in res["bot"]["description"] and res["row"]["status"] == "ressalva"
+    # entre candidatos, o aprovado ganha do ressalva mesmo com R menor
+    calls = {"n": 0}
+
+    def mixed(vt, cfg, p):
+        return _fake_trades(vt, strong if p["threshold"] == 20 else thin)
+
+    res = cr.search_cell(cell, "tendencia", "long", fast=True, simulate=mixed)
+    assert res["research"]["status"] == "aprovado" and res["bot"]["threshold"] == 20
+    assert (1.0, 2.0) not in cr.EXITS[:1] and (4.0, 6.0) in cr.EXITS and (5.0, 5.0) in cr.EXITS     # stops largos diluem as taxas nos tempos curtos

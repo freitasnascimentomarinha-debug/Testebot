@@ -34,12 +34,13 @@ OUT_FILE = Path(__file__).resolve().parent / "context_bots.json"
 AUTHOR = "Pesquisa por contexto · out/2026"
 INTERVALS = ("5m", "15m", "1h", "4h")
 MARKET_SIDES = {"futures": ("long", "short"), "spot": ("long",)}
-DAYS = {"5m": 45, "15m": 90, "1h": 240, "4h": 540}          # período de backtest por tempo gráfico
+DAYS = {"5m": 60, "15m": 120, "1h": 240, "4h": 540}          # período de backtest por tempo gráfico
 N_SEARCH, N_UNSEEN = 6, 4                                     # moedas da busca/validação e da prova final
 # amostra mínima (operações): busca, validação, prova final
 MIN_TRADES = {"5m": (40, 20, 20), "15m": (30, 15, 15), "1h": (25, 12, 12), "4h": (15, 8, 8)}
-MIN_AVG_R = 0.05
+MIN_AVG_R = 0.05                 # aprovado: R médio por operação nas três provas
 MIN_POS_COINS = 0.6
+RESSALVA_AVG_R, RESSALVA_POS_COINS = 0.02, 0.5   # ressalva: ainda positivo nas três provas, mas com margem menor
 
 CONTEXTS = {
     "lateralidade": {
@@ -72,7 +73,8 @@ CONTEXTS = {
         "archetypes": [{"volume": 2.0, "momentum": 1.0}, {"volume": 1.5, "macd": 1.0, "tendencia": 0.5}, {"volume": 2.0, "estrutura": 1.0}]},
 }
 THRESHOLDS = (10, 20, 30, 45)
-EXITS = ((1.0, 1.5), (1.0, 2.0), (1.5, 3.0), (2.0, 3.0), (2.0, 4.0), (3.0, 3.0))   # (stop ATR, alvo ATR)
+# (stop ATR, alvo ATR): stops largos diluem as taxas nos tempos curtos (a taxa pesa mais quanto menor o ATR)
+EXITS = ((1.0, 1.5), (1.0, 2.0), (1.5, 3.0), (2.0, 3.0), (2.0, 4.0), (3.0, 3.0), (4.0, 6.0), (5.0, 5.0))
 FILTERS = ({}, {"trend_ema": True}, {"volume_confirm": True}, {"adx_min": 20})
 SIDE_WORD = {"long": "Compra", "short": "Venda"}
 
@@ -148,7 +150,8 @@ def _avg(trades) -> float | None:
 
 
 def verdict(ev: dict, interval: str) -> dict:
-    """Aplica os critérios de aprovação. ``score`` = pior R médio entre as três provas (maior é melhor)."""
+    """Critérios de aprovação. ``tier`` = ``aprovado`` (R médio ≥ 0,05 nas três provas e 60% das moedas no verde), ``ressalva``
+    (positivo nas três, mas com R médio ≥ 0,02 e metade das moedas no verde) ou ``None``. ``score`` = pior R médio das três provas."""
     need = MIN_TRADES[interval]
     n = (len(ev["search"]), len(ev["valid"]), len(ev["unseen"]))
     avgs = tuple(_avg(ev[k]) for k in ("search", "valid", "unseen"))
@@ -156,10 +159,15 @@ def verdict(ev: dict, interval: str) -> dict:
     pos = sum(1 for t in coins.values() if sum(x["r"] for x in t) > 0)
     ret_search = compound([t["r"] for t in ev["search"]])[0] if ev["search"] else 0.0
     ret_valid = compound([t["r"] for t in ev["valid"]])[0] if ev["valid"] else 0.0
-    ok = (all(x >= m for x, m in zip(n, need)) and all(a is not None and a > MIN_AVG_R for a in avgs)
-          and ret_search > 0 and ret_valid > 0 and bool(coins) and pos / len(coins) >= MIN_POS_COINS)
-    return {"ok": ok, "n": n, "avg_r": avgs, "pos_coins": (pos, len(coins)), "ret_search": ret_search, "ret_valid": ret_valid,
-            "score": min(a for a in avgs if a is not None) if all(a is not None for a in avgs) else -9.0}
+    enough = all(x >= m for x, m in zip(n, need)) and all(a is not None for a in avgs) and bool(coins) and ret_search > 0 and ret_valid > 0
+    share = pos / len(coins) if coins else 0.0
+    tier = None
+    if enough and all(a > MIN_AVG_R for a in avgs) and share >= MIN_POS_COINS:
+        tier = "aprovado"
+    elif enough and all(a >= RESSALVA_AVG_R for a in avgs) and share >= RESSALVA_POS_COINS:
+        tier = "ressalva"
+    return {"ok": tier is not None, "tier": tier, "n": n, "avg_r": avgs, "pos_coins": (pos, len(coins)), "ret_search": ret_search,
+            "ret_valid": ret_valid, "score": min(avgs) if all(a is not None for a in avgs) else -9.0}
 
 
 # ------------------------------------------------------------------------------ resultados no formato do app
@@ -183,10 +191,9 @@ def _group_stats(by_symbol: dict, search_syms, days: int) -> dict:
             "trades_month": round(len(allt) / max(len(by_symbol), 1) / days * 30, 1)}
 
 
-def research_block(ev: dict, cell: CellData, regimes: list[str]) -> dict:
+def research_block(ev: dict, cell: CellData, regimes: list[str], status: str = "aprovado") -> dict:
     days, search_syms = cell.days, set(cell.search)
     whole = _group_stats(ev["per_symbol"], search_syms, days)
-    status = "aprovado" if whole["ret_seen"] > 0 and whole["ret_new"] > 0 else "ressalva" if whole["ret_pct"] > 0 else "fraco"
     contexts = {}
     for rg in regimes:
         sub = {s: [t for t in ts if t["regime"] == rg] for s, ts in ev["per_symbol"].items()}
@@ -210,7 +217,8 @@ def build_bot(p: dict, market: str, interval: str, context: str, side: str, v: d
         "description": f"{spec['bot_tip']} Só opera {word.lower()} e só quando o gráfico está em {spec['label'].lower()} "
                        f"({', '.join(p['filters']['contexts'])}), no {interval} de {'futuros' if market == 'futures' else 'spot'}. "
                        f"Stop {p['sl_atr']:g} ATR, alvo {p['tp_atr']:g} ATR. Provado em busca, validação e moedas inéditas "
-                       f"(R médio {v['avg_r'][0]:+.2f} / {v['avg_r'][1]:+.2f} / {v['avg_r'][2]:+.2f}).",
+                       f"(R médio {v['avg_r'][0]:+.2f} / {v['avg_r'][1]:+.2f} / {v['avg_r'][2]:+.2f})"
+                       + ("; margem pequena — selo ressalva." if v.get("tier") == "ressalva" else "."),
         "bot": "day" if market == "futures" else "swing", "markets": [market], "tested_interval": interval,
         "timeframes": f"{interval} (testado)", "direction": p["direction"], "threshold": p["threshold"], "sl_atr": p["sl_atr"],
         "tp_atr": p["tp_atr"], "skills": p["skills"], "filters": p["filters"], "context_group": context, "side": side,
@@ -234,13 +242,13 @@ def search_cell(cell: CellData, context: str, side: str, fast: bool = False, sim
         v = verdict(ev, cell.interval)
         if v["ok"]:
             passed += 1
-            if best is None or v["score"] > best_v["score"]:
+            if best is None or (v["tier"] == "aprovado", v["score"]) > (best_v["tier"] == "aprovado", best_v["score"]):
                 best, best_v, best_ev = p, v, ev
     row = {"market": cell.market, "interval": cell.interval, "context": context, "side": side, "tested": tested, "passed": passed}
     if best is None:
         return {"row": {**row, "status": "sem bot aprovado"}, "bot": None, "research": None}
     bot = build_bot(best, cell.market, cell.interval, context, side, best_v)
-    research = research_block(best_ev, cell, best["filters"]["contexts"])
+    research = research_block(best_ev, cell, best["filters"]["contexts"], best_v["tier"])
     return {"row": {**row, "status": research["status"], "avg_r": best_v["avg_r"], "n": best_v["n"], "monthly_pct": research["monthly_pct"],
                     "pos_coins": research["pos_coins"]}, "bot": bot, "research": research}
 
