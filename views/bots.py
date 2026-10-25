@@ -5,8 +5,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core import indicators as ind, personalities as P, regime
-from core.profiles import PAGE_BOTS, PROFILES
-from core.settings import default_settings, load_settings, save_settings
+from core.profiles import PROFILES
+from core.settings import default_settings
 from core.strategy import SKILLS
 from core.ui import cached_klines, cached_symbols
 
@@ -15,8 +15,6 @@ st.caption("Cada bot é especialista em um estilo, timeframe, indicador e relaç
            "vem de testes com candles reais (1% da banca arriscado por operação, com taxas); o real vem das operações "
            "feitas pelos bots na carteira simulada. Resultado passado não garante resultado futuro.")
 
-if msg := st.session_state.pop("bots_toast", None):
-    st.toast(msg, icon="✅")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
 STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}  # estilo pelo tempo gráfico do bot
@@ -30,20 +28,6 @@ def rr_label(p: dict) -> str:
     if r >= 1:
         return f"{r:.1f}:1".replace(".0:", ":").replace(".", ",")
     return f"1:{1 / r:.1f}".replace(".0", "").replace(".", ",")
-
-
-def activate(p: dict, bot: str) -> None:
-    cfg = load_settings(bot)
-    cfg["personality"] = p["id"]
-    st.session_state[f"{bot}__personality"] = p["id"]
-    msg = f"{p['name']} ativado no {PROFILES[bot].name}."
-    tested = p.get("tested_interval")
-    if tested and tested in PROFILES[bot].intervals:
-        cfg["interval"] = tested
-        st.session_state[f"{bot}__interval"] = tested
-        msg += f" Timeframe: {tested}."
-    save_settings(bot, cfg)
-    st.session_state["bots_toast"] = msg  # exibido após o recarregamento da página
 
 
 live = {r["id"]: r for r in P.ranking()}
@@ -83,7 +67,6 @@ with tab_gal:
     st.caption(f"{len(view)} de {len(bots)} bots · {ok} aprovados na prova final")
 
     # --------------------------------------------------------------------- cards
-    in_use = {b: load_settings(b).get("personality") for b in PAGE_BOTS}
     cols = st.columns(3)
     for n, p in enumerate(view):
         rs = p.get("research", {})
@@ -127,15 +110,9 @@ with tab_gal:
                            f"{(lv['live_avg_r'] or 0):+.2f}R por operação · {lv['live_pnl']:+.2f} USDT")
             else:
                 st.caption("📊 Real: ainda sem operações — ative para começar a medir.")
-            using = [PROFILES[b].name for b, pid in in_use.items() if pid == p["id"]]
-            b1, b2 = st.columns([1.2, 1])
-            label = "✅ Em uso" if bot in in_use and in_use[bot] == p["id"] else f"Ativar no {PROFILES[bot].name}"
             weak = rs.get("status") not in ("aprovado", "ressalva") and bool(rs)
-            if weak:
-                label = "Fraco no teste"
-            if b1.button(label, key=f"act_{p['id']}", type="primary", width="stretch", disabled=label.startswith("✅") or weak):
-                activate(p, bot)
-                st.rerun()
+            b1, b2 = st.columns([1.2, 1])
+            b1.caption("⚠️ Fraco no teste: o sistema não o escolhe" if weak else "🤖 Escolhido sozinho quando o contexto combina")
             with b2.popover("Detalhes", width="stretch"):
                 st.markdown(p.get("description", ""))
                 st.markdown("**Indicadores (peso):** " + ", ".join(
@@ -168,8 +145,6 @@ with tab_gal:
                             "Acerto": st.column_config.NumberColumn(format="%.0f%%"),
                             "R médio": st.column_config.NumberColumn(format="%+.2f"),
                             "Retorno": st.column_config.NumberColumn(format="%+.1f%%")})
-                if using:
-                    st.caption("Em uso no: " + ", ".join(using))
 
     if not view:
         st.info("Nenhum bot com esses filtros.")

@@ -148,6 +148,36 @@ def candidates(profile, cfg: dict, sc: dict, vies: str, active_id: str | None, t
     return out
 
 
+# ------------------------------------------------------------------------------------------ resumo em linguagem simples
+_SIMPLE = {
+    "rompimento_alta": "O preço acabou de romper para cima e ganhou força.",
+    "rompimento_baixa": "O preço acabou de romper para baixo e ganhou força.",
+    "reversao_alta": "O preço caiu demais e pode dar um repique para cima.",
+    "reversao_baixa": "O preço subiu demais e pode corrigir para baixo.",
+    "pullback_alta": "O preço sobe, mas deu uma recuada: é a hora clássica de procurar compra.",
+    "pullback_baixa": "O preço cai, mas deu um repique: é a hora clássica de procurar venda.",
+    "tendencia_alta": "O preço está subindo com força e de forma organizada.",
+    "tendencia_baixa": "O preço está caindo com força e de forma organizada.",
+    "lateral": "O preço está andando de lado, sem direção clara.",
+    "indefinido": "O preço não mostra um padrão claro agora.",
+}
+
+
+def plain_summary(sc: dict, vies: str) -> str:
+    """Resumo curto e sem jargão do que acontece no gráfico (usado quando a IA não é consultada)."""
+    parts = [f"No {sc['timeframe']}, {_SIMPLE.get(sc['contexto'], _SIMPLE['indefinido'])}"]
+    htf = (sc.get("tendencia_tempo_maior") or {}).get("direcao")
+    if htf in ("alta", "baixa"):
+        parts.append(f"O tempo gráfico maior também está de {htf}.")
+    vol = sc.get("volume_relativo")
+    if vol is not None:
+        parts.append("O volume está forte." if vol >= 1.3 else "O volume está fraco." if vol < 0.7 else "O volume está normal.")
+    rsi = sc.get("rsi")
+    if rsi is not None and (rsi >= 70 or rsi <= 30):
+        parts.append("O preço está esticado para " + ("cima" if rsi >= 70 else "baixo") + ", com risco de reversão.")
+    return " ".join(parts)
+
+
 # ------------------------------------------------------------------------------------------ texto didático (regras)
 def _tendencia_txt(sc: dict) -> str:
     adx = sc["adx"]
@@ -232,8 +262,8 @@ def rules_advice(sc: dict, cands: list[dict], plan_d: dict, cfg: dict, price: fl
         bot = {"id": best["id"], "nome": best["nome"], "motivo": best["porque"] + ("" if best["mesmo_tempo"] else f". Atenção: foi testado no {best['tempo_testado']}, "
                f"e você está no {itv}"), "mesmo_tempo": best["mesmo_tempo"], "ativo": best["ativo"],
                "alternativas": [{"id": c["id"], "nome": c["nome"]} for c in positive if c["id"] != best["id"]][:3]}
-    return {"cenario": cenario, "leitura_tecnica": leitura, "oportunidade": opp, "dica": dica, "bot": bot, "plano": plano, "fonte": "regras",
-            "vies": vies}
+    return {"cenario": cenario, "resumo": plain_summary(sc, vies), "leitura_tecnica": leitura, "oportunidade": opp, "dica": dica, "bot": bot,
+            "plano": plano, "fonte": "regras", "vies": vies}
 
 
 def _rule_plan(sc: dict, cands: list[dict], vies: str, price: float) -> dict | None:

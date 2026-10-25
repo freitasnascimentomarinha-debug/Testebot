@@ -4,10 +4,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import accounts, fastsim, personalities as P
+from core import accounts, fastsim, personalities as P, ranking
 from core.ai import strategy_from_text
 from core.profiles import PAGE_BOTS, PROFILES
-from core.settings import DEFAULT_MODEL, load_settings, save_settings
+from core.settings import DEFAULT_MODEL
 from core.strategy import SKILLS
 from core.paper import account_id, get_account, stats
 from core.storage import current_user
@@ -28,29 +28,6 @@ def mlabel(m: str) -> str:
 BOT_LABEL = {k: f"{PROFILES[k].icon} {PROFILES[k].name}" for k in PAGE_BOTS}
 
 
-def use_in_bot(pid: str, bot: str) -> None:
-    persona = P.get(pid)
-    rs = persona.get("research") or {}
-    if rs and (rs.get("market") != PROFILES[bot].market or rs.get("status") not in ("aprovado", "ressalva")):
-        st.toast(f"{persona['name']} só pode ser usada onde foi treinada e se destacou "
-                 f"({mlabel(rs.get('market')).lower()}, {rs.get('interval')}"
-                 f"{'' if rs.get('status') in ('aprovado', 'ressalva') else '; ficou fraca no teste'}).", icon="🚫")
-        return
-    cfg = load_settings(bot)
-    cfg["personality"] = pid
-    st.session_state[f"{bot}__personality"] = pid
-    tested = persona.get("tested_interval")
-    msg = f"{persona['name']} ativada no {PROFILES[bot].name}."
-    if tested and tested in PROFILES[bot].intervals:
-        cfg["interval"] = tested
-        st.session_state[f"{bot}__interval"] = tested
-        msg += f" Timeframe ajustado para {tested} (o testado)."
-    if persona.get("markets") and PROFILES[bot].market not in persona["markets"]:
-        msg += " Atenção: ela foi testada em outro mercado."
-    save_settings(bot, cfg)
-    st.toast(msg, icon="✅")
-
-
 def fmt_r(v):
     return "—" if v is None else f"{v:+.2f}R"
 
@@ -65,6 +42,33 @@ with tab_rank:
         "A pontuação é o **R médio por operação** (resultado ÷ risco planejado: +1R = ganhou o que arriscou) "
         "ponderado pela quantidade de operações. Operações reais dos bots valem o dobro dos backtests. Com menos de "
         "10 operações, o resultado ainda é pouco confiável.")
+
+    # --- Ranking semanal automático ------------------------------------------------
+    with st.container(border=True):
+        st.markdown("**🏆 Ranking semanal automático**")
+        st.caption(f"O sistema refaz este ranking sozinho a cada {ranking.MAX_AGE_DAYS} dias, simulando todos os bots nos candles mais "
+                   "recentes, e escolhe o bot de cada ativo com base nele. Aqui você acompanha ou força uma atualização.")
+        c1, c2, c3 = st.columns([1, 1, 1.4])
+        w_market = c1.selectbox("Mercado", ["futures", "spot"], key="wk_m", format_func=lambda m: "Futuros" if m == "futures" else "Spot")
+        w_itv = c2.selectbox("Tempo gráfico", P.trained_intervals(w_market) or ["15m"], key="wk_i")
+        age = ranking.age_days(w_market, w_itv)
+        c3.caption("Ainda não calculado neste tempo gráfico." if age is None else
+                   f"Atualizado há {age:.0f} dia(s) · próxima atualização automática em {ranking.next_update(w_market, w_itv):%d/%m}.")
+        if c3.button("🔄 Atualizar agora", key="wk_go", type="primary"):
+            bar = st.progress(0.0, text="Baixando candles recentes…")
+            try:
+                ranking.refresh(w_market, w_itv, progress=lambda f, t: bar.progress(min(f, 1.0), text=t))
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                bar.empty()
+                st.error(f"Não foi possível atualizar agora: {exc}")
+        board = ranking.leaderboard(w_market, w_itv, top=10)
+        if board:
+            st.dataframe(pd.DataFrame([{"#": i + 1, "Bot": r["name"], "Retorno no período": r["ret_pct"], "≈ ao mês": r["monthly_pct"],
+                                        "Acerto": r["win_pct"], "Pior queda": r["dd_pct"], "Operações": r["trades"], "Selo": r["status"]}
+                                       for i, r in enumerate(board)]), hide_index=True, column_config={
+                "Retorno no período": st.column_config.NumberColumn(format="%+.2f%%"), "≈ ao mês": st.column_config.NumberColumn(format="%+.2f%%"),
+                "Acerto": st.column_config.NumberColumn(format="%.0f%%"), "Pior queda": st.column_config.NumberColumn(format="−%.1f%%")})
 
     # --- Retorno simulado nos últimos 40 dias -------------------------------------
     with st.container(border=True):
@@ -163,24 +167,18 @@ with tab_rank:
     else:
         st.info("Ainda não há dados. Clique em Calcular acima para ver quanto cada personalidade teria rendido "
                 "nos últimos 40 dias.")
-    c1, c2, c3 = st.columns([2, 1.2, 1])
-    pick = c1.selectbox("Usar uma personalidade", [r["id"] for r in rows], format_func=lambda i: P.get(i)["name"])
-    bot = c2.selectbox("no bot", list(PAGE_BOTS), format_func=BOT_LABEL.get, key="rank_bot")
-    if c3.button("Usar agora", type="primary", width="stretch"):
-        use_in_bot(pick, bot)
+    st.caption("Não é preciso escolher um bot: no fechamento de cada candle o sistema escolhe sozinho o melhor para o contexto de cada ativo.")
 
 # --------------------------------------------------------------- biblioteca
 with tab_lib:
-    in_use = {k: load_settings(k).get("personality") for k in PAGE_BOTS}
     for p in P.list_all():
         with st.container(border=True):
             c1, c2 = st.columns([3, 1.2])
-            using = [PROFILES[b].name for b, pid in in_use.items() if pid == p["id"]]
             c1.markdown(f"#### {p['name']}  \n"
                         f"{'Pronta' if p.get('builtin') else P.VISIBILITY.get(p.get('visibility') or 'comunidade', '')} · por **{p.get('author') or '—'}**"
                         + ("" if p.get("builtin") or p.get("visibility") != "usuarios" or not p.get("shared_with")
                            else f" · com: {', '.join(p['shared_with'])}")
-                        + (f" · em uso: {', '.join(using)}" if using else ""))
+                        )
             c1.write(p.get("summary") or "")
             with c1.expander("Ver estratégia completa"):
                 st.write(p.get("description", ""))
@@ -206,10 +204,6 @@ with tab_lib:
                         f"{rs['ret_seen']:+.1f}% · moedas inéditas {rs['ret_new']:+.1f}% · acerto {rs['win_pct']:.0f}% · "
                         f"pior queda {rs['dd_pct']:.0f}%. Passado não garante futuro.")
             with c2:
-                target = st.selectbox("Bot", list(PAGE_BOTS), format_func=BOT_LABEL.get, key=f"lib_bot_{p['id']}",
-                                      label_visibility="collapsed")
-                if st.button("Usar neste bot", key=f"use_{p['id']}", width="stretch", type="primary"):
-                    use_in_bot(p["id"], target)
                 mine = P.can_edit(p, current_user())
                 if st.button("Editar" if mine else "Duplicar e editar", key=f"edit_{p['id']}", width="stretch"):
                     st.session_state["persona_template"] = {**p, "duplicate": not mine}

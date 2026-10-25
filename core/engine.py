@@ -65,7 +65,7 @@ def pick_bot(profile: BotProfile, cfg: dict, df: pd.DataFrame) -> tuple[dict | N
 
 
 def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
-                 api_key: str | None) -> AnalysisResult:
+                 api_key: str | None, log: bool = True) -> AnalysisResult:
     symbol, interval = cfg["symbol"], cfg["interval"]
     broker = get_broker(profile.key)
     acct = broker.account()
@@ -166,6 +166,15 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     if waiting and decision.decision in ("BUY", "SELL"):
         decision.reasoning = f"[Bot automático em espera] {waiting} " + decision.reasoning
         decision.decision = "HOLD"
+    # Uma posição por ativo: o bot não abre outra na mesma direção nem entra contra a que já tem (sinal contrário encerra a posição)
+    mine = [p for p in acct["positions"] if p["symbol"] == symbol and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
+    if mine and decision.decision in ("BUY", "SELL"):
+        if any(p["side"] == decision.decision for p in mine):
+            decision.reasoning = f"[Já posicionado em {symbol}] Aguardando o stop ou o alvo. " + decision.reasoning
+            decision.decision = "HOLD"
+        else:
+            decision.reasoning = "[Sinal contrário ao da posição aberta] O cenário virou: a posição do bot é encerrada. " + decision.reasoning
+            decision.decision = "CLOSE"
 
     check = None
     if decision.decision in ("BUY", "SELL"):
@@ -179,7 +188,8 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     result = AnalysisResult(plan=plan_d, decision=decision, check=check, price=price, symbol=symbol,
                             interval=interval, time=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=error,
                             personality={"id": personality["id"], "name": personality["name"]} if personality else None)
-    log_decision(profile.key, result)
+    if log:
+        log_decision(profile.key, result)
     return result
 
 

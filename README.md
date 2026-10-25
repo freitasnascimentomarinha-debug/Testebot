@@ -30,6 +30,11 @@ pronta para receber a API de negociação da Binance numa segunda fase.
   Se nenhum tem vantagem comprovada no contexto, o bot aguarda. O ranking é **refeito sozinho a cada 7 dias**
   (`core/ranking.py`) simulando todos os bots nos candles recentes — assim acompanha o mercado real e o selo
   (aprovado / ressalva / fraco) se adapta. Também dá para atualizar na hora.
+* **Varredura automática** (`core/scanner.py`): com o bot ligado, a cada candle fechado ele analisa sozinho vários ativos (lista
+  configurável), escolhe o melhor bot do ranking para o contexto de cada um e opera as melhores oportunidades. Uma posição por ativo:
+  sinal contrário encerra a posição em vez de abrir a oposta. A IA só é consultada para a melhor oportunidade de cada varredura.
+* **Tudo automático**: não há botões para trocar de bot, armar/desarmar plano ou analisar na mão; o ranking semanal é acompanhado
+  (e pode ser forçado) na página Personalidades.
 * **Papel da IA**: por padrão a IA só **explica resumidamente** o que acontece no mercado e dá uma **dica útil** do
   contexto, no tom da personalidade escolhida (professor, direto ao ponto, gestor cauteloso, mentor ou quant).
   Opcionalmente ela também **interfere** na ativação do bot: confirma ou veta o sinal naquele momento.

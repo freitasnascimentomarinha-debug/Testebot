@@ -1,7 +1,8 @@
 """Executor 24/7 sem navegador (piloto automático em segundo plano).
 
 Usa exatamente as configurações salvas na interface. Analisa cada bot com
-``autopilot`` ligado sempre que um novo candle fecha, usa o bot mais recomendado do ranking para o contexto e executa a ordem. Também monitora stops/alvos continuamente.
+``autopilot`` ligado sempre que um novo candle fecha: varre os ativos da lista, usa o bot mais recomendado do ranking
+para o contexto de cada um e opera as melhores oportunidades. Também monitora stops/alvos continuamente.
 
     export OPENROUTER_API_KEY=sk-or-...
     python worker.py              # todos os bots com piloto automático ligado
@@ -13,11 +14,10 @@ import argparse
 import logging
 import time
 
-from core import accounts, engine, execution, personalities, storage
-from core.broker import get_broker
+from core import accounts, engine, execution, personalities, scanner, storage
 from core.data import get_funding_rate, get_klines, get_ticker, last_closed_candle_time
 from core.ai import get_api_key
-from core.profiles import PROFILES
+from core.profiles import PAGE_BOTS, PROFILES
 from core.settings import load_settings
 
 log = logging.getLogger("worker")
@@ -26,11 +26,8 @@ log = logging.getLogger("worker")
 def tick(bot: str, last_seen: dict) -> None:
     profile = PROFILES[bot]
     cfg = load_settings(bot)
-    raw = get_klines(cfg["symbol"], cfg["interval"], int(cfg["candles"]), profile.market)
-    price = get_ticker(cfg["symbol"], profile.market).last
-    broker = get_broker(bot)
-    funding = get_funding_rate(cfg["symbol"]) if profile.market == "futures" else None
-    for ev in broker.sync(cfg["symbol"], raw, price, funding):
+    # stops e alvos de todos os ativos com posição aberta (a varredura pode abrir posições em vários ativos)
+    for ev in scanner.sync_open(profile, get_klines, get_ticker, get_funding_rate):
         log.info("[%s] %s %s", bot, ev["type"], ev.get("trade", {}).get("pnl", ""))
     if not cfg["autopilot"]:
         return
@@ -40,42 +37,23 @@ def tick(bot: str, last_seen: dict) -> None:
     if not personalities.allowed(profile.market, cfg["interval"]):
         log.warning("[%s] nenhum bot foi treinado/testado em %s %s: análise ignorada", bot, profile.market, cfg["interval"])
         return
+    raw = get_klines(cfg["symbol"], cfg["interval"], 150, profile.market)
     marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(raw, cfg['interval'])}"
     if last_seen.get(bot) == marker:
         return
     last_seen[bot] = marker
     if engine.ensure_ranking(profile, cfg):
         log.info("[%s] ranking semanal dos bots atualizado (%s %s)", bot, profile.market, cfg["interval"])
-    htf_raw = mtf_raw = None
-    if engine.needs_htf(cfg):
-        htf_raw, mtf_raw = engine.htf_frames(get_klines, cfg, len(raw), profile.market)
-    df = engine.prepare(raw, cfg, htf_raw, mtf_raw)
-    state, planned = engine.check_armed_plan(profile, cfg, df, price)
-    if state:
-        log.info("[%s] plano condicional: %s", bot, state)
-    if planned is not None:
-        if planned.check and planned.check.allowed:
-            out = engine.execute(profile, cfg, planned, price)
-            log.info("[%s] plano condicional confirmado: ordem %s", bot, out.get("status"))
-        else:
-            log.info("[%s] plano confirmado, ordem não montada: %s", bot, " | ".join(planned.check.reasons if planned.check else []))
-        return
-    result = engine.run_analysis(profile, cfg, df, price, get_api_key())
-    d = result.decision
-    log.info("[%s] %s %s bot=%s conf=%s%% fonte=%s pronta=%s", bot, cfg["symbol"], d.decision,
-             (result.personality or {}).get("name"), d.confidence, d.source, bool(result.check and result.check.allowed))
-    if (result.check and result.check.allowed) or d.decision == "CLOSE":
-        out = engine.execute(profile, cfg, result, price)
-        log.info("[%s] ordem: %s", bot, out.get("status"))
-    elif result.check:
-        log.info("[%s] ordem não montada: %s", bot, " | ".join(result.check.reasons))
-    elif engine.auto_arm(profile, cfg, result, df):
-        log.info("[%s] plano condicional da IA armado", bot)
+    report = scanner.run(profile, cfg, get_api_key(), klines=get_klines, ticker=get_ticker, funding=get_funding_rate)
+    log.info("[%s] varredura: %d ativo(s), %d oportunidade(s), ordens: %s", bot, report.scanned, len(report.opportunities),
+             ", ".join(f"{e['action']} {e['symbol']} {e['status']}" for e in report.executed) or "nenhuma")
+    for note in report.notes:
+        log.info("[%s] %s", bot, note)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--bots", nargs="*", default=list(PROFILES), choices=list(PROFILES))
+    parser.add_argument("--bots", nargs="*", default=list(PAGE_BOTS), choices=list(PROFILES))
     parser.add_argument("--interval", type=int, default=15, help="segundos entre verificações")
     parser.add_argument("--users", nargs="*", default=None, help="com contas ligadas: só estes usuários (padrão: todos)")
     args = parser.parse_args()
