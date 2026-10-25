@@ -1756,3 +1756,15 @@ def test_bots_gallery_survives_weekly_ranking_contexts_without_extra_fields(monk
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
+
+
+def test_realtime_spot_chart_lists_binance_websocket_ports_in_order():
+    from core import realtime
+
+    cfg = default_settings(PROFILES["swing"])
+    html = realtime.realtime_chart_html(symbol="BTCUSDT", interval="1h", market="spot", cfg=cfg, lines=[], positions=[], height=600)
+    i443, i9443, imirror = html.index("stream.binance.com:443"), html.index("stream.binance.com:9443"), html.index("data-stream.binance.vision")
+    assert i443 < i9443 < imirror                                    # 443 → 9443 → espelho público → OKX
+    fut = realtime.realtime_chart_html(symbol="BTCUSDT", interval="1h", market="futures", cfg=default_settings(PROFILES["day"]), lines=[],
+                                       positions=[], height=600)
+    assert "fstream.binance.com" in fut and "stream.binance.com:9443" not in fut.split("if (fut)")[1].split("else {")[0]
