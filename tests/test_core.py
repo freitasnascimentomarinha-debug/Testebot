@@ -1829,7 +1829,8 @@ def test_realtime_chart_has_tools_and_sends_requests_to_the_page():
     html = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="futures", cfg=default_settings(PROFILES["day"]), lines=[],
                                         positions=pos, orders=orders, height=700)
     for needle in ('data-tool="', "Heikin-Ashi", "Fibonacci", "window.parent.postMessage", 'kind: "limit"', 'kind: "protect"', 'kind: "close"',
-                   'kind: "cancel_order"', "Indicadores ▾", '"id": "p1"', '"liquidation": 85.0', '"id": "o1"', "tb_draw_"):
+                   'kind: "cancel_order"', "Indicadores ▾", '"id": "p1"', '"liquidation": 85.0', '"id": "o1"', "tb_draw_",
+                   'data-z="in"', 'data-z="out"', "zoomBy(", "const netAt", "lineTitle(dragLine.pos"):   # zoom e P&L ao arrastar stop/alvo
         assert needle in html, needle
     assert "__TOOLS__" not in html and "__CONF__" not in html
     demo = realtime.realtime_chart_html(symbol="BTCUSDT", interval="15m", market="spot", cfg=default_settings(PROFILES["swing"]), lines=[],
