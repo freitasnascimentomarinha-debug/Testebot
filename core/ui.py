@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import nav as nav_mod, ai as ai_mod, analysis_view, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
+from core import exchanges, nav as nav_mod, ai as ai_mod, analysis_view, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
 from core.broker import get_broker
 from core import leverage as lev_rules
 from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker, list_symbols
@@ -153,7 +153,7 @@ def render_bot_page(bot: str) -> None:
             orders = [o for o in broker.account()["orders"] if o["symbol"] == cfg["symbol"] and o.get("market") == profile.market]
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
                                                 cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions, orders=orders,
-                                                height=height, symbols=all_symbols), height=height + 5)
+                                                height=height, symbols=all_symbols, prefer=exchanges.selected()), height=height + 5)
         with tab_book:
             _book_component()(key=f"{bot}-book", data={"symbol": cfg["symbol"], "market": profile.market})
         with tab_ctl:

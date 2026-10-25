@@ -31,7 +31,7 @@ def chart_height(cfg: dict, base: int = 640) -> int:
 
 def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, lines: list[dict],
                         positions: list[dict], height: int, orders: list[dict] | None = None, demo: list | None = None,
-                        symbols: list[str] | None = None) -> str:
+                        symbols: list[str] | None = None, prefer: str = "binance") -> str:
     """``lines``: [{"price", "color", "title", "style": "solid|dashed|dotted"}];
     ``positions``: posições abertas no ativo (para o P&L ao vivo)."""
     ind_keys = ("ema_on", "ema_fast", "ema_slow", "ema_trend_on", "ema_trend", "bb_on", "bb_period", "bb_std", "vwap_on",
@@ -43,7 +43,7 @@ def realtime_chart_html(*, symbol: str, interval: str, market: str, cfg: dict, l
     from core.data import okx_base
 
     base, mult = okx_base(symbol)
-    conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height, "symbols": list(symbols or [])[:3000],
+    conf = json.dumps({"okx_base": base, "okx_mult": mult, "symbol": symbol.upper(), "interval": interval, "market": market, "height": height, "symbols": list(symbols or [])[:3000], "prefer": prefer,
                        "ind": {k: cfg[k] for k in ind_keys}, "lines": lines, "positions": pos,
                        "orders": [{k: o.get(k) for k in ("id", "side", "qty")} | {"price": o["limit_price"]} for o in (orders or [])],
                        **({"demo": demo} if demo else {})})
@@ -292,6 +292,18 @@ else {
     t24: `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${C.symbol}`, ws: `wss://data-stream.binance.vision/ws/${sl}@kline_${C.interval}`});
 }
 SOURCES.push({name: fut ? "OKX Perpétuo" : "OKX Spot", kind: "okx"});
+// Corretora escolhida pelo usuário: vem primeiro (a Bybit entra como fonte; a OKX já existe e só sobe na fila)
+const BY_IV = {"1m":"1","3m":"3","5m":"5","15m":"15","30m":"30","1h":"60","2h":"120","4h":"240","6h":"360","12h":"720","1d":"D","1w":"W","1M":"M"}[C.interval];
+if (C.prefer === "bybit" && BY_IV) SOURCES.unshift({name: fut ? "Bybit Perpétuo" : "Bybit Spot", kind: "bybit"});
+if (C.prefer === "okx") SOURCES.unshift(SOURCES.splice(SOURCES.findIndex(x => x.kind === "okx"), 1)[0]);
+if (C.demo) SOURCES.unshift(SOURCES.splice(SOURCES.findIndex(x => x.kind === "demo"), 1)[0]);
+const byCat = fut ? "linear" : "spot";
+const byRow = k => row(+k[0], k[1], k[2], k[3], k[4], k[5]);
+async function bybitHistory() {
+  const r = await fetch(`https://api.bybit.com/v5/market/kline?category=${byCat}&symbol=${C.symbol}&interval=${BY_IV}&limit=1000`);
+  const j = await r.json(); if (j.retCode !== 0 || !j.result.list.length) throw new Error("Bybit sem dados");
+  return j.result.list.reverse().map(byRow);
+}
 
 async function okxHistory() {
   let rows = [], after = "", url = "candles";
@@ -307,6 +319,7 @@ async function okxHistory() {
 async function history(src) {
   if (src.kind === "demo") return C.demo.map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
   if (src.kind === "okx") return okxHistory();
+  if (src.kind === "bybit") return bybitHistory();
   const r = await fetch(src.rest); if (!r.ok) throw new Error("HTTP " + r.status);
   try { open24 = +(await (await fetch(src.t24)).json()).openPrice; } catch (e) {}
   return (await r.json()).map(k => row(k[0], k[1], k[2], k[3], k[4], k[5]));
@@ -318,9 +331,13 @@ function stream(i) {
   if (src.kind === "demo") { status("demonstração (sem fluxo ao vivo)", "live"); return; }
   let opened = false;
   status("conectando a " + src.name + "…");
-  ws = new WebSocket(src.kind === "okx" ? "wss://ws.okx.com/ws/v5/business" : src.ws);
+  ws = new WebSocket(src.kind === "okx" ? "wss://ws.okx.com/ws/v5/business" : src.kind === "bybit" ? "wss://stream.bybit.com/v5/public/" + byCat : src.ws);
   const failover = setTimeout(() => { if (!opened) { ws.onclose = null; ws.close(); stream(i + 1); } }, 6000);
   ws.onopen = () => {
+    if (src.kind === "bybit") {
+      ws.send(JSON.stringify({op: "subscribe", args: [`kline.${BY_IV}.${C.symbol}`]}));
+      clearInterval(pingTimer); pingTimer = setInterval(() => ws.readyState === 1 && ws.send(JSON.stringify({op: "ping"})), 20000);
+    }
     if (src.kind === "okx") {
       ws.send(JSON.stringify({op: "subscribe", args: [{channel: "candle" + OKX_BAR, instId: okxInst}]}));
       clearInterval(pingTimer); pingTimer = setInterval(() => ws.readyState === 1 && ws.send("ping"), 20000);
@@ -332,6 +349,7 @@ function stream(i) {
     let c = null;
     if (src.kind === "bn" && m.k) c = row(m.k.t, m.k.o, m.k.h, m.k.l, m.k.c, m.k.v);
     if (src.kind === "okx" && m.data) c = okxRow(m.data[0]);
+    if (src.kind === "bybit" && m.topic && m.data && m.data[0]) c = byRow([m.data[0].start, m.data[0].open, m.data[0].high, m.data[0].low, m.data[0].close, m.data[0].volume]);
     if (!c) return;
     if (!opened) { opened = true; clearTimeout(failover); retry = 0; status("ao vivo · " + src.name + (source && source !== src.name ? " (histórico: " + source + ")" : ""), "live"); }
     upsert(c);
