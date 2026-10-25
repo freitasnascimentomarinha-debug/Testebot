@@ -16,7 +16,7 @@ from core import ai
 from core.storage import load_json, locked_update
 
 FILE = "events_pt.json"
-BATCH = 12
+BATCH = 8
 KEEP = 800
 MONTHS = {"January": "janeiro", "February": "fevereiro", "March": "março", "April": "abril", "May": "maio", "June": "junho", "July": "julho",
           "August": "agosto", "September": "setembro", "October": "outubro", "November": "novembro", "December": "dezembro"}
@@ -44,12 +44,15 @@ def rule_pt(text: str) -> str:
     return out
 
 
+VERSION = "v2"   # muda quando o formato da explicação muda: as traduções antigas são refeitas
+
+
 def key_of(card: dict) -> str:
-    return hashlib.sha1((card["titulo"] + "|" + "|".join(o["nome"] for o in card["opcoes"])).encode()).hexdigest()[:16]
+    return hashlib.sha1((VERSION + card["titulo"] + "|" + "|".join(o["nome"] for o in card["opcoes"])).encode()).hexdigest()[:16]
 
 
-def generic_explanation(card: dict) -> str:
-    """O que é a aposta, em português simples, sem depender de tradução."""
+def generic_explanation(card: dict) -> list[list[str]]:
+    """Seções do "?" sem a IA: o que é a aposta e por que importa, em português simples (o contexto específico depende da IA)."""
     kind = ("As linhas são níveis de preço: a porcentagem é a chance, dada pelos apostadores, de o preço tocar esse nível até o vencimento."
             if card.get("escada") else
             "É uma aposta de sim ou não: a porcentagem é a chance, dada pelos apostadores, de acontecer até o vencimento."
@@ -60,13 +63,26 @@ def generic_explanation(card: dict) -> str:
            "politica": "Eleições e decisões de governo mudam regulação, impostos e confiança dos investidores, o que acaba chegando ao mercado.",
            "commodities": "Ouro, petróleo e bolsas mostram o humor geral do mercado: cripto tende a acompanhar o apetite a risco.",
            "cripto": "Mostra o que o mercado de previsões espera do preço da moeda."}.get(card["categoria"], "")
-    return f"{kind} {why}".strip()
+    out = [["O que é", kind]]
+    if why:
+        out.append(["Por que importa", why])
+    out.append(["Contexto do assunto", "Aparece aqui quando a IA está ligada (chave da OpenRouter): ela resume o assunto e traduz a descrição oficial."])
+    return out
 
 
 def _cache() -> dict:
     if _state["cache"] is None:
         _state["cache"] = load_json(FILE, {}) or {}
     return _state["cache"]
+
+
+def _sections(e) -> list[list[str]]:
+    """Explicação guardada → lista de [rótulo, texto] (aceita o formato antigo, que era um texto só)."""
+    if isinstance(e, str) and e.strip():
+        return [["O que é", e.strip()]]
+    if isinstance(e, list):
+        return [[str(a), str(b)] for a, b in (x for x in e if isinstance(x, (list, tuple)) and len(x) == 2) if str(b).strip()]
+    return []
 
 
 def localize(cards: list[dict]) -> list[dict]:
@@ -76,7 +92,7 @@ def localize(cards: list[dict]) -> list[dict]:
         t = cache.get(key_of(c))
         opts = c["opcoes"]
         if t and len(t.get("o") or []) == len(opts):
-            titulo, nomes, expl, ia = t["t"], t["o"], t.get("e") or generic_explanation(c), True
+            titulo, nomes, expl, ia = t["t"], t["o"], _sections(t.get("e")) or generic_explanation(c), True
         else:
             titulo, nomes, expl, ia = rule_pt(c["titulo"]), [rule_pt(o["nome"]) for o in opts], generic_explanation(c), False
         out.append({**{k: v for k, v in c.items() if k != "desc"}, "titulo": titulo, "traduzido": ia, "explicacao": expl,
@@ -85,20 +101,22 @@ def localize(cards: list[dict]) -> list[dict]:
 
 
 SYSTEM = """Você traduz mercados do Polymarket para o português do Brasil e explica cada um para quem nunca viu o mercado.
-Responda SOMENTE um JSON: {"itens":[{"id":"...","titulo":"...","opcoes":["...", ...],"explicacao":"..."}]}.
+Responda SOMENTE um JSON: {"itens":[ ... ]}.
 Regras: mantenha a ordem das opções e a MESMA quantidade; traduza títulos e opções de forma natural (ex.: "No change" → "Sem mudança",
 "25 bps increase" → "Alta de 25 bps"); mantenha nomes próprios, siglas e números (Fed, bps, WTI, BTC, US$). "explicacao": 2 a 3 frases
-simples dizendo o que está sendo apostado, até quando e como resolve (use a descrição), e por que importa para cripto/dólar quando for óbvio.
-Não invente fatos além da descrição."""
+simples, em três partes: "o_que_e" (o que está sendo apostado, até quando e como resolve — use a descrição), "contexto" (resumo do assunto: quem
+são as partes, o que está em jogo e o histórico estável que você conhece; NÃO invente notícias nem fatos recentes que não estejam na descrição, e se
+não souber o contexto escreva só o que a descrição diz) e "importa" (por que isso mexe com cripto, dólar ou apetite a risco; omita se não houver ligação
+clara). Cada parte com 1 a 2 frases. Formato de cada item: {"id","titulo","opcoes":[...],"o_que_e":"...","contexto":"...","importa":"..."}."""
 
 
 def translate(cards: list[dict], api_key: str, model: str) -> dict:
     """Pede à IA a tradução de ``cards`` (já sem tradução guardada). Devolve {chave: {t, o, e}}; falhas devolvem vazio."""
-    payload = [{"id": key_of(c), "titulo": c["titulo"], "opcoes": [o["nome"] for o in c["opcoes"]], "descricao": c.get("desc", "")[:450]} for c in cards]
+    payload = [{"id": key_of(c), "titulo": c["titulo"], "opcoes": [o["nome"] for o in c["opcoes"]], "descricao": c.get("desc", "")[:800], "marcadores": c.get("tags", [])} for c in cards]
     try:
         r = requests.post(ai.OPENROUTER_URL, timeout=ai.TIMEOUT, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                                                                          "X-Title": "TradeBot Platform"},
-                          json={"model": model, "temperature": 0.1, "max_tokens": 6000, "response_format": {"type": "json_object"},
+                          json={"model": model, "temperature": 0.1, "max_tokens": 8000, "response_format": {"type": "json_object"},
                                 "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": __import__("json").dumps(payload, ensure_ascii=False)}]})
         r.raise_for_status()
         msg = r.json()["choices"][0]["message"]
@@ -116,7 +134,8 @@ def parse(data: dict, cards: list[dict]) -> dict:
         opts = it.get("opcoes")
         if not c or not isinstance(opts, list) or len(opts) != len(c["opcoes"]) or not str(it.get("titulo", "")).strip():
             continue   # resposta fora do combinado: esse evento fica com as regras
-        out[str(it["id"])] = {"t": str(it["titulo"]).strip()[:200], "o": [str(o).strip()[:80] for o in opts], "e": str(it.get("explicacao", "")).strip()[:600]}
+        secs = [[rot, str(it.get(k, "")).strip()[:420]] for rot, k in (("O que é", "o_que_e"), ("Contexto", "contexto"), ("Por que importa", "importa"))]
+        out[str(it["id"])] = {"t": str(it["titulo"]).strip()[:200], "o": [str(o).strip()[:80] for o in opts], "e": [x for x in secs if x[1]]}
     return out
 
 
