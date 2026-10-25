@@ -237,7 +237,7 @@ def _funding_events(since: pd.Timestamp, until: pd.Timestamp) -> int:
 
 
 def sync(acc: str, symbol: str, candles: pd.DataFrame, last_price: float,
-         funding_rate_pct: float | None = None) -> list[dict]:
+         funding_rate_pct: float | None = None, market: str | None = None) -> list[dict]:
     """Processa ordens limitadas, stops, alvos, liquidações e financiamento,
     usando as máximas e mínimas reais dos candles desde a última verificação.
     Quando stop e alvo cabem no mesmo candle, assume-se o stop (premissa
@@ -248,7 +248,7 @@ def sync(acc: str, symbol: str, candles: pd.DataFrame, last_price: float,
         acct = _account(data, acc)
         now = pd.Timestamp(_now())
         for order in list(acct["orders"]):
-            if order["symbol"] != symbol:
+            if order["symbol"] != symbol or (market and order["market"] != market):  # o mesmo par existe em futuros e no spot
                 continue
             since = candles[candles["time"] >= pd.Timestamp(order["created"]).floor("min")]
             lo = min(since["low"].min() if len(since) else last_price, last_price)
@@ -263,7 +263,7 @@ def sync(acc: str, symbol: str, candles: pd.DataFrame, last_price: float,
                     events.append({"type": "Ordem cancelada", "detail": str(exc)})
 
         for pos in list(acct["positions"]):
-            if pos["symbol"] != symbol:
+            if pos["symbol"] != symbol or (market and pos["market"] != market):
                 continue
             # Financiamento dos perpétuos: comprado paga taxa positiva, vendido recebe
             if pos["market"] == "futures" and funding_rate_pct is not None:

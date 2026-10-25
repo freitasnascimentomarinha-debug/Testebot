@@ -37,7 +37,9 @@ class PaperBroker:
         paper.update_protection(self.acc, position_id, stop_loss, take_profit)
 
     def sync(self, symbol: str, candles, last_price: float, funding_rate_pct: float | None = None) -> list[dict]:
-        return paper.sync(self.acc, symbol, candles, last_price, funding_rate_pct)
+        from core.profiles import PROFILES
+
+        return paper.sync(self.acc, symbol, candles, last_price, funding_rate_pct, market=PROFILES[self.bot].market)
 
     def reset(self, initial: float) -> None:
         paper.reset_account(self.acc, initial)

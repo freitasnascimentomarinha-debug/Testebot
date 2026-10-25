@@ -101,7 +101,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
     positions = [{k: p.get(k) for k in ("side", "qty", "entry", "stop_loss", "take_profit", "leverage", "liquidation",
                                          "opened", "source")}
                  | {"pnl_nao_realizado": round(paper.pnl_of(p, price), 2)}
-                 for p in acct["positions"] if p["symbol"] == symbol]
+                 for p in acct["positions"] if p["symbol"] == symbol and p.get("market", profile.market) == profile.market]
     account_view = {k: round(v, 2) for k, v in st_.items() if isinstance(v, (int, float)) and not math.isinf(v)}
     funding = get_funding_rate(symbol) if profile.market == "futures" else None
 
@@ -167,7 +167,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         decision.reasoning = f"[Bot automático em espera] {waiting} " + decision.reasoning
         decision.decision = "HOLD"
     # Uma posição por ativo: o bot não abre outra na mesma direção nem entra contra a que já tem (sinal contrário encerra a posição)
-    mine = [p for p in acct["positions"] if p["symbol"] == symbol and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
+    mine = [p for p in acct["positions"] if p["symbol"] == symbol and p.get("market", profile.market) == profile.market and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
     if mine and decision.decision in ("BUY", "SELL"):
         if any(p["side"] == decision.decision for p in mine):
             decision.reasoning = f"[Já posicionado em {symbol}] Aguardando o stop ou o alvo. " + decision.reasoning
@@ -201,7 +201,7 @@ def execute(profile: BotProfile, cfg: dict, result: AnalysisResult, price: float
         # O bot só encerra as posições que ele mesmo abriu; as manuais ficam com o usuário.
         closed = [broker.close_position(p["id"], price, "IA: cenário invertido")
                   for p in broker.account()["positions"]
-                  if p["symbol"] == result.symbol and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
+                  if p["symbol"] == result.symbol and p.get("market", profile.market) == profile.market and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
         out = {"status": "ENCERRADAS", "closed": closed}
     elif d.decision in ("BUY", "SELL") and result.check and result.check.allowed and result.check.calc:
         calc = result.check.calc

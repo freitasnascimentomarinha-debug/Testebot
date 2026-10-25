@@ -157,7 +157,7 @@ def render_bot_page(bot: str) -> None:
         tab_rt, tab_tv, tab_ctl, tab_cfg = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho", "🧠 Análise do bot",
                                                      "⚙️ Configurações"])
         with tab_rt:
-            positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
+            positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"] and p.get("market") == profile.market]
             height = chart_height(cfg)
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
                                                 cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
@@ -281,10 +281,11 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
 def realtime_lines(bot: str, cfg: dict) -> list[dict]:
     """Linhas de preço do gráfico em tempo real (só mudam quando há ação do
     usuário, para o gráfico não recarregar a cada atualização)."""
+    market = PROFILES[bot].market  # o mesmo par existe em futuros e no spot: cada página mostra só as ordens do seu mercado
     acct = get_broker(bot).account()
     lines = []  # a linha de entrada (com P&L ao vivo) é desenhada pelo próprio gráfico
     for p in acct["positions"]:
-        if p["symbol"] != cfg["symbol"]:
+        if p["symbol"] != cfg["symbol"] or p.get("market") != market:
             continue
         if p.get("stop_loss"):
             lines.append({"price": p["stop_loss"], "color": "#ef5350", "title": "SL"})
@@ -307,7 +308,7 @@ def realtime_lines(bot: str, cfg: dict) -> list[dict]:
             lines += [{"price": v, "color": "rgba(255,193,7,.7)", "style": "dotted", "title": f"Fib {k}"}
                       for k, v in ind.fibonacci(closed).items()]
     for o in acct["orders"]:
-        if o["symbol"] == cfg["symbol"]:
+        if o["symbol"] == cfg["symbol"] and o.get("market") == market:
             lines.append({"price": o["limit_price"], "color": "#bdbdbd", "title": f"LIMIT {o['side']}"})
     result = st.session_state.get(f"{bot}__analysis")
     if result and result.symbol == cfg["symbol"] and result.decision.decision in ("BUY", "SELL") and not result.executed:
@@ -589,9 +590,10 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
     with t1:
         open_positions(profile, cfg)
     with t2:
-        if not acct["orders"]:
+        orders = [o for o in acct["orders"] if o.get("market") == profile.market]
+        if not orders:
             st.caption("Nenhuma ordem pendente.")
-        for o in acct["orders"]:
+        for o in orders:
             c = st.columns([4, 1])
             c[0].write(f"LIMIT {o['side']} {o['qty']:g} {o['symbol']} @ {fmt_price(o['limit_price'])} · "
                        f"SL {fmt_price(o['stop_loss'])} · TP {fmt_price(o['take_profit'])} · {o['source']}")
@@ -599,8 +601,9 @@ def portfolio_section(profile: BotProfile, cfg: dict) -> None:
                 broker.cancel_order(o["id"])
                 st.rerun()
     with t3:
-        if acct["history"]:
-            hist = pd.DataFrame(acct["history"]).reindex(columns=[
+        history = [t for t in acct["history"] if t.get("market", profile.market) == profile.market]
+        if history:
+            hist = pd.DataFrame(history).reindex(columns=[
                 "closed", "bot", "symbol", "side", "qty", "entry", "exit", "leverage", "reason", "pnl",
                 "pnl_pct_margin", "fees_total", "source"]).iloc[::-1]
             hist["bot"] = hist["bot"].map(lambda b: PROFILES[b].name if b in PROFILES else "")
@@ -647,9 +650,10 @@ def open_positions(profile: BotProfile, cfg: dict) -> None:
         broker = get_broker(bot)
         acct = broker.account()
         price = st.session_state.get(f"{bot}__last_price", 0)
-        if not acct["positions"]:
+        positions = [p for p in acct["positions"] if p.get("market") == profile.market]
+        if not positions:
             st.caption("Nenhuma posição aberta.")
-        for p in acct["positions"]:
+        for p in positions:
             p_price = price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]
             gross = paper.pnl_of(p, p_price)
             net = gross - p["fees_paid"] - p_price * p["qty"] * p.get("fx", 1.0) * p["fee_pct"] / 100
