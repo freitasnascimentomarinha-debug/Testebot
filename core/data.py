@@ -250,6 +250,47 @@ def list_symbols(market: str) -> list[str]:
     return [d["instId"].replace("-", "") for d in data["data"] if d["instId"].endswith("-USDT")]
 
 
+_STABLE_BASES = {"USDC", "FDUSD", "TUSD", "USDP", "DAI", "BUSD", "AEUR", "EUR", "USD1", "XUSD", "PYUSD", "UST", "USDE", "EURI"}
+_volume_cache: dict = {}
+VOLUME_TTL = 3600
+
+
+def volume_ranking(market: str) -> list[str]:
+    """Pares em USDT do mercado (futuros ou spot) do maior para o menor volume negociado em 24 h, sem moedas estáveis.
+    Guarda o resultado por 1 hora."""
+    hit = _volume_cache.get(market)
+    if hit and time.time() - hit[0] < VOLUME_TTL:
+        return hit[1]
+    rows: list[tuple[str, float]] = []
+    try:
+        if market == "futures":
+            rows = [(r["symbol"], float(r["quoteVolume"])) for r in _get(BINANCE_FUT + "/fapi/v1/ticker/24hr")]
+        else:
+            for base in BINANCE_SPOT:
+                try:
+                    rows = [(r["symbol"], float(r["quoteVolume"])) for r in _get(base + "/api/v3/ticker/24hr", {"type": "MINI"})]
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
+    except Exception:  # noqa: BLE001
+        rows = []
+    if not rows:  # reserva: OKX
+        try:
+            data = _get(OKX + "/api/v5/market/tickers", {"instType": "SWAP" if market == "futures" else "SPOT"})["data"]
+            for d in data:
+                if "-USDT" not in d["instId"]:
+                    continue
+                vol = float(d.get("volCcy24h") or 0) * (float(d.get("last") or 0) if market == "futures" else 1)
+                rows.append((d["instId"].split("-")[0] + "USDT", vol))
+        except Exception:  # noqa: BLE001
+            rows = []
+    ranked = [s for s, v in sorted(rows, key=lambda r: -r[1])
+              if v > 0 and s.endswith("USDT") and s.isalnum() and s.removesuffix("USDT") not in _STABLE_BASES]
+    if ranked:
+        _volume_cache[market] = (time.time(), ranked)
+    return ranked or (hit[1] if hit else [])
+
+
 def get_usdt_brl() -> float | None:
     """Cotação do dólar cripto em reais (USDT/BRL), para exibir a banca em R$."""
     try:

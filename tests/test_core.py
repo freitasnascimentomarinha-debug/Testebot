@@ -736,34 +736,48 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
     paper.set_wallet_mode("única")
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
     profile = PROFILES["day"]
-    cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_symbols": ["ETHUSDT", "SOLUSDT", "XRPUSDT"], "scan_max_entries": 2,
+    cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_count": 20, "scan_pool": 40, "scan_max_entries": 2,
            "candles": 400}
     asked, fetched = [], []
 
+    limits = []
+
     def klines(sym, interval, limit=500, market="futures"):
         fetched.append(sym)
-        raw = make_df(max(limit, 300), trend=0.3, seed=120)   # cenário sintético com sinal de venda e preços positivos
+        if interval == "15m" and limit > 5 and sym != "_t":
+            limits.append(limit)
+        raw = make_df(max(limit, 300), trend=0.2, seed=8)   # cenário sintético com sinal de venda e preços positivos
         raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("15min") - pd.Timedelta(minutes=15), periods=len(raw), freq="15min")
         raw.attrs["source"] = "teste"
         return raw.tail(limit).reset_index(drop=True)
 
-    ticker = lambda sym, market="futures": __import__("core.data", fromlist=["Ticker"]).Ticker(sym, float(klines(sym, "15m", 400).close.iloc[-1]), 0, 0, 0, 0, "t")  # noqa: E731
+    ticker = lambda sym, market="futures": __import__("core.data", fromlist=["Ticker"]).Ticker(  # noqa: E731
+        sym, float(make_df(scanner.WINDOW + scanner.WARMUP + 1, trend=0.2, seed=8).close.iloc[-1]), 0, 0, 0, 0, "t")
     monkeypatch.setattr(ai, "ask_ai", lambda ctx, **kw: asked.append(ctx["bot"]["ativo"]) or ai.AIDecision(
         decision="HOLD", reasoning="Resumo simples.", source="ia", model="m", advice={"resumo": "Resumo simples.", "dica": "Dica."}))
     monkeypatch.setattr(scanner.engine, "pick_bot", lambda *a, **k: (scanner.engine.personalities.get("esp_15m_ema_3x1"), {}))
     monkeypatch.setattr(scanner.engine, "get_funding_rate", lambda s: None)
-    assert scanner.symbols_for(cfg) == ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
-    assert scanner.symbols_for({**cfg, "scan_on": False}) == ["BTCUSDT"]
+    ranked = ["BTCUSDT"] + [f"C{i:02d}USDT" for i in range(60)]                # ranking por volume (o primeiro é o mais negociado)
+    pool = lambda market: ranked  # noqa: E731
+    import random
+    sample = scanner.symbols_for(cfg, "futures", pool, random.Random(1))
+    assert sample[0] == "BTCUSDT" and len(sample) == 20 and len(set(sample)) == 20                # a da tela + 19 sorteadas, sem repetir
+    assert set(sample) <= set(ranked[:40])                                                          # só entre as 40 de maior volume
+    assert scanner.symbols_for(cfg, "futures", pool, random.Random(2)) != sample                    # sorteio: muda a cada varredura
+    assert len(scanner.symbols_for({**cfg, "scan_count": 5}, "futures", pool, random.Random(1))) == 20   # mínimo de 20
+    assert scanner.symbols_for(cfg, "futures", pool, random.Random(1), extra=["C59USDT"])[-1] == "C59USDT"  # posição aberta entra sempre
+    assert scanner.symbols_for({**cfg, "scan_on": False}, "futures", pool) == ["BTCUSDT"]
 
-    rep = scanner.run(profile, cfg, "chave", klines=klines, ticker=ticker)
-    assert rep.scanned == 4 and {"BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"} <= set(fetched)
+    rep = scanner.run(profile, cfg, "chave", klines=klines, ticker=ticker, pool=pool, rng=random.Random(3))
+    assert rep.scanned == 20 and len(set(fetched)) >= 20 and "BTCUSDT" in fetched
+    assert all(n == scanner.WINDOW + scanner.WARMUP + 1 for n in limits)                      # 120 candles fechados + aquecimento + o em formação
     assert len(asked) <= 1                                     # no máximo uma consulta à IA por varredura (só para a melhor oportunidade)
     assert 1 <= len(rep.executed) <= 2 and rep.viewed is not None             # o cenário sintético tem sinal: o bot opera
     opened = {p["symbol"] for p in paper.get_account(paper.SHARED_ACCOUNT)["positions"]}
     assert opened == {e["symbol"] for e in rep.executed if e["action"] in ("BUY", "SELL")}
     # nova varredura no mesmo cenário: não abre outra posição nos ativos que já tem (nada de comprar e vender o mesmo ativo)
     before = len(paper.get_account(paper.SHARED_ACCOUNT)["positions"])
-    rep2 = scanner.run(profile, cfg, None, klines=klines, ticker=ticker)
+    rep2 = scanner.run(profile, cfg, None, klines=klines, ticker=ticker, pool=pool, rng=random.Random(4))
     positions = paper.get_account(paper.SHARED_ACCOUNT)["positions"]
     assert len(positions) <= before + 2 and len({(p["symbol"], p["side"]) for p in positions}) == len(positions)
     for sym in {p["symbol"] for p in positions}:
@@ -1419,3 +1433,51 @@ def test_each_market_page_only_shows_and_syncs_its_own_positions(monkeypatch):
     from core.ui import realtime_lines
 
     assert realtime_lines("swing", {"symbol": "BTCUSDT", "sr_on": False, "pivots_on": False, "fib_on": False}) == []
+
+
+def test_volume_ranking_orders_by_volume_and_skips_stables(monkeypatch):
+    from core import data
+
+    rows = [{"symbol": "ETHUSDT", "quoteVolume": "500"}, {"symbol": "BTCUSDT", "quoteVolume": "900"}, {"symbol": "USDCUSDT", "quoteVolume": "9999"},
+            {"symbol": "BTCBUSD", "quoteVolume": "800"}, {"symbol": "DEADUSDT", "quoteVolume": "0"}, {"symbol": "SOLUSDT", "quoteVolume": "300"}]
+    calls = []
+    monkeypatch.setattr(data, "_get", lambda url, params=None: calls.append(url) or rows)
+    data._volume_cache.clear()
+    assert data.volume_ranking("futures") == ["BTCUSDT", "ETHUSDT", "SOLUSDT"] and "fapi" in calls[0]
+    assert data.volume_ranking("futures") == ["BTCUSDT", "ETHUSDT", "SOLUSDT"] and len(calls) == 1   # segunda chamada vem do cache
+    assert data.volume_ranking("spot") == ["BTCUSDT", "ETHUSDT", "SOLUSDT"] and "api/v3" in calls[1]
+    data._volume_cache.clear()
+
+
+def test_ai_reads_all_indicators_even_when_hidden_on_chart(monkeypatch):
+    from core import ai, engine
+
+    monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "auto_bot": False, "personality": "esp_15m_ema_3x1"}
+    for flag in [k for k in cfg if k.endswith("_on")]:
+        cfg[flag] = False                                                   # nenhum indicador ligado no gráfico
+    df = ind.compute(make_df(400, trend=0.4, seed=21), cfg)
+    seen = {}
+    monkeypatch.setattr(ai, "ask_ai", lambda ctx, **kw: seen.update(ctx) or ai.AIDecision(decision="HOLD", source="ia", model="m"))
+    engine.run_analysis(PROFILES["day"], cfg, df, float(df.close.iloc[-1]), "chave")
+    now = seen["indicadores_atuais"]
+    for key in ("rsi", "macd", "bb_up", "adx", "stoch_k", "stoch_d", "vwap", "obv", "ichi_tenkan", "ichi_span_a", "st_line"):
+        assert key in now and now[key] is not None, key
+    assert {"pivots", "fibonacci"} <= set(seen["plano_por_regras"]["levels"])
+    assert seen["candles_recentes"]["colunas"][:3] == ["time", "open", "high"] and len(seen["candles_recentes"]["linhas"]) == 120
+
+
+def test_position_details_margin_fees_stop_and_target():
+    from core.ui import position_details
+
+    out = paper.place_order(paper.SHARED_ACCOUNT, symbol="Z", market="futures", side="BUY", qty=1, price=100.0, stop_loss=95.0, take_profit=110.0,
+                            leverage=10, fee_pct=0.1)
+    pos = out["position"]
+    d = position_details(pos, 100.0)
+    assert d["margin"] == pytest.approx(10.0) and d["liquidation"] and d["liquidation"] < 100
+    assert d["fees_open"] == pytest.approx(0.1) and d["fees_close"] == pytest.approx(0.1)
+    assert d["loss_sl"] == pytest.approx(-5 - 0.1 - 0.095)              # −5 do preço, taxa de entrada e taxa de saída no stop
+    assert d["gain_tp"] == pytest.approx(10 - 0.1 - 0.11)               # +10 do preço menos as taxas
+    assert position_details({**pos, "stop_loss": None, "take_profit": None}, 100.0)["loss_sl"] is None

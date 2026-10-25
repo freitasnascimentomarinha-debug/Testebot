@@ -89,7 +89,7 @@ def skill_momentum(df: pd.DataFrame, cfg: dict) -> SkillResult:
         div, v = " Divergência baixista.", v - 0.3
     elif w["close"].iloc[-1] <= w["close"].min() * 1.001 and rsi_now > w["rsi"].min() + 5:
         div, v = " Divergência altista.", v + 0.3
-    stoch = f" Estocástico %K {r.stoch_k:.0f}." if cfg.get("stoch_on") and not np.isnan(r.stoch_k) else ""
+    stoch = f" Estocástico %K {r.stoch_k:.0f}." if not np.isnan(r.stoch_k) else ""
     return SkillResult("momentum", "Momentum (RSI)", _clip(v), f"RSI {rsi_now:.1f} ({txt}).{div}{stoch}")
 
 
@@ -348,10 +348,8 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
     ``live=True`` descarta o último candle (ainda em formação)."""
     data = df.iloc[:-1] if live and len(df) > 50 else df
     levels = ind.support_resistance(data)
-    if cfg.get("pivots_on"):
-        levels["pivots"] = ind.pivot_points(data)
-    if cfg.get("fib_on"):
-        levels["fibonacci"] = ind.fibonacci(data)
+    levels["pivots"] = ind.pivot_points(data)      # a IA lê pivôs e Fibonacci mesmo com eles desligados no gráfico
+    levels["fibonacci"] = ind.fibonacci(data)
 
     weights = (personality or {}).get("skills") or profile.skill_weights
     results = []
@@ -436,9 +434,11 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
     return plan
 
 
-def market_snapshot(df: pd.DataFrame, n: int = 60) -> list[dict]:
-    """Candles recentes resumidos para a IA (com indicadores principais)."""
+def market_snapshot(df: pd.DataFrame, n: int = 60) -> dict:
+    """Últimos ``n`` candles fechados para a IA, em formato compacto (colunas + linhas, para gastar menos tokens), com os
+    indicadores principais — estejam eles ligados no gráfico ou não."""
     cols = ["time", "open", "high", "low", "close", "volume", "ema_fast", "ema_slow", "rsi", "macd_hist", "atr"]
     tail = df[cols].tail(n).copy()
-    tail["time"] = tail["time"].dt.strftime("%Y-%m-%d %H:%M")
-    return [{k: (round(v, 6) if isinstance(v, float) else v) for k, v in row.items()} for row in tail.to_dict("records")]
+    tail["time"] = tail["time"].dt.strftime("%m-%d %H:%M")
+    rows = [[(round(v, 6) if isinstance(v, float) else v) for v in row] for row in tail.itertuples(index=False, name=None)]
+    return {"colunas": cols, "linhas": rows}
