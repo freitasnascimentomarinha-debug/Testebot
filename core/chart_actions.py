@@ -83,3 +83,28 @@ def handle(profile: BotProfile, cfg: dict, ev: dict, price: float | None, atr: f
         broker.cancel_order(oid)
         return True, "Ordem limite cancelada."
     return False, ""
+
+
+def handle_card(profile: BotProfile, ev: dict, price_for) -> tuple[bool, str]:
+    """Ações dos cards das posições abertas (atualizar stop/alvo, encerrar): valida como as do gráfico, em qualquer ativo do mercado."""
+    if not isinstance(ev, dict) or ev.get("kind") not in ("protect", "close"):
+        return False, ""
+    if (why := execution.orders_problem()):
+        return False, why
+    broker = get_broker(profile.key)
+    pos = next((p for p in broker.account()["positions"] if p["id"] == str(ev.get("id")) and p.get("market") == profile.market), None)
+    if pos is None:
+        return False, "Posição não encontrada."
+    if ev["kind"] == "protect":
+        sl, tp = ev.get("stop_loss"), ev.get("take_profit")
+        sl, tp = (_num(sl) if sl else None), (_num(tp) if tp else None)
+        long = pos["side"] == "BUY"
+        if (sl and (sl >= pos["entry"] if long else sl <= pos["entry"])) or (tp and (tp <= pos["entry"] if long else tp >= pos["entry"])):
+            return False, "Stop ou alvo do lado errado da entrada: não alterado."
+        broker.update_protection(pos["id"], sl, tp)
+        return True, "Stop e alvo atualizados."
+    price = price_for(pos["symbol"])
+    if not price:
+        return False, "Sem cotação agora para encerrar a posição."
+    tr = broker.close_position(pos["id"], price, "Manual")
+    return True, f"Posição encerrada: {tr['pnl']:+.2f} USDT."

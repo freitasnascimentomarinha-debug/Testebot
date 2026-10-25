@@ -1867,18 +1867,23 @@ def test_position_summary_spot_and_futures_numbers():
     assert vf["target"]["per_coin"] == pytest.approx(50.0 * 1) and vf["stop"]["per_coin"] == pytest.approx(-20.0)       # venda ganha quando cai
 
 
-def test_open_position_cards_spot_has_no_margin_and_shows_who_entered(monkeypatch):
+def test_open_position_cards_component_and_actions(monkeypatch):
+    """Os cards são um componente em HTML/CSS/JS: a página abre com posições de spot e futuros e os dados trazem o necessário."""
+    from pathlib import Path
+
     from streamlit.testing.v1 import AppTest
 
+    from core import chart_actions, positions_view as pv
     from core.broker import get_broker
 
     _offline_market(monkeypatch)
     paper.set_wallet_mode("única")
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
-    get_broker("swing").place_order(symbol="BTCUSDT", market="spot", side="BUY", qty=0.5, price=100.0, stop_loss=95.0, take_profit=112.0, leverage=1,
-                                    fee_pct=0.1, source="ia", personality={"id": "x", "name": "Rompimento 4h"}, margin_mode="Isolada")
-    get_broker("day").place_order(symbol="BTCUSDT", market="futures", side="BUY", qty=1, price=100.0, stop_loss=95.0, take_profit=112.0, leverage=5,
-                                  fee_pct=0.05, source="ia", personality={"id": "y", "name": "Tendência 15m"}, margin_mode="Isolada")
+    spot = get_broker("swing").place_order(symbol="BTCUSDT", market="spot", side="BUY", qty=0.5, price=100.0, stop_loss=95.0, take_profit=112.0,
+                                           leverage=1, fee_pct=0.1, source="ia", personality={"id": "x", "name": "Rompimento 4h"},
+                                           margin_mode="Isolada", note="rompeu a máxima")["position"]
+    fut = get_broker("day").place_order(symbol="BTCUSDT", market="futures", side="BUY", qty=1, price=100.0, stop_loss=95.0, take_profit=112.0, leverage=5,
+                                        fee_pct=0.05, source="ia", personality={"id": "y", "name": "Tendência 15m"}, margin_mode="Isolada")["position"]
 
     def page(bot):
         import streamlit as st
@@ -1888,22 +1893,25 @@ def test_open_position_cards_spot_has_no_margin_and_shows_who_entered(monkeypatc
 
         render_bot_page(bot)
 
-    def card_text(at):
-        labels = [m.label for m in at.metric]
-        return labels, " ".join(m.value for m in at.markdown)
-
-    spot = AppTest.from_function(page, args=("swing",), default_timeout=120).run()
-    assert not spot.exception, [e.value for e in spot.exception]
-    labels, md = card_text(spot)
-    for want in ("Valor investido", "Moedas compradas", "Preço de entrada", "Preço agora", "Resultado agora (líquido)", "Se bater o alvo", "Se bater o stop"):
-        assert want in labels, want
-    assert any("Venda esperada" in l for l in labels) and "Rompimento 4h" in md and "Spot" in md
-    for gone in ("Margem", "Alavancagem", "Preço de liquidação", "Funding pago"):
-        assert gone not in labels, gone
-    assert "Isolada" not in " ".join(str(m.value) for m in spot.metric) + md
-    fut = AppTest.from_function(page, args=("day",), default_timeout=120).run()
-    assert not fut.exception, [e.value for e in fut.exception]
-    labels, md = card_text(fut)
-    for want in ("Valor da posição", "Margem", "Alavancagem", "Preço de liquidação", "Funding pago"):
-        assert want in labels, want
-    assert "Tendência 15m" in md and "Futuros" in md
+    for bot in ("swing", "day"):
+        at = AppTest.from_function(page, args=(bot,), default_timeout=120).run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert "Nenhuma posição aberta." not in " ".join(c.value for c in at.caption)      # há card: o componente recebe os dados
+    cs, cf = pv.card_data(spot, 104.0), pv.card_data(fut, 104.0)
+    assert cs["spot"] and cs["who"] == "🤖 Rompimento 4h" and cs["id"] == spot["id"] and cs["symbol"] == "BTCUSDT" and cs["note"] == "rompeu a máxima"
+    assert cs["target"]["net"] > 0 > cs["stop"]["net"] and cs["opened_at"].endswith("UTC") and cs["cost"] == pytest.approx(50.0)
+    assert not cf["spot"] and cf["who"] == "🤖 Tendência 15m" and cf["margin"] == pytest.approx(20.0) and cf["liquidation"]
+    js = Path(__file__).resolve().parent.parent.joinpath("core", "position_cards.js").read_text(encoding="utf-8")
+    for needle in ("Valor investido", "Moedas compradas", "Venda esperada (alvo)", "Vender tudo agora", "Preço de liquidação", "Alavancagem", "setTriggerValue"):
+        assert needle in js, needle
+    assert js.index("if (c.spot)") < js.index("Margem") < js.index("Alavancagem")         # margem, alavancagem e liquidação só no ramo de futuros
+    prof = PROFILES["swing"]
+    price_for = lambda sym: 104.0  # noqa: E731
+    assert chart_actions.handle_card(prof, {"kind": "protect", "id": fut["id"], "stop_loss": 96, "take_profit": 112}, price_for)[0] is False    # é de futuros
+    assert chart_actions.handle_card(prof, {"kind": "protect", "id": spot["id"], "stop_loss": 106, "take_profit": 112}, price_for)[0] is False  # stop acima da entrada
+    assert chart_actions.handle_card(prof, {"kind": "protect", "id": spot["id"], "stop_loss": 97, "take_profit": 115}, price_for) == (True, "Stop e alvo atualizados.")
+    assert chart_actions.handle_card(prof, {"kind": "protect", "id": spot["id"], "stop_loss": None, "take_profit": None}, price_for)[0]       # tirar stop/alvo
+    assert chart_actions.handle_card(prof, {"kind": "outra", "id": spot["id"]}, price_for) == (False, "") and chart_actions.handle_card(prof, "x", price_for)[0] is False
+    ok, msg = chart_actions.handle_card(prof, {"kind": "close", "id": spot["id"]}, price_for)
+    assert ok and "encerrada" in msg and chart_actions.handle_card(prof, {"kind": "close", "id": spot["id"]}, price_for)[0] is False
+    assert chart_actions.handle_card(prof, {"kind": "close", "id": fut["id"]}, lambda s: None)[0] is False                                       # outro mercado

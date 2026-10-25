@@ -57,3 +57,11 @@ def summarize(p: dict, price_now: float, now: datetime | None = None) -> dict:
             "gross": paper.pnl_of(p, price_now), "fees_open": fees_open, "fees_close": value_now * fee, "stop": stop, "target": target, "rr": rr,
             "margin": p["margin"], "leverage": p["leverage"], "margin_mode": p.get("margin_mode"), "liquidation": p.get("liquidation"),
             "funding": p.get("funding_paid", 0.0), "opened_ago": _ago(p.get("opened"), now), "who": who_opened(p)}
+
+
+def card_data(p: dict, price_now: float, now: datetime | None = None) -> dict:
+    """Tudo o que o card (core/position_cards.js) mostra, em tipos simples (JSON)."""
+    v = summarize(p, price_now, now)
+    opened = str(p.get("opened") or "")
+    return {**v, "id": p["id"], "symbol": p["symbol"], "side": p["side"], "note": (p.get("note") or "")[:200],
+            "opened_at": f"{opened[8:10]}/{opened[5:7]} {opened[11:16]} UTC" if len(opened) >= 16 else ""}
