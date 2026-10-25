@@ -136,6 +136,7 @@ Testes: `python -m pytest -q tests`
    ```toml
    APP_PASSWORD = "sua-senha-forte"
    OPENROUTER_API_KEY = "sk-or-v1-..."   # com a chave aqui, o campo da barra lateral some
+   AI_MODEL = "deepseek/deepseek-v4-flash"   # opcional: modelo da IA no OpenRouter (também vale como variável de ambiente)
    # opção GitHub:
    GITHUB_DATA_REPO = "usuario/repositorio"
    GITHUB_TOKEN = "github_pat_..."

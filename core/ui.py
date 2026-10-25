@@ -14,7 +14,7 @@ from core.data import MarketDataError, get_funding_rate, get_klines, get_ticker,
 from core.profiles import PROFILES, SYMBOLS, BotProfile, style_of
 from core import indicators as ind
 from core.realtime import chart_height, realtime_chart_html
-from core.settings import DEFAULT_MODEL, FORCED as FORCED_SETTINGS, default_settings, load_settings, save_settings
+from core.settings import DEFAULT_MODEL, forced as forced_settings, default_settings, load_settings, save_settings
 from core.storage import get_secret, load_json
 
 # Seletor rápido de indicadores → chaves de configuração (as mesmas da aba Indicadores)
@@ -97,7 +97,7 @@ def init_settings(profile: BotProfile) -> dict:
         st.session_state[_k(bot, name)] = value
     for name, value in stored.items():
         st.session_state.setdefault(_k(bot, name), value)
-    for name, value in FORCED_SETTINGS.items():   # não são mais escolhas do usuário (vale também para sessões abertas antes)
+    for name, value in forced_settings().items():   # não são mais escolhas do usuário (vale também para sessões abertas antes)
         st.session_state[_k(bot, name)] = value
     cfg = {name: st.session_state[_k(bot, name)] for name in stored}
     if cfg != stored:
@@ -738,7 +738,7 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
             st.text_input("Chave da OpenRouter (somente nesta sessão)", type="password", key=f"{bot}__or_key_w",
                           value=st.session_state.get("_or_key", ""), on_change=_save_key,
                           help="Para não digitar sempre, defina OPENROUTER_API_KEY nos Secrets do Streamlit.")
-        st.caption("A IA escolhe o modelo sozinha, confirma ou veta as entradas do bot e decide se encerra posições abertas. "
+        st.caption("O modelo da IA vem do segredo `AI_MODEL` (Secrets). A IA confirma ou veta as entradas do bot e decide se encerra posições abertas. "
                    "Stop e alvo continuam valendo, e sem sinal das regras ela nunca abre operação sozinha.")
         c = st.columns(2)
         c[0].selectbox("Personalidade da IA (tom das explicações)", list(ai_mod.AI_PERSONAS), key=k("ai_persona"),
