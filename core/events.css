@@ -1,0 +1,14 @@
+.ev { font-family: var(--st-font, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); color: var(--st-text-color, #d1d4dc); display: flex; flex-direction: column; gap: 12px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; } .chips button { border: 1px solid #2a3042; background: #181d2b; color: #b8bdc9; border-radius: 999px; padding: 6px 13px; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.chips button.on { background: #2a3042; color: #fff; border-color: #5a6385; } .chips button:hover { color: #fff; }
+h2 { margin: 8px 0 0; font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; color: #8a8f98; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.card { background: #141824; border: 1px solid #262b3a; border-radius: 12px; padding: 11px 14px; display: flex; flex-direction: column; gap: 8px; } .card.ia { border-color: rgba(66,165,245,.45); }
+.card header { display: flex; gap: 6px; flex-wrap: wrap; } .card h3 { margin: 0; font-size: .95rem; line-height: 1.3; } .card h3 a { color: inherit; text-decoration: none; } .card h3 a:hover { text-decoration: underline; }
+.chip { font-size: .68rem; padding: 2px 9px; border-radius: 999px; background: #1e2433; border: 1px solid #2a3042; color: #b8bdc9; }
+.chip.ai { background: rgba(66,165,245,.12); border-color: rgba(66,165,245,.4); color: #90caf9; }
+.c-macro { color: #ffb74d; } .c-politica { color: #ce93d8; } .c-commodities { color: #a1887f; } .c-cripto { color: #f7931a; }
+.opts { display: flex; flex-direction: column; gap: 5px; } .o { display: grid; grid-template-columns: minmax(80px, 1.2fr) 1.4fr 44px; gap: 8px; align-items: center; font-size: .8rem; }
+.o .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .o .b { height: 7px; background: #1b2030; border-radius: 4px; overflow: hidden; } .o .b i { display: block; height: 100%; background: #26a69a; border-radius: 4px; } .o b { text-align: right; font-variant-numeric: tabular-nums; }
+.card footer { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: .7rem; color: #8a8f98; border-top: 1px dashed #2a3042; padding-top: 7px; }
+.foot, .empty { margin: 0; font-size: .76rem; color: #8a8f98; }

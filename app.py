@@ -72,6 +72,7 @@ _acct_pages = ([st.Page("views/account.py", title="Minha conta", icon="👤", ur
 pages = {
     **({"Conta": _acct_pages} if _acct_pages else {}),
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
+                    st.Page("views/events.py", title="Eventos", icon="📅", url_path="eventos"),
                     st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
                     st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
                     st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
