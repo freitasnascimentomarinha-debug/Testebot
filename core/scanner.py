@@ -92,7 +92,7 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
                 htf_raw, mtf_raw = engine.htf_frames(klines, cfg_s, len(raw), profile.market)
             # indicadores calculados com o aquecimento; a análise olha os últimos 120 candles fechados (+ o candle em formação)
             df = engine.prepare(raw, cfg_s, htf_raw, mtf_raw).tail(WINDOW + 1).reset_index(drop=True)
-            res = engine.run_analysis(profile, cfg_s, df, price, None, log=False)   # só regras: não gasta IA
+            res = _best_signal(profile, cfg_s, df, price)   # só regras: não gasta IA
         except Exception as exc:  # noqa: BLE001 - um ativo sem dados não derruba a varredura
             report.notes.append(f"{sym}: sem dados ({str(exc)[:60]})")
             continue
@@ -103,7 +103,7 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
             if execute:
                 _run_close(profile, cfg_s, res, price, report)
         elif res.decision.decision in ("BUY", "SELL") and res.check and res.check.allowed:
-            found.append((abs(res.plan["score"]), sym, cfg_s, df, price, res))
+            found.append((abs(res.plan["score"]), sym, cfg_s, df, price, res))  # res.personality = bot que deu o sinal
         if progress:
             progress(k / len(symbols), sym)
 
@@ -115,7 +115,8 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
         # A IA só entra com a melhor oportunidade (ou em todas, se ela puder confirmar/vetar a entrada); as demais são
         # refeitas só com regras porque o saldo disponível mudou depois da ordem anterior.
         use_ai = bool(api_key) and (idx == 0 or cfg.get("ai_intervene"))
-        res = engine.run_analysis(profile, cfg_s, df, price, api_key if use_ai else None, log=False)
+        res = engine.run_analysis(profile, cfg_s, df, price, api_key if use_ai else None, log=False,
+                                  personality_id=(res.personality or {}).get("id"))
         if sym == symbols[0] or report.viewed is None:
             report.viewed = res
         if res.decision.decision not in ("BUY", "SELL") or not (res.check and res.check.allowed):
@@ -133,6 +134,22 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
     if report.viewed is not None and report.viewed.decision.decision == "HOLD":
         engine.log_decision(profile.key, report.viewed)
     return report
+
+
+def _best_signal(profile: BotProfile, cfg_s: dict, df, price: float, top: int = 3) -> engine.AnalysisResult:
+    """Lê o contexto da moeda (tendência, força, volume, tempo maior…) e aplica, em ordem, os melhores bots do ranking para esse
+    contexto até um deles dar sinal. Sem sinal de nenhum, devolve a leitura do melhor bot (ou de espera, se nenhum tem vantagem)."""
+    try:
+        bots, _ = engine.pick_bots(profile, cfg_s, df, top=top)
+    except Exception:  # noqa: BLE001 - a escolha automática nunca derruba a varredura
+        bots = []
+    first = None
+    for bot in bots:
+        res = engine.run_analysis(profile, cfg_s, df, price, None, log=False, personality_id=bot["id"])
+        first = first or res
+        if res.decision.decision in ("BUY", "SELL", "CLOSE"):
+            return res
+    return first or engine.run_analysis(profile, cfg_s, df, price, None, log=False)
 
 
 def _run_close(profile, cfg_s, res, price, report: ScanReport) -> None:
