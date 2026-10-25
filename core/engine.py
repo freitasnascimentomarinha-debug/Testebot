@@ -49,11 +49,12 @@ def ensure_ranking(profile: BotProfile, cfg: dict, progress=None) -> bool:
     return ranking.refresh_if_stale(profile.market, cfg["interval"], progress=progress)
 
 
-def pick_bot(profile: BotProfile, cfg: dict, df: pd.DataFrame) -> tuple[dict | None, dict]:
-    """Bot mais recomendado para o contexto do gráfico agora, no tempo gráfico atual, segundo o ranking semanal.
+def pick_bots(profile: BotProfile, cfg: dict, df: pd.DataFrame, top: int = 3) -> tuple[list[dict], dict]:
+    """Os bots mais recomendados para o contexto do gráfico agora (tendência, força, volume, tempo maior…), do melhor para o pior,
+    segundo o ranking semanal.
 
     Só entram bots treinados neste mercado e tempo gráfico, sem selo fraco e com vantagem comprovada (R médio positivo) no
-    contexto atual. Devolve ``(bot, info)``; ``bot`` é None quando nenhum tem vantagem — então o melhor é aguardar."""
+    contexto atual. A lista vem vazia quando nenhum tem vantagem — então o melhor é aguardar."""
     sc = advisor.scenario(df, cfg)
     vies = advisor.bias(sc)
     ok_ids = {p["id"] for p in personalities.allowed(profile.market, cfg["interval"])}
@@ -61,18 +62,26 @@ def pick_bot(profile: BotProfile, cfg: dict, df: pd.DataFrame) -> tuple[dict | N
     good = [c for c in cands if c["mesmo_tempo"] and c["id"] in ok_ids and (c["contexto_r"] or 0) > 0]
     good.sort(key=lambda c: -c["pontuacao"])
     info = {"contexto": sc["contexto"], "contexto_nome": sc["contexto_nome"], "candidatos": [c["id"] for c in good]}
-    return (personalities.get(good[0]["id"]) if good else None), info
+    return [personalities.get(c["id"]) for c in good[:top]], info
+
+
+def pick_bot(profile: BotProfile, cfg: dict, df: pd.DataFrame) -> tuple[dict | None, dict]:
+    """O melhor bot para o contexto do gráfico agora (``None`` quando nenhum tem vantagem comprovada)."""
+    bots, info = pick_bots(profile, cfg, df, top=1)
+    return (bots[0] if bots else None), info
 
 
 def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
-                 api_key: str | None, log: bool = True) -> AnalysisResult:
+                 api_key: str | None, log: bool = True, personality_id: str | None = None) -> AnalysisResult:
     symbol, interval = cfg["symbol"], cfg["interval"]
     broker = get_broker(profile.key)
     acct = broker.account()
     st_ = broker.stats({symbol: price})
     personality = personalities.get(cfg.get("personality")) or personalities.get(personalities.DEFAULT_BY_BOT.get(profile.key))
     waiting = ""
-    if cfg.get("auto_bot", True):  # fechamento do candle: o bot mais recomendado para o contexto assume
+    if personality_id and personalities.get(personality_id):  # bot já escolhido pela varredura para este contexto
+        personality = personalities.get(personality_id)
+    elif cfg.get("auto_bot", True):  # fechamento do candle: o bot mais recomendado para o contexto assume
         try:
             best, pinfo = pick_bot(profile, cfg, df)
         except Exception:  # noqa: BLE001 - a escolha automática nunca derruba a análise

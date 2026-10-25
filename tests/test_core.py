@@ -755,7 +755,7 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
         sym, float(make_df(scanner.WINDOW + scanner.WARMUP + 1, trend=0.2, seed=8).close.iloc[-1]), 0, 0, 0, 0, "t")
     monkeypatch.setattr(ai, "ask_ai", lambda ctx, **kw: asked.append(ctx["bot"]["ativo"]) or ai.AIDecision(
         decision="HOLD", reasoning="Resumo simples.", source="ia", model="m", advice={"resumo": "Resumo simples.", "dica": "Dica."}))
-    monkeypatch.setattr(scanner.engine, "pick_bot", lambda *a, **k: (scanner.engine.personalities.get("esp_15m_ema_3x1"), {}))
+    monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: ([scanner.engine.personalities.get("esp_15m_ema_3x1")], {}))
     monkeypatch.setattr(scanner.engine, "get_funding_rate", lambda s: None)
     ranked = ["BTCUSDT"] + [f"C{i:02d}USDT" for i in range(60)]                # ranking por volume (o primeiro é o mais negociado)
     pool = lambda market: ranked  # noqa: E731
@@ -1481,3 +1481,33 @@ def test_position_details_margin_fees_stop_and_target():
     assert d["loss_sl"] == pytest.approx(-5 - 0.1 - 0.095)              # −5 do preço, taxa de entrada e taxa de saída no stop
     assert d["gain_tp"] == pytest.approx(10 - 0.1 - 0.11)               # +10 do preço menos as taxas
     assert position_details({**pos, "stop_loss": None, "take_profit": None}, 100.0)["loss_sl"] is None
+
+
+def test_scan_tries_the_best_bots_for_the_context_until_one_signals(monkeypatch):
+    """O sistema não fica preso a uma personalidade: lê o contexto da moeda e testa, em ordem, os melhores bots para ele."""
+    from core import scanner
+    from core import personalities as Pm
+
+    monkeypatch.setattr(scanner.engine, "get_funding_rate", lambda s: None)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    profile = PROFILES["day"]
+    cfg = {**default_settings(profile), "symbol": "X", "interval": "15m"}
+    df = ind.compute(make_df(331, trend=0.2, seed=8), cfg).tail(121).reset_index(drop=True)
+    price = float(df.close.iloc[-1])
+    mute = [p for p in Pm.allowed("futures", "15m")
+            if analyze(df, cfg, profile, p).direction == "HOLD"]
+    signals = analyze(df, cfg, profile, Pm.get("esp_15m_ema_3x1")).direction in ("BUY", "SELL")
+    assert mute and signals
+    order = [mute[0], Pm.get("esp_15m_ema_3x1")]                      # o 1º bot do ranking não dá sinal; o 2º dá
+    monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: (order, {}))
+    res = scanner._best_signal(profile, cfg, df, price)
+    assert res.decision.decision in ("BUY", "SELL") and res.personality["id"] == "esp_15m_ema_3x1"
+    # nenhum bot dá sinal: devolve a leitura do melhor do ranking, sem abrir nada
+    monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: (mute[:2], {}))
+    res = scanner._best_signal(profile, cfg, df, price)
+    assert res.decision.decision == "HOLD" and res.personality["id"] == mute[0]["id"]
+    # nenhum bot com vantagem no contexto: espera
+    monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: ([], {"contexto_nome": "Lateralidade"}))
+    monkeypatch.setattr(scanner.engine, "pick_bot", lambda *a, **k: (None, {"contexto_nome": "Lateralidade"}))
+    assert scanner._best_signal(profile, cfg, df, price).decision.decision == "HOLD"
