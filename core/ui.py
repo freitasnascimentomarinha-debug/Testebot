@@ -754,15 +754,19 @@ def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResul
 
         persona = personalities.get((result.personality or {}).get("id"))
         weights = (persona or {}).get("skills") or profile.skill_weights
+        skills = result.plan.get("skills")  # a ordem de um plano condicional confirmado não passa pelas habilidades
+        if not skills:
+            return
         with st.expander(f"Habilidades da personalidade {persona['name'] if persona else ''} (votos que alimentaram a decisão)"):
             st.dataframe(pd.DataFrame([{"Habilidade": sk["name"], "Voto": round(sk["vote"], 2),
                                         "Peso": weights.get(sk["key"], 1.0), "Leitura": sk["detail"]}
-                                       for sk in result.plan["skills"]]),
+                                       for sk in skills]),
                          hide_index=True, column_config={"Voto": st.column_config.ProgressColumn(
                              min_value=-1, max_value=1, format="%.2f")})
-            lv = result.plan["levels"]
-            st.caption("Suportes: " + ", ".join(fmt_price(x["price"]) for x in lv["supports"]) +
-                       " · Resistências: " + ", ".join(fmt_price(x["price"]) for x in lv["resistances"]))
+            lv = result.plan.get("levels")
+            if lv:
+                st.caption("Suportes: " + ", ".join(fmt_price(x["price"]) for x in lv["supports"]) +
+                           " · Resistências: " + ", ".join(fmt_price(x["price"]) for x in lv["resistances"]))
 
 
 def armed_panel(profile: BotProfile, cfg: dict) -> None:

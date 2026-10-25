@@ -1263,3 +1263,33 @@ def test_queue_setting_after_widgets_does_not_raise(monkeypatch):
     from core.settings import load_settings
 
     assert load_settings("day")["interval"] == "1h"
+
+
+def test_page_renders_result_of_confirmed_conditional_plan(monkeypatch):
+    """O resultado de um plano condicional confirmado não tem 'skills' nem 'levels': a página não pode quebrar."""
+    from streamlit.testing.v1 import AppTest
+
+    _offline_market(monkeypatch)
+    paper.set_wallet_mode("única")
+
+    def page():
+        import streamlit as st
+
+        st.page_link = lambda *a, **k: None
+        from core import ai, engine
+        from core.profiles import PROFILES
+
+        if "planned" not in st.session_state:
+            d = ai.AIDecision(decision="BUY", entry=100.0, stop_loss=97.0, take_profit=106.0, confidence=75, reasoning="Plano confirmado.",
+                              model="plano", source="regras")
+            plan = {"direction": "BUY", "score": 0.0, "regime": "plano condicional", "entry": 100.0, "stop_loss": 97.0,
+                    "take_profit": 106.0, "trail_dist": None, "be_r": 0.0}
+            st.session_state["day__analysis"] = engine.AnalysisResult(
+                plan=plan, decision=d, check=None, price=100.0, symbol="BTCUSDT", interval="15m", time="2026-10-25T00:00:00+00:00")
+            st.session_state["planned"] = True
+        from core.ui import render_bot_page
+
+        render_bot_page("day")
+
+    at = AppTest.from_function(page, default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
