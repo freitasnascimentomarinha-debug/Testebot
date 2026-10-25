@@ -148,11 +148,27 @@ def _okx_klines(symbol: str, interval: str, limit: int, market: str) -> list:
              float(r[vol_idx]) / mult] for r in reversed(rows)]
 
 
+def _chosen() -> str | None:
+    """Corretora escolhida pelo usuário quando não é a Binance (que usa os provedores nativos abaixo)."""
+    from core import exchanges
+
+    try:
+        ex = exchanges.selected()
+    except Exception:  # noqa: BLE001
+        return None
+    return None if ex == exchanges.DEFAULT else ex
+
+
 def get_klines(symbol: str, interval: str, limit: int = 500, market: str = "spot") -> pd.DataFrame:
     """Candles OHLCV em UTC. ``df.attrs['source']`` informa o provedor usado."""
     symbol = symbol.upper().strip()
     errors = []
     attempts = []
+    if (ex := _chosen()):
+        from core import exchanges
+
+        if exchanges.supports(ex, market):
+            attempts.append((exchanges.label(ex), lambda: exchanges.klines(ex, symbol, interval, limit, market)))
     if market == "futures":
         attempts.append(("Binance Futuros", lambda: _binance_klines(BINANCE_FUT, "/fapi/v1/klines", symbol, interval, limit, 1500)))
         attempts.append(("OKX Perpétuo", lambda: _okx_klines(symbol, interval, limit, "futures")))
@@ -182,6 +198,11 @@ def get_ticker(symbol: str, market: str = "spot") -> Ticker:
                       float(d["lowPrice"]), float(d["quoteVolume"]), name)
 
     attempts = []
+    if (ex := _chosen()):
+        from core import exchanges
+
+        if exchanges.supports(ex, market):
+            attempts.append((exchanges.label(ex), lambda: exchanges.ticker(ex, symbol, market)))
     if market == "futures":
         attempts.append(("Binance Futuros", lambda: binance(BINANCE_FUT, "/fapi/v1/ticker/24hr", "Binance Futuros")))
         attempts.append(("OKX Perpétuo", lambda: _okx_ticker(symbol, "futures")))
@@ -211,6 +232,11 @@ def _okx_ticker(symbol: str, market: str) -> Ticker:
 
 def get_funding_rate(symbol: str) -> float | None:
     """Taxa de financiamento atual do perpétuo (em %), quando disponível."""
+    if (ex := _chosen()):
+        from core import exchanges
+
+        if exchanges.supports(ex, "futures") and (v := exchanges.funding(ex, symbol)) is not None:
+            return v
     try:
         d = _get(BINANCE_FUT + "/fapi/v1/premiumIndex", {"symbol": symbol})
         return float(d["lastFundingRate"]) * 100
@@ -234,6 +260,14 @@ def last_closed_candle_time(df: pd.DataFrame, interval: str) -> pd.Timestamp:
 
 def list_symbols(market: str) -> list[str]:
     """Todos os pares em USDT negociáveis no mercado (spot: por volume)."""
+    if (ex := _chosen()):
+        from core import exchanges
+
+        try:
+            if exchanges.supports(ex, market) and (rows := exchanges.symbols(ex, market)):
+                return rows
+        except Exception:  # noqa: BLE001 - corretora fora do ar: volta aos provedores padrão
+            pass
     if market == "futures":
         from core.leverage import futures_symbols
 
@@ -275,11 +309,23 @@ def _spot_table() -> dict[str, tuple[float, float]]:
 def watch_prices(market: str, symbols) -> dict[str, tuple[float, float]]:
     """Preço e variação de 24 h (%) de vários pares de uma vez ({símbolo: (preço, %)}), para a lista de moedas da barra lateral.
     Uma só chamada ao mercado inteiro, guardada por 15 s; vazio quando nenhuma fonte responde."""
-    hit = _watch_cache.get(market)
+    chosen = _chosen()
+    market_key = f"{chosen}|{market}" if chosen else market
+    hit = _watch_cache.get(market_key)
     if not hit or time.time() - hit[0] >= WATCH_TTL:
         table: dict[str, tuple[float, float]] = {}
+        if chosen:
+            from core import exchanges
+
+            try:
+                if exchanges.supports(chosen, market):
+                    table = {s: (v[0], v[1]) for s, v in exchanges.table(chosen, market).items()}
+            except Exception:  # noqa: BLE001
+                table = {}
         try:
-            if market == "futures":
+            if table:
+                pass   # já temos a tabela da corretora escolhida
+            elif market == "futures":
                 for r in _get(BINANCE_FUT + "/fapi/v1/ticker/24hr"):
                     table[r["symbol"]] = (float(r["lastPrice"]), float(r["priceChangePercent"]))
             else:
@@ -304,7 +350,7 @@ def watch_prices(market: str, symbols) -> dict[str, tuple[float, float]]:
         if not table and market == "futures":   # sem acesso aos perpétuos (bloqueio regional): o à vista acompanha de perto
             table = _spot_table()
         if table:
-            _watch_cache[market] = hit = (time.time(), table)
+            _watch_cache[market_key] = hit = (time.time(), table)
         elif hit is None:
             return {}
     return {s: hit[1][s] for s in symbols if s in hit[1]}
@@ -313,9 +359,22 @@ def watch_prices(market: str, symbols) -> dict[str, tuple[float, float]]:
 def volume_ranking(market: str) -> list[str]:
     """Pares em USDT do mercado (futuros ou spot) do maior para o menor volume negociado em 24 h, sem moedas estáveis.
     Guarda o resultado por 1 hora."""
-    hit = _volume_cache.get(market)
+    chosen = _chosen()
+    cache_key = f"{chosen}|{market}" if chosen else market
+    hit = _volume_cache.get(cache_key)
     if hit and time.time() - hit[0] < VOLUME_TTL:
         return hit[1]
+    if chosen:
+        from core import exchanges
+
+        try:
+            if exchanges.supports(chosen, market):
+                ranked = [s for s in exchanges.symbols(chosen, market) if s.removesuffix("USDT") not in _STABLE_BASES]
+                if ranked:
+                    _volume_cache[cache_key] = (time.time(), ranked)
+                    return ranked
+        except Exception:  # noqa: BLE001
+            pass
     rows: list[tuple[str, float]] = []
     try:
         if market == "futures":
@@ -342,7 +401,7 @@ def volume_ranking(market: str) -> list[str]:
     ranked = [s for s, v in sorted(rows, key=lambda r: -r[1])
               if v > 0 and s.endswith("USDT") and s.isalnum() and s.removesuffix("USDT") not in _STABLE_BASES]
     if ranked:
-        _volume_cache[market] = (time.time(), ranked)
+        _volume_cache[cache_key] = (time.time(), ranked)
     return ranked or (hit[1] if hit else [])
 
 

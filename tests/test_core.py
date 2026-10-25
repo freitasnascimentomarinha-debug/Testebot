@@ -1995,3 +1995,74 @@ def test_ticket_view_and_submit(monkeypatch):
     assert tv.view(fut, fcfg, {"lev": 5}, 100.0, 2.0, stats)["leverage"] == 5 and tv.view(spot, cfg, {"lev": 5}, 100.0, 2.0, stats)["leverage"] is None
     assert tv.submit(spot, cfg, {"type": "LIMIT", "limit": 150}, 100.0, 2.0)[0] is False      # limite 50% longe do mercado
     assert tv.submit(spot, cfg, {"side": "SELL"}, None, 2.0)[0] is False                      # sem cotação
+
+
+class _FakeCcxt:
+    """Corretora de mentira com a interface do ccxt usada em core/exchanges.py."""
+    timeframes = {"1m": "1m", "15m": "15m", "1h": "1h"}
+
+    def __init__(self, quote="USDT", swap=False):
+        self.quote, self.swap = quote, swap
+        sym = lambda b: f"{b}/{quote}:{quote}" if swap else f"{b}/{quote}"  # noqa: E731
+        self.markets = {sym(b): {"base": b, "quote": quote, "active": True, "swap": swap, "spot": not swap} for b in ("BTC", "ETH", "SOL")}
+        self.calls = 0
+
+    def load_markets(self):
+        return self.markets
+
+    def fetch_ohlcv(self, symbol, tf, since=None, limit=None):
+        self.calls += 1
+        step = {"1m": 60, "15m": 900, "1h": 3600}[tf] * 1000
+        t0 = (since // step) * step
+        return [[t0 + i * step, 100 + i, 101 + i, 99 + i, 100.5 + i, 10.0] for i in range(min(limit or 300, 300))]
+
+    def fetch_ticker(self, symbol):
+        return {"last": 123.0, "percentage": 1.5, "high": 130.0, "low": 120.0, "quoteVolume": 5e6}
+
+    def fetch_tickers(self):
+        vol = {"BTC": 9e9, "ETH": 5e9, "SOL": 1e9}
+        return {s: {"last": 10.0, "percentage": 2.0, "quoteVolume": vol[m["base"]]} for s, m in self.markets.items()}
+
+    def fetch_funding_rate(self, symbol):
+        return {"fundingRate": 0.0001}
+
+
+def test_exchanges_via_ccxt_and_fallback(monkeypatch):
+    """Corretoras pelo ccxt: pares convertidos, candles paginados, ranking por volume, escolha salva e volta aos provedores padrão."""
+    from core import data, exchanges
+
+    monkeypatch.setattr(exchanges, "_make", lambda cid, swap: _FakeCcxt(quote="USD" if cid == "coinbase" else "USDT", swap=swap))
+    exchanges._clients.clear(); exchanges._markets_at.clear(); exchanges._sel_cache.clear()
+    assert exchanges.supports("bybit", "futures") and not exchanges.supports("coinbase", "futures") and not exchanges.supports("nada", "spot")
+    assert exchanges.market_symbol("bybit", "spot", "BTCUSDT") == "BTC/USDT"
+    assert exchanges.market_symbol("coinbase", "spot", "ETHUSDT") == "ETH/USD"             # Coinbase cota em USD: o par é traduzido
+    try:
+        exchanges.market_symbol("bybit", "spot", "DOGEUSDT")
+        raise AssertionError("par inexistente deveria falhar")
+    except exchanges.ExchangeError:
+        pass
+    rows = exchanges.klines("bybit", "BTCUSDT", "15m", 120, "spot")
+    assert len(rows) == 120 and rows == sorted(rows, key=lambda r: r[0])
+    try:
+        exchanges.klines("bybit", "BTCUSDT", "3m", 50, "spot")
+        raise AssertionError("tempo gráfico sem suporte deveria falhar")
+    except exchanges.ExchangeError:
+        pass
+    assert exchanges.ticker("bybit", "BTCUSDT", "spot").last == 123.0 and exchanges.funding("bybit", "BTCUSDT") == 0.01
+    assert exchanges.symbols("bybit", "spot") == ["BTCUSDT", "ETHUSDT", "SOLUSDT"]          # do maior para o menor volume
+    assert set(exchanges.table("coinbase", "spot")) == {"BTCUSDT", "ETHUSDT", "SOLUSDT"}   # pares em USD aparecem como USDT internamente
+
+    monkeypatch.setattr(exchanges, "load_json", lambda *a, **k: {"exchange": "bybit"})
+    exchanges._sel_cache.clear()
+    assert exchanges.selected() == "bybit"
+    df = data.get_klines("BTCUSDT", "15m", 100, "spot")
+    assert df.attrs["source"] == "Bybit" and len(df) == 100                                  # a corretora escolhida manda
+    assert data.get_ticker("BTCUSDT", "spot").source == "Bybit Spot" and data.get_funding_rate("BTCUSDT") == 0.01
+    assert data.volume_ranking("spot")[0] == "BTCUSDT" and data.watch_prices("spot", ["BTCUSDT"])["BTCUSDT"] == (10.0, 2.0)
+    # corretora sem o par/tempo gráfico: cai nos provedores padrão em vez de quebrar
+    monkeypatch.setattr(data, "_binance_klines", lambda *a, **k: [[1_700_000_000_000 + i * 900_000, 1, 2, 0.5, 1.5, 3] for i in range(5)])
+    assert data.get_klines("BTCUSDT", "3m", 5, "spot").attrs["source"].startswith("Binance")
+    monkeypatch.setattr(exchanges, "load_json", lambda *a, **k: {"exchange": "desconhecida"})
+    exchanges._sel_cache.clear()
+    assert exchanges.selected() == exchanges.DEFAULT
+    exchanges._clients.clear(); exchanges._sel_cache.clear(); data._volume_cache.clear(); data._watch_cache.clear()

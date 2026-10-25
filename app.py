@@ -103,6 +103,16 @@ with st.sidebar:
         sidebar_nav.render(pages, nav)
     st.divider()
     if _authed and not _gated:
+        from core import exchanges
+
+        _ex = exchanges.selected()
+        _pick_ex = st.selectbox("Corretora dos dados", list(exchanges.EXCHANGES), index=list(exchanges.EXCHANGES).index(_ex), key="data_exchange",
+                                format_func=exchanges.label, help="De onde vêm candles, preços, volume e financiamento (gráficos, bot e varredura). "
+                                "As ordens continuam simuladas. Se a corretora não responder ou não tiver o par, o sistema usa a Binance/OKX.")
+        if _pick_ex != _ex:
+            exchanges.select(_pick_ex)
+            st.cache_data.clear()
+            st.rerun()
         st.caption(f"Conta de operação: {execution.MODES[execution.get_mode()]}")
         if (_why := execution.orders_problem()):
             st.caption("⚠️ " + _why)
