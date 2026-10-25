@@ -2160,3 +2160,29 @@ def test_events_panel_and_ai_context():
     assert "eventos_externos" in ai_exit.build_context({"symbol": "XUSDT", "side": "BUY", "entry": 1.0, "stop_loss": 0.9, "take_profit": 1.2, "opened": "", "qty": 10.0, "fee_pct": 0.05,
                                                         "leverage": 1, "margin": 10.0, "market": "spot"},
                                                        1.0, {"atr": 0.01}, {}, None, {"interval": "15m"}, None, ctx)
+
+
+def test_events_translation_and_tooltip(monkeypatch):
+    """Eventos em português: regras mínimas sem IA, tradução da IA validada e guardada, e sempre uma explicação para o '?'."""
+    from core import events, events_pt as pt
+
+    monkeypatch.setattr(pt, "_state", {"cache": {}, "running": False})
+    monkeypatch.setattr(pt, "locked_update", lambda name, default, fn: None)      # sem gravar em disco no teste
+    card = {"id": "1", "titulo": "Fed Decision in October?", "categoria": "macro", "escada": False, "slug": "fed", "vence": "2026-10-29T03:59:00Z", "volume_24h": 1,
+            "liquidez": 1, "desc": "Resolve to the change in bps.", "opcoes": [{"nome": "No change", "pct": 94.5}, {"nome": "25 bps increase", "pct": 5.5}]}
+    loc = pt.localize([card])[0]
+    assert loc["titulo"] == "Decisão do Fed em outubro?" and [o["nome"] for o in loc["opcoes"]] == ["Sem mudança", "Alta de 25 bps"] and not loc["traduzido"]
+    assert "juros" in loc["explicacao"].lower() and "desc" not in loc                    # explicação genérica em português, sem o texto original
+    assert "preço" in pt.generic_explanation({**card, "escada": True}) and "sim ou não" in pt.generic_explanation({**card, "opcoes": [{"nome": "Sim", "pct": 1}, {"nome": "Não", "pct": 99}]})
+    k = pt.key_of(card)
+    good = {"itens": [{"id": k, "titulo": "Decisão do Fed em outubro", "opcoes": ["Sem mudança", "Alta de 0,25 p.p."], "explicacao": "Aposta no que o Fed fará com os juros."}]}
+    assert pt.parse(good, [card])[k]["o"][1] == "Alta de 0,25 p.p."
+    assert pt.parse({"itens": [{"id": k, "titulo": "x", "opcoes": ["só uma"]}]}, [card]) == {}      # quantidade de opções diferente: descartado
+    assert pt.parse("lixo", [card]) == {}
+    pt.save(pt.parse(good, [card]))
+    loc = pt.localize([card])[0]
+    assert loc["traduzido"] and loc["titulo"] == "Decisão do Fed em outubro" and loc["explicacao"].startswith("Aposta no que o Fed")
+    assert pt.pending([card]) == []
+    assert "geopolitica" in events.CATEGORIES and events.AI_PICK["geopolitica"] == 2
+    assert events.card({"id": "9", "title": "US-Iran ceasefire continues through...?", "endDate": "2099-10-31T00:00:00Z", "volume24hr": 1e6,
+                        "markets": [{"question": "q", "groupItemTitle": "October 22", "outcomes": '["Yes","No"]', "outcomePrices": '["0.99","0.01"]'}]}, "geopolitica") is not None
