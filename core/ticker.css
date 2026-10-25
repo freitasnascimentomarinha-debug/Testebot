@@ -1,5 +1,9 @@
-.tk { overflow: hidden; background: #141824; border: 1px solid #262b3a; border-radius: 10px; font-family: var(--st-font, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); color: #d1d4dc;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.tk { display: flex; align-items: stretch; overflow: hidden; background: #141824; border: 1px solid #262b3a; border-radius: 10px; font-family: var(--st-font, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); color: #d1d4dc;
+}
+.view { flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 3%, #000 96%, transparent); }
+.lead { flex: none; display: flex; flex-direction: column; justify-content: center; padding: 4px 14px; border-right: 1px solid #262b3a; background: #181d2b; font-weight: 700; font-size: .84rem; white-space: nowrap; }
+.lead small { font-weight: 500; font-size: .66rem; color: #8a8f98; }
+.sn { font-style: normal; font-size: .72rem; padding: 1px 7px; border-radius: 999px; background: #1e2433; border: 1px solid #2a3042; color: #b8bdc9; } .sn.up { color: #26a69a; border-color: rgba(38,166,154,.4); } .sn.dn { color: #ef5350; border-color: rgba(239,83,80,.4); }
 .track { display: flex; width: max-content; animation: slide linear infinite; } .tk:hover .track { animation-play-state: paused; }
 @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .it { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; font-size: .86rem; cursor: pointer; white-space: nowrap; border-right: 1px solid #1e2433; }

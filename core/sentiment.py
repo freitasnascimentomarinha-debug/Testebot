@@ -143,6 +143,36 @@ def _fetch(base: str) -> list[dict]:
     return r.json().get("events") or []
 
 
+def peek(symbol: str) -> dict | None:
+    """Sentimento já guardado (sem rede): usado pela faixa de cotações, que não pode esperar a consulta."""
+    hit = _cache.get(str(symbol).upper().removesuffix("USDT"))
+    return hit[1] if hit and time.time() - hit[0] < TTL else None
+
+
+_pending: set[str] = set()
+
+
+def warm(prices: dict[str, float]) -> None:
+    """Busca em segundo plano o sentimento dos pares ainda sem dados (um de cada vez); aparece na próxima atualização da faixa."""
+    import threading
+
+    todo = [(s, p) for s, p in prices.items() if str(s).upper().removesuffix("USDT") in NAMES and p
+            and (str(s).upper().removesuffix("USDT") not in _cache or time.time() - _cache[str(s).upper().removesuffix("USDT")][0] >= TTL)
+            and s not in _pending]
+    if not todo:
+        return
+    _pending.update(s for s, _ in todo)
+
+    def _run():
+        for s, p in todo:
+            try:
+                for_symbol(s, p)
+            finally:
+                _pending.discard(s)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def for_symbol(symbol: str, price: float | None, fetch=None) -> dict | None:
     """Sentimento do Polymarket para o par (ex.: BTCUSDT). None sem mercado, sem preço ou sem rede (nunca levanta erro)."""
     base = str(symbol).upper().removesuffix("USDT")
