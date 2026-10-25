@@ -38,6 +38,7 @@ export default function (component) {
       ${a.bot_note ? `<h4>Bot para este contexto</h4><p class="small">${esc(a.bot_note)}</p>` : ""}
     </section>
   </div>
+  ${a.sentiment ? `<section class="card"><h3>Sentimento · Polymarket</h3><p class="small"><span class="chip ${a.sentiment.vies === "altista" ? "up" : a.sentiment.vies === "baixista" ? "dn" : ""}">${esc(a.sentiment.vies)}</span> ${esc(a.sentiment.leitura)}</p><p class="foot">Probabilidades de apostadores com dinheiro real; contexto de apoio, não gatilho de entrada.</p></section>` : ""}
   ${a.exits.length ? `<section class="card"><h3>Decisão da IA sobre posições abertas</h3>${a.exits.map((e) => `<div class="exit ${e.acao === "CLOSE" ? "warn" : ""}"><b>${esc(e.symbol)}</b><span class="chip ${e.acao === "CLOSE" ? "warnc" : ""}">${e.acao === "CLOSE" ? "Encerrar" : "Manter"}${e.confianca ? " · " + e.confianca + "%" : ""}</span><p>${esc(e.motivo)}</p></div>`).join("")}</section>` : ""}
   ${a.opportunities.length ? `<section class="card"><h3>Oportunidades da última varredura</h3><table><tr><th>Ativo</th><th>Lado</th><th>Bot</th><th>Entrada</th><th>Stop</th><th>Alvo</th></tr>${a.opportunities.map((o) => `<tr><td><b>${esc(o.symbol)}</b></td><td class="${o.side === "BUY" ? "up" : "dn"}">${o.side === "BUY" ? "Compra" : "Venda"}</td><td>${esc(o.bot)}</td><td>${px(o.entry)}</td><td>${px(o.stop)}</td><td>${px(o.target)}</td></tr>`).join("")}</table></section>` : ""}
   <p class="foot">🔎 ${scanTxt}</p>${a.notes.map((n) => `<p class="foot">⚠️ ${esc(n)}</p>`).join("")}`;

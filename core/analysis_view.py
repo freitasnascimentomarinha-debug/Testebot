@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 
-from core import advisor, personalities, regime
+from core import advisor, personalities, regime, sentiment
 
 HEAD = {"BUY": ("Oportunidade de compra", "up"), "SELL": ("Oportunidade de venda", "dn"), "HOLD": ("Sem oportunidade agora", "mut"),
         "CLOSE": ("Sinal contrário: encerrando a posição", "warn")}
@@ -63,7 +63,7 @@ def view(profile, cfg: dict, rep, *, on: bool, next_at: float | None, now: float
         "scan": {"on": on, "scanned": rep.scanned, "last": (getattr(rep, "scan_time", "") or "")[11:16],
                  "next_in_min": None if not on or not next_at else max(0, round((next_at - (time.time() if now is None else now)) / 60)),
                  "minutes": cfg.get("scan_minutes")},
-        "notes": rep.notes[:3], "ai": d.source == "ia",
+        "notes": rep.notes[:3], "ai": d.source == "ia", "sentiment": sentiment.for_symbol(res.symbol, res.price) if d.source == "ia" else None,
     }
     if d.decision in ("BUY", "SELL") and res.check and res.check.calc:
         c = res.check.calc

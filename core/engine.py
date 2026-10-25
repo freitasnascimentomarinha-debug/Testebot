@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import advisor, ai, htf, indicators as ind, personalities, quota, ranking, risk
+from core import advisor, ai, htf, sentiment as sentiment_mod, indicators as ind, personalities, quota, ranking, risk
 from core import paper
 from core.broker import get_broker
 from core.data import get_funding_rate
@@ -127,11 +127,12 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         pass
     rec = advisor.armed(profile.key)
     armed_view = ({k: rec[k] for k in ("plano", "ativo", "tempo", "descricao")} if rec and rec.get("ativo") == symbol else None)
+    sent = sentiment_mod.for_symbol(symbol, price) if api_key else None   # só quando a IA vai ler (evita rede à toa)
     context = ai.build_context(profile=profile, cfg=cfg, symbol=symbol, interval=interval, plan=plan_d,
                                snapshot=market_snapshot(df.iloc[:-1], int(cfg["ai_candles_context"])),
                                indicators_now=indicators_now, account=account_view, positions=positions,
                                risk_rules=risk_rules, funding_rate=funding, personality=personality, scenario=sc,
-                               candidates=cands, armed_plan=armed_view)
+                               candidates=cands, armed_plan=armed_view, sentiment=sent)
     error = ""
     # A chave da OpenRouter é do dono da plataforma: cada usuário tem um limite diário de análises (quem usa a própria chave não tem).
     platform_key = bool(api_key) and api_key == get_secret("OPENROUTER_API_KEY") and bool(current_user())
