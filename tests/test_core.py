@@ -2107,3 +2107,23 @@ def test_polymarket_sentiment_for_ai(monkeypatch):
     ctx = ai.build_context(profile=PROFILES["day"], cfg=cfg, symbol="BTCUSDT", interval="15m", plan={}, snapshot={}, indicators_now={}, account={},
                            positions=[], risk_rules={}, sentiment=r)
     assert ctx["sentimento_polymarket"]["vies"] == "altista" and "sentimento_polymarket" in ai.SYSTEM_PROMPT
+
+
+def test_sentiment_peek_and_warm_do_not_block(monkeypatch):
+    """A faixa de cotações só lê o sentimento já guardado; a busca roda em segundo plano e uma moeda sem mercado não gera consulta."""
+    from core import sentiment
+
+    sentiment._cache.clear(); sentiment._pending.clear()
+    assert sentiment.peek("BTCUSDT") is None
+    calls = []
+    monkeypatch.setattr(sentiment, "for_symbol", lambda s, p, fetch=None: calls.append(s))
+    sentiment.warm({"BTCUSDT": 80000.0, "XYZUSDT": 1.0, "ETHUSDT": 0.0})     # XYZ não tem nome conhecido; ETH sem preço
+    import time as _t
+    for _ in range(50):
+        if calls:
+            break
+        _t.sleep(0.05)
+    assert calls == ["BTCUSDT"]
+    sentiment._cache["BTC"] = (_t.time(), {"vies": "altista"})
+    assert sentiment.peek("BTCUSDT") == {"vies": "altista"}
+    sentiment._cache.clear()

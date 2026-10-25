@@ -5,7 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from core import data as market_data
+from core import data as market_data, sentiment
 from core.profiles import SYMBOLS
 
 _JS = Path(__file__).with_name("sidebar.js").read_text(encoding="utf-8")
@@ -27,18 +27,31 @@ def _ticker_component():
 
 
 def ticker_strip(bot: str, market: str, current: str) -> None:
-    """Faixa de cotações em movimento no topo das páginas de mercado. Clicar numa moeda troca o ativo da página."""
-    quotes = market_data.watch_prices(market, SYMBOLS)
-    res = _ticker_component()(key=f"{bot}-ticker", data={"symbols": list(SYMBOLS), "market": market, "current": current,
-                                                          "quotes": {s: list(q) for s, q in quotes.items()}}, on_pick_change=lambda: None)
-    ev = getattr(res, "pick", None)
-    if ev and ev.get("uid") != st.session_state.get(f"{bot}__tick_uid"):
-        st.session_state[f"{bot}__tick_uid"] = ev.get("uid")
-        if ev.get("symbol") in SYMBOLS:
-            from core.ui import set_setting
+    """Faixa de cotações em movimento no topo das páginas de mercado, com o sentimento do Polymarket de cada moeda.
+    Atualiza sozinha; clicar numa moeda troca o ativo da página."""
 
-            set_setting(bot, "symbol", ev["symbol"])
-            st.rerun()
+    @st.fragment(run_every=20)
+    def _strip():
+        quotes = market_data.watch_prices(market, SYMBOLS)
+        sentiment.warm({s: q[0] for s, q in quotes.items()})   # busca em segundo plano; entra na próxima atualização
+        sent = {}
+        for s in quotes:
+            r = sentiment.peek(s)
+            if r:
+                sent[s] = {"vies": r["vies"], "leitura": r["leitura"]}
+        res = _ticker_component()(key=f"{bot}-ticker", data={"symbols": list(SYMBOLS), "market": market, "current": current,
+                                                              "quotes": {s: list(q) for s, q in quotes.items()}, "sentiment": sent},
+                                  on_pick_change=lambda: None)
+        ev = getattr(res, "pick", None)
+        if ev and ev.get("uid") != st.session_state.get(f"{bot}__tick_uid"):
+            st.session_state[f"{bot}__tick_uid"] = ev.get("uid")
+            if ev.get("symbol") in SYMBOLS:
+                from core.ui import set_setting
+
+                set_setting(bot, "symbol", ev["symbol"])
+                st.rerun(scope="app")
+
+    _strip()
 
 
 def groups(pages: dict, current_path: str) -> list[dict]:

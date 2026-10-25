@@ -6,15 +6,21 @@ export default function (component) {
   const px = (v) => nf(v, v >= 100 ? 2 : v >= 1 ? 4 : 6);
   const root = parentElement.querySelector(".tk") || parentElement.appendChild(Object.assign(document.createElement("div"), { className: "tk" }));
   const quotes = { ...(data.quotes || {}) };
+  const SN = data.sentiment || {};
+  const tag = (s) => { const x = SN[s]; return x ? `<em class="sn ${x.vies === "altista" ? "up" : x.vies === "baixista" ? "dn" : ""}" title="${esc(x.leitura)}">🔮 ${x.vies === "altista" ? "▲" : x.vies === "baixista" ? "▼" : "•"} ${x.vies}</em>` : ""; };
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const item = (s) => { const q = quotes[s]; if (!q) return ""; const up = q[1] >= 0;
-    return `<button class="it ${s === data.current ? "cur" : ""}" data-sym="${s}"><b>${s.replace(/USDT$/, "")}</b><span>${px(q[0])}</span><i class="${up ? "up" : "dn"}">${up ? "▲" : "▼"} ${nf(Math.abs(q[1]))}%</i></button>`; };
+    return `<button class="it ${s === data.current ? "cur" : ""}" data-sym="${s}"><b>${s.replace(/USDT$/, "")}</b><span>${px(q[0])}</span><i class="${up ? "up" : "dn"}">${up ? "▲" : "▼"} ${nf(Math.abs(q[1]))}%</i>${tag(s)}</button>`; };
   const draw = () => {
     const html = data.symbols.map(item).join("");
     if (!html) { root.innerHTML = ""; return; }
+    const cur = SN[data.current], lead = cur ? `<div class="lead ${cur.vies === "altista" ? "up" : cur.vies === "baixista" ? "dn" : ""}" title="${esc(cur.leitura)}">🔮 ${esc(data.current.replace(/USDT$/, ""))} · ${esc(cur.vies)}<small>Polymarket</small></div>` : "";
     const track = root.querySelector(".track");
-    if (track && root.dataset.n === String(Object.keys(quotes).length)) { track.innerHTML = html + html; return; }   // só troca os números: a faixa não reinicia
+    if (track && root.dataset.n === String(Object.keys(quotes).length)) {   // só troca os números: a faixa não reinicia
+      track.innerHTML = html + html; const l = root.querySelector(".lead"); if (l) l.outerHTML = lead; else if (lead) root.insertAdjacentHTML("afterbegin", lead); return;
+    }
     root.dataset.n = String(Object.keys(quotes).length);
-    root.innerHTML = `<div class="track" style="animation-duration:${Math.max(30, data.symbols.length * 4)}s">${html}${html}</div>`;
+    root.innerHTML = `${lead}<div class="view"><div class="track" style="animation-duration:${Math.max(30, data.symbols.length * 4)}s">${html}${html}</div></div>`;
   };
   draw();
   const load = async () => {
