@@ -262,6 +262,16 @@ _watch_cache: dict[str, tuple[float, dict]] = {}
 WATCH_TTL = 15
 
 
+def _spot_table() -> dict[str, tuple[float, float]]:
+    for base in BINANCE_SPOT:
+        try:
+            return {r["symbol"]: (float(r["lastPrice"]), (float(r["lastPrice"]) / float(r["openPrice"]) - 1) * 100 if float(r["openPrice"]) else 0.0)
+                    for r in _get(base + "/api/v3/ticker/24hr", {"type": "MINI"})}
+        except Exception:  # noqa: BLE001
+            continue
+    return {}
+
+
 def watch_prices(market: str, symbols) -> dict[str, tuple[float, float]]:
     """Preço e variação de 24 h (%) de vários pares de uma vez ({símbolo: (preço, %)}), para a lista de moedas da barra lateral.
     Uma só chamada ao mercado inteiro, guardada por 15 s; vazio quando nenhuma fonte responde."""
@@ -291,6 +301,8 @@ def watch_prices(market: str, symbols) -> dict[str, tuple[float, float]]:
                         table[d["instId"].split("-")[0] + "USDT"] = (last, (last / o - 1) * 100 if o else 0.0)
             except Exception:  # noqa: BLE001
                 table = {}
+        if not table and market == "futures":   # sem acesso aos perpétuos (bloqueio regional): o à vista acompanha de perto
+            table = _spot_table()
         if table:
             _watch_cache[market] = hit = (time.time(), table)
         elif hit is None:
