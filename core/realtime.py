@@ -170,8 +170,9 @@ function compute(d) {
 }
 
 // ------------------------------------------------------------------ gráfico
+let H = C.height;   // altura atual (muda no modo tela cheia)
 const chart = L.createChart($("chart"), {
-  height: C.height - 40, layout: {background: {color: "#0e1117"}, textColor: "#d1d4dc", panes: {separatorColor: "#2a2e39"}},
+  height: H - 40, layout: {background: {color: "#0e1117"}, textColor: "#d1d4dc", panes: {separatorColor: "#2a2e39"}},
   grid: {vertLines: {color: "#1c2030"}, horzLines: {color: "#1c2030"}},
   crosshair: {mode: 0}, rightPriceScale: {borderColor: "#2a2e39"},
   timeScale: {borderColor: "#2a2e39", timeVisible: SEC < 86400, secondsVisible: false, rightOffset: 6},
@@ -205,7 +206,7 @@ function destroyInd() { SERIES.forEach(x => chart.removeSeries(x.s)); SERIES.len
 buildInd();
 function layoutPanes() {  // painel de preço com o espaço restante (mínimo 260 px); indicadores com altura fixa, menor se faltar espaço
   const ps = chart.panes(); if (ps.length < 2) return;
-  const total = C.height - 40 - 30;  // desconta a escala de tempo
+  const total = H - 40 - 30;  // desconta a escala de tempo
   const h = Math.max(70, Math.min(__PANE_H__, Math.floor((total - 260) / (ps.length - 1))));
   ps.forEach((p, i) => p.setHeight(i === 0 ? total - (ps.length - 1) * h : h));
 }

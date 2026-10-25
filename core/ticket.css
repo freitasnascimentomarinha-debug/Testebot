@@ -27,3 +27,8 @@
 .send:disabled { opacity: .4; cursor: not-allowed; } .send:not(:disabled):hover { filter: brightness(1.1); }
 .blocked { margin: 0; font-size: .78rem; color: #ff9800; }
 .fld input::-webkit-outer-spin-button, .fld input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } .fld input[type=number] { -moz-appearance: textfield; }
+.lev { background: #141824; border: 1px solid #262b3a; border-radius: 12px; padding: 9px 12px; display: flex; flex-direction: column; gap: 8px; }
+.lv-h { display: flex; justify-content: space-between; align-items: baseline; font-size: .72rem; color: #8a8f98; text-transform: uppercase; letter-spacing: .4px; } .lv-h b { font-size: 1.05rem; color: #e6e8ee; letter-spacing: 0; }
+.lev input[type=range] { width: 100%; accent-color: #42a5f5; }
+.presets { display: flex; flex-wrap: wrap; gap: 4px; } .presets button { border: 1px solid #2a3042; background: #1e2433; color: #b8bdc9; border-radius: 6px; padding: 3px 8px; font-size: .76rem; cursor: pointer; }
+.presets button.on { background: #2a3042; color: #fff; border-color: #5a6385; } .margin button { padding: 6px; font-size: .8rem; }

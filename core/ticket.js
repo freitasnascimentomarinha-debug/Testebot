@@ -14,6 +14,10 @@ export default function (component) {
       <div class="seg sides"><button data-side="BUY" class="buy">Comprar</button>${d.can_short ? `<button data-side="SELL" class="sell">Vender</button>` : ""}</div>
       <div class="seg types"><button data-type="MARKET">Mercado</button><button data-type="LIMIT">Limitada</button></div>
       <label class="fld lim"><span>Preço limite</span><input data-f="limit" type="number" step="any"><em>USDT</em></label>
+      ${d.spot ? "" : `<div class="lev"><div class="lv-h"><span>Alavancagem</span><b class="lv-v"></b></div>
+        <input type="range" data-f="lev" min="1" max="${d.max_lev}" step="1">
+        <div class="presets">${[1, 2, 3, 5, 10, 20, 50, 100].filter((x) => x < d.max_lev).map((x) => `<button data-lev="${x}">${x}×</button>`).join("")}<button data-lev="${d.max_lev}">máx ${d.max_lev}×</button></div>
+        <div class="seg margin"><button data-margin="Isolada">Isolada</button><button data-margin="Cruzada">Cruzada</button></div></div>`}
       <label class="chk"><input type="checkbox" data-f="auto"><span>Stop e alvo automáticos (ATR)</span></label>
       <div class="two"><label class="fld sl"><span>Stop loss</span><input data-f="sl" type="number" step="any"></label>
         <label class="fld tp"><span>Take profit</span><input data-f="tp" type="number" step="any"></label></div>
@@ -25,12 +29,13 @@ export default function (component) {
     root.querySelector('[data-f="sl"]').value = f.sl;
     root.querySelector('[data-f="tp"]').value = f.tp;
     root.querySelector('[data-f="auto"]').checked = f.auto;
+    if (!d.spot) root.querySelector('[data-f="lev"]').value = f.lev;
     root.querySelector('[data-f="amount"]').value = f.sizing === "RISK" ? f.risk : f.value;
     root.state = { ...f };
   }
   const st = root.state;
   const q = (s) => root.querySelector(s);
-  const form = () => ({ side: st.side, type: st.type, auto: st.auto, sizing: st.sizing, limit: +q('[data-f="limit"]').value || null,
+  const form = () => ({ lev: d.spot ? 1 : +q('[data-f="lev"]').value || 1, margin: st.margin, side: st.side, type: st.type, auto: st.auto, sizing: st.sizing, limit: +q('[data-f="limit"]').value || null,
     sl: +q('[data-f="sl"]').value || null, tp: +q('[data-f="tp"]').value || null,
     risk: st.sizing === "RISK" ? +q('[data-f="amount"]').value || null : st.risk, value: st.sizing === "VALUE" ? +q('[data-f="amount"]').value || null : st.value });
   let timer;
@@ -43,6 +48,8 @@ export default function (component) {
   root.querySelectorAll("[data-type]").forEach((b) => b.classList.toggle("on", b.dataset.type === st.type));
   root.querySelectorAll("[data-sizing]").forEach((b) => b.classList.toggle("on", b.dataset.sizing === st.sizing));
   q(".lim").style.display = st.type === "LIMIT" ? "" : "none";
+  if (!d.spot) { q(".lv-v").textContent = f.lev + "×"; root.querySelectorAll("[data-margin]").forEach((b) => b.classList.toggle("on", b.dataset.margin === st.margin));
+    root.querySelectorAll("[data-lev]").forEach((b) => b.classList.toggle("on", +b.dataset.lev === f.lev)); }
   q('[data-f="sl"]').disabled = q('[data-f="tp"]').disabled = st.auto;
   if (st.auto) { setVal('[data-f="sl"]', f.sl); setVal('[data-f="tp"]', f.tp); }
   q(".amt-l").textContent = st.sizing === "RISK" ? "Perda máxima no stop" : (d.spot ? "Valor a investir" : "Margem a alocar");
@@ -68,12 +75,15 @@ export default function (component) {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.side) { st.side = b.dataset.side; push(); }
     else if (b.dataset.type) { st.type = b.dataset.type; push(); }
+    else if (b.dataset.margin) { st.margin = b.dataset.margin; push(); }
+    else if (b.dataset.lev) { q('[data-f="lev"]').value = b.dataset.lev; push(); }
     else if (b.dataset.sizing) { st.risk = form().risk; st.value = form().value; st.sizing = b.dataset.sizing; q('[data-f="amount"]').value = st.sizing === "RISK" ? st.risk : st.value; push(); }
     else if (b.classList.contains("send") && !b.disabled) setTriggerValue("send", { ...form(), uid: Date.now() + "-" + Math.random() });
     root.querySelectorAll("[data-side]").forEach((x) => x.classList.toggle("on", x.dataset.side === st.side));
     root.querySelectorAll("[data-type]").forEach((x) => x.classList.toggle("on", x.dataset.type === st.type));
     root.querySelectorAll("[data-sizing]").forEach((x) => x.classList.toggle("on", x.dataset.sizing === st.sizing));
+    if (!d.spot) root.querySelectorAll("[data-margin]").forEach((x) => x.classList.toggle("on", x.dataset.margin === st.margin));
     q(".lim").style.display = st.type === "LIMIT" ? "" : "none";
   };
-  root.oninput = (e) => { if (e.target.dataset.f === "auto") { st.auto = e.target.checked; q('[data-f="sl"]').disabled = q('[data-f="tp"]').disabled = st.auto; } push(); };
+  root.oninput = (e) => { if (e.target.dataset.f === "lev") q(".lv-v").textContent = e.target.value + "×"; if (e.target.dataset.f === "auto") { st.auto = e.target.checked; q('[data-f="sl"]').disabled = q('[data-f="tp"]').disabled = st.auto; } push(); };
 }
