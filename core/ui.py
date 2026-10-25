@@ -154,20 +154,23 @@ def render_bot_page(bot: str) -> None:
     col_chart, col_side = st.columns([3.3, 1.2], gap="medium")
     with col_chart:
         indicator_picker(bot, cfg)
-        tab_rt, tab_tv = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho"])
+        tab_rt, tab_tv, tab_ctl, tab_cfg = st.tabs(["⚡ Tempo real", "🖊️ TradingView — ferramentas de desenho", "🧠 Análise do bot",
+                                                     "⚙️ Configurações"])
         with tab_rt:
             positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"]]
             height = chart_height(cfg)
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
                                                 cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions,
                                                 height=height), height=height + 5)
-            st.caption("Candles ao vivo direto da corretora para o seu navegador (WebSocket): cada negociação move o candle, "
-                       "os indicadores e o lucro/prejuízo das posições abertas (já descontadas as taxas).")
         with tab_tv:
             st.caption("Barra lateral esquerda: linhas de tendência, Fibonacci, canais, padrões, régua e as ferramentas "
                        "**Posição comprada / vendida**. Os desenhos ficam no navegador; níveis para a IA ficam em "
                        "*Configurações → Níveis do usuário*.")
             components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
+        with tab_ctl:
+            analysis_panel(profile, cfg)
+        with tab_cfg:
+            settings_section(profile, cfg)
     with col_side:
         bot_power(profile, cfg)
         t_order, t_bot = st.tabs(["✍️ Ordem", "🤖 Entrada do bot"])
@@ -176,13 +179,7 @@ def render_bot_page(bot: str) -> None:
         with t_bot:
             entry_panel(profile, cfg)
 
-    t_pos, t_ctl, t_cfg = st.tabs(["💼 Posições e histórico", "🧠 Análise do bot", "⚙️ Configurações"])
-    with t_pos:
-        portfolio_section(profile, cfg)
-    with t_ctl:
-        analysis_panel(profile, cfg)
-    with t_cfg:
-        settings_section(profile, cfg)
+    portfolio_section(profile, cfg)
 
 
 def execution_banner() -> None:
@@ -673,8 +670,6 @@ def open_positions(profile: BotProfile, cfg: dict) -> None:
                     tr = broker.close_position(p["id"], p_price, "Manual")
                     st.toast(f"Posição encerrada: {tr['pnl']:+.2f} USDT")
                     st.rerun(scope="app")
-        st.caption("P&L líquido = variação de preço − taxa de entrada − taxa estimada de saída. No gráfico em "
-                   f"tempo real ele muda a cada negociação; aqui, a cada {cfg['refresh_sec']} s.")
 
     _cards()
 
