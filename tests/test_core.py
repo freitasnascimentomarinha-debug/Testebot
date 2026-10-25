@@ -1915,3 +1915,23 @@ def test_open_position_cards_component_and_actions(monkeypatch):
     ok, msg = chart_actions.handle_card(prof, {"kind": "close", "id": spot["id"]}, price_for)
     assert ok and "encerrada" in msg and chart_actions.handle_card(prof, {"kind": "close", "id": spot["id"]}, price_for)[0] is False
     assert chart_actions.handle_card(prof, {"kind": "close", "id": fut["id"]}, lambda s: None)[0] is False                                       # outro mercado
+
+
+def test_ticket_view_and_submit(monkeypatch):
+    """A boleta (componente) manda só o formulário: o Python saneia, calcula o risco e valida o envio."""
+    from core import execution, ticket_view as tv
+    from core.profiles import PROFILES
+    from core.settings import default_settings
+
+    spot, fut = PROFILES["swing"], PROFILES["day"]
+    cfg = {**default_settings(spot), "symbol": "BTCUSDT"}
+    stats = {"equity": 10000.0, "available": 10000.0}
+    monkeypatch.setattr(execution, "orders_problem", lambda mode=None: "")
+    v = tv.view(spot, cfg, {"side": "SELL", "type": "LIMIT", "limit": 99, "auto": True}, 100.0, 2.0, stats)
+    assert v["form"]["side"] == "BUY" and v["form"]["type"] == "LIMIT" and v["spot"] and v["leverage"] is None   # spot não vende a descoberto
+    assert v["calc"]["qty"] > 0 and v["form"]["sl"] < 99 < v["form"]["tp"]
+    fcfg = {**default_settings(fut), "symbol": "BTCUSDT", "allow_short": True}
+    assert tv.view(fut, fcfg, {"side": "SELL"}, 100.0, 2.0, stats)["form"]["side"] == "SELL"
+    assert tv.clean_form(spot, cfg, {"limit": "abc", "type": "LIMIT"}, 100.0, 2.0, 50.0, 1000.0)["limit"] == 100.0   # lixo vira o preço atual
+    assert tv.submit(spot, cfg, {"type": "LIMIT", "limit": 150}, 100.0, 2.0)[0] is False      # limite 50% longe do mercado
+    assert tv.submit(spot, cfg, {"side": "SELL"}, None, 2.0)[0] is False                      # sem cotação

@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import ai as ai_mod, chart_actions, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
+from core import ai as ai_mod, chart_actions, ticket_view, engine, execution, paper, personalities, positions_view, ranking, regime, risk, scanner
 from core.broker import get_broker
 from core.charts import tradingview_widget
 from core import leverage as lev_rules
@@ -128,14 +128,11 @@ def render_bot_page(bot: str) -> None:
     cfg = init_settings(profile)
     broker = get_broker(bot)
 
-    st.title(f"{profile.icon} {profile.name}")
-    st.caption(f"{profile.market_label} · estilo pelo tempo gráfico: **{style_of(st.session_state.get(_k(bot, 'interval'), cfg['interval']))}** "
-               "(até 1h day trade · 2h a 12h swing · 1d ou mais long) · dados reais.")
-
+    header_slot = st.container()   # o cabeçalho é desenhado pelo fragmento ao vivo, mas ocupa o topo da página
     execution_banner()
 
-    # Seleção de ativo e timeframe -------------------------------------------
-    c1, c2, c3, c4 = st.columns([2, 1.2, 1, 1.2])
+    # Seleção de ativo (o tempo gráfico fica em botões no cabeçalho) -------------------------------------------
+    c1, c3, c4 = st.columns([2.4, 1, 1.2])
     all_symbols = cached_symbols(profile.market)
     options = list(dict.fromkeys([s_ for s_ in SYMBOLS if s_ in all_symbols] + [cfg["symbol"]] + all_symbols))
     c1.selectbox(f"Ativo ({len(all_symbols)} pares em USDT)", options, key=_k(bot, "symbol"), accept_new_options=True,
@@ -143,13 +140,13 @@ def render_bot_page(bot: str) -> None:
                       f"{'Futuros' if profile.market == 'futures' else 'Spot'} (ex.: PEPE, SOL, DOGE).")
     if st.session_state[_k(bot, "interval")] not in profile.intervals:
         st.session_state[_k(bot, "interval")] = profile.default_interval
-    c2.selectbox("Timeframe", profile.intervals, key=_k(bot, "interval"))
     c3.number_input("Candles", 150, 1500, step=50, key=_k(bot, "candles"))
     c4.selectbox("Atualização (s)", (5, 10, 15, 30, 60, 120, 300, 600), key=_k(bot, "refresh_sec"))
     cfg = {name: st.session_state[_k(bot, name)] for name in cfg}
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
-    live_metrics(profile, cfg)
+    with header_slot:
+        live_metrics(profile, cfg)
 
     # Layout em L, como no terminal da Binance: gráfico no centro, painel de ordem na lateral direita e,
     # embaixo, posições/histórico, controle do bot e configurações.
@@ -178,7 +175,7 @@ def render_bot_page(bot: str) -> None:
         bot_power(profile, cfg)
         t_order, t_bot = st.tabs(["✍️ Ordem", "🤖 Entrada do bot"])
         with t_order:
-            trade_ticket(profile, cfg)
+            ticket_panel(profile, cfg)
         with t_bot:
             entry_panel(profile, cfg)
 
@@ -218,11 +215,8 @@ def chart_bridge(profile: BotProfile, cfg: dict) -> None:
 
 
 def execution_banner() -> None:
-    """Conta em que as ordens são executadas (escolhida na barra lateral)."""
-    mode = execution.get_mode()
-    st.caption(f"Conta de operação: **{execution.MODES[mode]}**" + (" · ordens simuladas com dados reais." if mode == "simulada" else "")
-               + " · troque em **Minha conta**.")
-    if (why := execution.orders_problem(mode)):
+    """Aviso quando a conta de operação escolhida não pode enviar ordens (a conta em uso aparece no cabeçalho)."""
+    if (why := execution.orders_problem(execution.get_mode())):
         st.warning(why)
 
 
@@ -287,19 +281,25 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
             st.session_state[f"{bot}__need_rerun"] = True
         s = broker.stats({symbol: price})
 
-        m = st.columns(6)
-        m[0].metric(symbol, fmt_price(price), f"{ticker.change_pct:+.2f}% 24h")
-        m[1].metric("Banca", f"{fmt(s['equity'])}", f"{fmt(s['total_pnl'])} ({s['total_pnl_pct']:+.2f}%)",
-                    help="Patrimônio da carteira simulada (saldo livre + margens + P&L em aberto), em USDT.")
-        m[2].metric("Resultado hoje", fmt(s["pnl_today"]))
-        m[3].metric("Operações hoje", f"{s['trades_today']}")
-        m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]), f"{s['open_positions']} posição(ões)",
-                    delta_color="off", help="Lucro/prejuízo das posições abertas já descontando taxas de entrada e saída.")
-        m[5].metric("Taxa de acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
-
         ctx = str(df["regime"].iloc[-2])
         st.session_state[f"{bot}__context"] = ctx
-        st.caption(f"🧭 **Contexto do gráfico agora ({interval}):** {regime.label(ctx)} — {regime.REGIMES[ctx][1]}")
+        mode = execution.get_mode()
+        hdr = {"icon": profile.icon, "name": profile.name, "market_label": profile.market_label, "style": style_of(interval),
+               "account": execution.MODES[mode], "account_real": mode == "exchange_real", "intervals": list(profile.intervals),
+               "interval": interval, "symbol": symbol,
+               "context": {"label": regime.label(ctx), "desc": regime.REGIMES[ctx][1]},
+               "metrics": {"price": price, "change_pct": ticker.change_pct, "equity": s["equity"], "total_pnl": s["total_pnl"],
+                           "total_pnl_pct": s["total_pnl_pct"], "pnl_today": s["pnl_today"], "trades_today": s["trades_today"],
+                           "unrealized_net": s["unrealized_net"], "open_positions": s["open_positions"], "win_rate": s["win_rate"],
+                           "trades": s["trades"]}}
+        res = _header_component()(key=f"{bot}-header", data=hdr, on_interval_change=lambda: None)
+        ev = getattr(res, "interval", None)
+        if ev and ev.get("uid") != st.session_state.get(f"{bot}__hdr_uid"):
+            st.session_state[f"{bot}__hdr_uid"] = ev.get("uid")
+            if ev.get("value") in profile.intervals:
+                set_setting(bot, "interval", ev["value"])
+                st.session_state.pop(f"{bot}__scan_marker", None)
+                st.rerun(scope="app")
 
         # Posições abertas em outros ativos (abertas pela varredura) também precisam de stop e alvo conferidos
         for ev in scanner.sync_open(profile, cached_klines, cached_ticker, cached_funding, skip={symbol}):
@@ -418,94 +418,6 @@ def entry_panel(profile: BotProfile, cfg: dict) -> None:
     st.caption(f"Uma compra agora a {fmt_price(price)} teria {calc.qty:g} {cfg['symbol'].removesuffix('USDT')} · {held} · "
                f"risco {fmt(calc.risk_usdt)} USDT · retorno {fmt(calc.reward_usdt)} USDT · "
                f"R:R {fmt(calc.rr) if calc.rr else '—'}. Sem bloqueio por metas ou limites diários.")
-
-
-def trade_ticket(profile: BotProfile, cfg: dict) -> None:
-    """Boleta manual: ordem a mercado ou limitada com a calculadora de risco."""
-    bot = profile.key
-    price = st.session_state.get(f"{bot}__last_price")
-    atr_v = st.session_state.get(f"{bot}__atr")
-    if not price:
-        st.info("Carregando cotação…")
-        return
-    broker = get_broker(bot)
-    s = broker.stats({cfg["symbol"]: price})
-
-    cfg = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ENTRY_KEYS}}
-    lev = risk.effective_leverage(cfg)
-    can_short = profile.market == "futures" and cfg["allow_short"]
-    sides = ["Compra (long)", "Venda (short)"] if can_short else ["Compra (long)"]
-    side_label = st.segmented_control("Lado", sides, default=sides[0], key=f"{bot}__t_side") or sides[0]
-    side = "BUY" if side_label.startswith("Compra") else "SELL"
-    otype = st.segmented_control("Tipo", ["Mercado", "Limitada"], default="Mercado", key=f"{bot}__t_type") or "Mercado"
-    sign = 1 if side == "BUY" else -1
-
-    entry = price
-    if otype == "Limitada":
-        entry = st.number_input("Preço limite", value=float(price), format="%.6f", key=f"{bot}__t_limit")
-    sl_default = entry - sign * (atr_v or price * 0.01) * float(cfg["atr_sl_mult"])
-    tp_default = entry + sign * (atr_v or price * 0.01) * float(cfg["atr_tp_mult"])
-    use_atr = st.toggle("Stop/alvo automáticos pelo ATR", value=True, key=f"{bot}__t_auto")
-    c1, c2 = st.columns(2)
-    if use_atr:
-        sl, tp = risk.round_price(sl_default, price), risk.round_price(tp_default, price)
-        c1.markdown(f"Stop  \n**:red[{fmt_price(sl)}]**")
-        c2.markdown(f"Alvo  \n**:green[{fmt_price(tp)}]**")
-    else:
-        sl = c1.number_input("Stop loss", value=float(risk.round_price(sl_default, price)), format="%.6f", key=f"{bot}__t_sl")
-        tp = c2.number_input("Take profit", value=float(risk.round_price(tp_default, price)), format="%.6f", key=f"{bot}__t_tp")
-
-    spot = profile.market == "spot"
-    value_label = "Valor a investir" if spot else "Valor (margem)"
-    sizing = st.radio("Tamanho por", ["Perda máxima", value_label], horizontal=True, key=f"{bot}__t_sizing{'_spot' if spot else ''}")
-    budget = risk.risk_budget(cfg, s["equity"])
-    if sizing == "Perda máxima":
-        risk_usdt = st.number_input("Perda máxima no trade (USDT)", min_value=0.0, value=float(round(budget, 2)),
-                                    step=5.0, key=f"{bot}__t_risk")
-        calc = risk.calculate(side, entry, sl, tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                              risk_usdt=risk_usdt, available=s["available"], symbol=cfg["symbol"],
-                              market=profile.market, margin_mode=cfg["margin_mode"])
-    else:
-        margin = st.number_input("Valor a investir (USDT)" if spot else "Margem a alocar (USDT)", min_value=0.0, value=float(min(500.0, s["available"])),
-                                 step=50.0, key=f"{bot}__t_margin")
-        calc = risk.calculate(side, entry, sl, tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                              margin_usdt=margin, available=s["available"], symbol=cfg["symbol"],
-                              market=profile.market, margin_mode=cfg["margin_mode"])
-
-    m1, m2 = st.columns(2)
-    m1.markdown(f"Quantidade  \n**{calc.qty:g}**")
-    m2.markdown(f"Nocional  \n**{fmt(calc.notional)}** USDT")
-    m1.markdown(f"Risco (stop)  \n**:red[−{fmt(calc.risk_usdt)}]** USDT ({fmt(calc.stop_pct)}%)")
-    m2.markdown(f"Retorno (alvo)  \n**:green[+{fmt(calc.reward_usdt)}]** USDT ({fmt(calc.tp_pct)}%)")
-    st.caption(f"R:R {fmt(calc.rr) if calc.rr else '—'} · "
-               + ("" if spot else f"margem {fmt(calc.margin)} USDT ({calc.leverage:g}×) · ") + f"taxas {fmt(calc.fees_usdt)} · "
-               f"break-even {fmt_price(calc.breakeven)}" + (f" · liquidação {fmt_price(calc.liquidation)}" if calc.liquidation else ""))
-    for w in calc.warnings:
-        st.warning(w)
-
-    blocked = execution.orders_problem()
-    if st.button(f"Enviar ordem — {'COMPRAR' if side == 'BUY' else 'VENDER'}", type="primary",
-                 width="stretch", key=f"{bot}__t_send", disabled=calc.qty <= 0 or bool(blocked)):
-        check = risk.check_trade(cfg, s, side, entry, sl, tp, profile.market)
-        if check.reasons:
-            for r in check.reasons:
-                st.error(r)
-        else:
-            for n in check.notes:
-                st.info(n)
-            try:
-                out = broker.place_order(symbol=cfg["symbol"], market=profile.market, side=side, qty=calc.qty,
-                                         order_type="LIMIT" if otype == "Limitada" else "MARKET", price=price,
-                                         limit_price=entry if otype == "Limitada" else None, stop_loss=sl,
-                                         take_profit=tp, leverage=lev, fee_pct=float(cfg["fee_pct"]),
-                                         slippage_pct=float(cfg["slippage_pct"]), source="manual",
-                                         max_loss_planned=calc.risk_usdt, margin_mode=cfg["margin_mode"], fx=calc.fx)
-                st.success(f"Ordem {out['status'].lower()}.")
-                st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
-    if blocked:
-        st.caption(blocked)
 
 
 def leverage_controls(profile: BotProfile, cfg: dict) -> None:
@@ -688,6 +600,52 @@ _CARDS_CSS = (Path(__file__).with_name("position_cards.css")).read_text(encoding
 @st.cache_resource(show_spinner=False)
 def _cards_component():
     return st.components.v2.component("tb_position_cards", css=_CARDS_CSS, js=_CARDS_JS)
+
+
+_TICKET_JS = Path(__file__).with_name("ticket.js").read_text(encoding="utf-8")
+_TICKET_CSS = Path(__file__).with_name("ticket.css").read_text(encoding="utf-8")
+_HEADER_JS = Path(__file__).with_name("header.js").read_text(encoding="utf-8")
+_HEADER_CSS = Path(__file__).with_name("header.css").read_text(encoding="utf-8")
+
+
+@st.cache_resource(show_spinner=False)
+def _header_component():
+    return st.components.v2.component("tb_header", css=_HEADER_CSS, js=_HEADER_JS)
+
+
+@st.cache_resource(show_spinner=False)
+def _ticket_component():
+    return st.components.v2.component("tb_ticket", css=_TICKET_CSS, js=_TICKET_JS)
+
+
+def ticket_panel(profile: BotProfile, cfg: dict) -> None:
+    """Boleta manual (componente em HTML/CSS/JS): o formulário volta ao Python, que calcula o risco e valida o envio."""
+
+    @st.fragment
+    def _ticket():
+        bot = profile.key
+        price, atr_v = st.session_state.get(f"{bot}__last_price"), st.session_state.get(f"{bot}__atr")
+        if not price:
+            st.info("Carregando cotação…")
+            return
+        c = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ENTRY_KEYS}}
+        stats = get_broker(bot).stats({c["symbol"]: price})
+        key = f"{bot}-ticket"
+        res = _ticket_component()(key=key, data=ticket_view.view(profile, c, st.session_state.get(f"{bot}__t_form"), price, atr_v, stats),
+                                  on_form_change=lambda: None, on_send_change=lambda: None)
+        form = getattr(res, "form", None)
+        if form is not None and form != st.session_state.get(f"{bot}__t_form"):
+            st.session_state[f"{bot}__t_form"] = form
+            st.rerun(scope="fragment")  # recalcula o resumo com o formulário novo
+        ev = getattr(res, "send", None)
+        if ev and ev.get("uid") != st.session_state.get(f"{bot}__t_uid"):
+            st.session_state[f"{bot}__t_uid"] = ev.get("uid")
+            ok, msg = ticket_view.submit(profile, c, ev, price, atr_v)
+            st.toast(msg, icon="✅" if ok else "🚫")
+            if ok:
+                st.rerun(scope="app")
+
+    _ticket()
 
 
 def open_positions(profile: BotProfile, cfg: dict) -> None:
