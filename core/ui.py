@@ -34,7 +34,9 @@ def cached_klines(symbol: str, interval: str, limit: int, market: str) -> pd.Dat
     return get_klines(symbol, interval, limit, market)
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+# Objetos (Ticker, faixas de alavancagem) ficam em cache_resource: o cache_data os serializa com pickle, que falha quando o app recarrega
+# os módulos após uma atualização do código (a classe guardada deixa de ser a mesma do módulo).
+@st.cache_resource(ttl=10, show_spinner=False)
 def cached_ticker(symbol: str, market: str):
     return get_ticker(symbol, market)
 
@@ -52,7 +54,7 @@ def cached_funding(symbol: str) -> float | None:
     return get_funding_rate(symbol)
 
 
-@st.cache_data(ttl=6 * 3600, show_spinner=False)
+@st.cache_resource(ttl=6 * 3600, show_spinner=False)
 def cached_brackets(symbol: str):
     return lev_rules.brackets(symbol)
 

@@ -1293,3 +1293,24 @@ def test_page_renders_result_of_confirmed_conditional_plan(monkeypatch):
 
     at = AppTest.from_function(page, default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
+
+
+def test_cached_objects_do_not_need_pickle(monkeypatch):
+    """Ticker e faixas de alavancagem não podem ir para o cache serializado (pickle falha se o módulo foi recarregado)."""
+    import dataclasses
+
+    import streamlit as st
+
+    @dataclasses.dataclass
+    class Local:  # classe que o pickle não encontra no módulo: igual ao que acontece após o recarregamento do código
+        last: float
+
+    _offline_market(monkeypatch)
+    from core import data, ui
+
+    monkeypatch.setattr(ui, "get_ticker", lambda s, m: Local(1.0))
+    monkeypatch.setattr(ui.lev_rules, "brackets", lambda s: ((Local(2.0),), "x"))
+    st.cache_resource.clear()
+    assert ui.cached_ticker("BTCUSDT", "futures").last == 1.0
+    assert ui.cached_brackets("BTCUSDT")[0][0].last == 2.0
+    assert data.Ticker  # os demais valores em cache_data são DataFrame, lista e número: serializáveis
