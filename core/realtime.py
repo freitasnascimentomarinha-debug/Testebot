@@ -72,6 +72,9 @@ _TEMPLATE = r"""<!doctype html><html><head><meta charset="utf-8">
   #closebtn{font-size:12px;padding:0 10px;background:#7b2d2d;border-color:#ef5350}
   #indbox{position:absolute;right:70px;top:34px;z-index:6;background:#161a25;border:1px solid #2a2e39;border-radius:6px;padding:8px 10px;font-size:12px;display:flex;flex-direction:column;gap:3px;max-width:220px}
   #indbox label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  #zoom{position:absolute;right:78px;bottom:34px;z-index:5;display:flex;gap:3px}
+  #zoom button{background:rgba(28,32,48,.92);color:#d1d4dc;border:1px solid #2a2e39;border-radius:4px;cursor:pointer;font-size:15px;width:30px;height:28px;padding:0}
+  #zoom button:hover{border-color:#8a8f98}
   #pop{position:absolute;z-index:7;background:#161a25;border:1px solid #2a2e39;border-radius:6px;padding:8px;font-size:12px;width:210px}
   #pop button{display:block;width:100%;margin:5px 0 0;padding:6px;border-radius:4px;border:1px solid #2a2e39;background:#1c2030;color:#d1d4dc;cursor:pointer}
   #pop button.b{background:#1f6f66;border-color:#26a69a} #pop button.s{background:#7b2d2d;border-color:#ef5350}

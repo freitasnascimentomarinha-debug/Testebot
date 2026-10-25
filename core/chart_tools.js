@@ -223,9 +223,15 @@ function openOrderPopup(pt) {
 }
 // linhas de stop/alvo/liquidação das posições e ordens pendentes (arrastar stop/alvo muda a proteção)
 const PL = [];   // {pos, kind: "sl"|"tp"|"liq", line}
-C.positions.forEach(p => {
-  const mk = (kind, price, color, title) => { if (price) PL.push({pos: p, kind, line: candles.createPriceLine({price, color, lineWidth: 1, lineStyle: kind === "liq" ? 1 : 2, axisLabelVisible: true, title})}); };
-  mk("sl", p.stop_loss, DN, "SL ↕"); mk("tp", p.take_profit, UP, "TP ↕"); mk("liq", p.liquidation, "#ff9800", "Liq.");
+// resultado líquido da posição se o preço chegar a ``price`` (já com a taxa de entrada e a estimada de saída): é o P&L mostrado no stop e no alvo
+const netAt = (p, price) => { const fx = p.fx || 1;
+  return p.sign * (price - p.entry) * p.qty * fx - p.fees_paid - price * p.qty * fx * p.fee_pct / 100; };
+const NAMES = {sl: "SL ↕", tp: "TP ↕", liq: "Liq."};
+const lineTitle = (p, kind, price) => NAMES[kind] + "  " + money(netAt(p, price)) + " " + UNIT;
+POS.forEach(p => {
+  const mk = (kind, price, color) => { if (price) PL.push({pos: p, kind, line: candles.createPriceLine({price, color, lineWidth: 1, lineStyle: kind === "liq" ? 1 : 2,
+    axisLabelVisible: true, title: lineTitle(p, kind, price)})}); };
+  mk("sl", p.stop_loss, DN); mk("tp", p.take_profit, UP); mk("liq", p.liquidation, "#ff9800");
 });
 const OL = (C.orders || []).map(o => ({o, line: candles.createPriceLine({price: o.price, color: "#bdbdbd", lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
   title: "LIMIT " + (o.side === "BUY" ? "COMPRA " : "VENDA ") + o.qty + " ✕"})}));
@@ -254,7 +260,8 @@ chartEl.addEventListener("pointerdown", e => {
 window.addEventListener("pointermove", e => {
   const pt = pointFromEvent(e);
   if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) down.moved = true;
-  if (down && down.drag === "line" && pt) { dragLine.line.applyOptions({price: pt.p}); return; }
+  if (down && down.drag === "line" && pt) {   // o rótulo mostra o P&L líquido que a posição teria se o preço chegar aqui
+    dragLine.line.applyOptions({price: pt.p, title: lineTitle(dragLine.pos, dragLine.kind, pt.p)}); return; }
   if (down && down.drag && down.drag.d && pt) {            // mover desenho inteiro
     const dl = chart.timeScale().coordinateToLogical(pt.x) - down.drag.lg, dp = pt.p - down.drag.pr, d = down.drag.d;
     const sh = (o, base) => ({t: timeOfIdx(idxOfTime(base.t) + dl), p: base.p + dp});
@@ -270,11 +277,13 @@ window.addEventListener("pointerup", e => {
   if (was.drag === "line") {                                 // soltou uma linha de stop/alvo
     const pt = pointFromEvent(e), l = dragLine; dragLine = null;
     const price = pt ? pt.p : l.line.options().price, prev = l.kind === "sl" ? l.pos.stop_loss : l.pos.take_profit;
-    if (!pt || !validProtect(l.pos, l.kind, price)) { l.line.applyOptions({price: prev}); return; }
-    if (confirm((l.kind === "sl" ? "Mover o STOP" : "Mover o ALVO") + " para " + fmt(price) + "?")) {
+    const back = () => l.line.applyOptions({price: prev, title: lineTitle(l.pos, l.kind, prev)});
+    if (!pt || !validProtect(l.pos, l.kind, price)) { back(); return; }
+    if (confirm((l.kind === "sl" ? "Mover o STOP" : "Mover o ALVO") + " para " + fmt(price) + "?\nResultado se for atingido: " + money(netAt(l.pos, price)) + " " + UNIT)) {
       if (l.kind === "sl") l.pos.stop_loss = price; else l.pos.take_profit = price;
+      l.line.applyOptions({title: lineTitle(l.pos, l.kind, price)});
       send({kind: "protect", id: l.pos.id, stop_loss: l.pos.stop_loss || null, take_profit: l.pos.take_profit || null});
-    } else l.line.applyOptions({price: prev});
+    } else back();
     return;
   }
   if (was.drag && was.drag.d) { saveDraw(); return; }
@@ -303,3 +312,17 @@ bar.appendChild(closeBtn);
 if (C.positions.length) { closeBtn.style.display = "";
   closeBtn.onclick = () => { if (confirm("Zerar a(s) posição(ões) aberta(s) em " + C.symbol + " a mercado?")) C.positions.forEach(p => send({kind: "close", id: p.id})); }; }
 setTool("cursor");
+
+// ---------------------------------------------------------------- zoom (canto do gráfico)
+const zoomBox = document.createElement("div"); zoomBox.id = "zoom";
+zoomBox.innerHTML = `<button data-z="in" title="Aproximar">＋</button><button data-z="out" title="Afastar">－</button><button data-z="fit" title="Ajustar ao padrão">⤢</button>`;
+chartEl.style.position = "relative"; chartEl.appendChild(zoomBox);   // ancorado no canto do próprio gráfico
+function zoomBy(f) {   // mantém a vela mais recente na tela e muda a quantidade de velas visíveis
+  const ts = chart.timeScale(), r = ts.getVisibleLogicalRange(); if (!r) return;
+  const span = Math.min(Math.max((r.to - r.from) * f, 8), 5000);
+  ts.setVisibleLogicalRange({from: r.to - span, to: r.to});
+}
+zoomBox.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.z === "in") zoomBy(0.7);
+  else if (b.dataset.z === "out") zoomBy(1 / 0.7);
+  else { chart.priceScale("right").applyOptions({autoScale: true}); chart.timeScale().setVisibleLogicalRange({from: data.length - 150, to: data.length + 5}); } });
