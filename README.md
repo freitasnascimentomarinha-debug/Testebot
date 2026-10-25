@@ -43,6 +43,11 @@ pronta para receber a API de negociação da Binance numa segunda fase.
   e em moedas inéditas. Células sem candidato aprovado ficam sem bot (o relatório em `docs/` mostra quais). O fluxo de ordens usa o
   volume comprador/vendedor agressivo (taker) da Binance; o livro de ofertas histórico não existe para backtest. Os bots gerados vão
   para `core/context_bots.json` e entram sozinhos no ranking e na escolha por contexto.
+* **Gráfico em tempo real com ferramentas**: barra à esquerda com seleção/mover, linha de tendência, linha horizontal, retângulo, Fibonacci,
+  régua e **ordem limite pelo gráfico** (clique no preço → comprar/vender limite, com tamanho pela perda máxima e stop/alvo pelo ATR);
+  desenhos ficam salvos no navegador por ativo. No topo: tipo de vela (velas, Heikin-Ashi, linha, área), escala logarítmica e liga/desliga
+  de indicadores. **Stop e alvo das posições são arrastáveis** (com confirmação), clicar na linha de uma ordem limite a cancela e o botão
+  Zerar encerra a posição. O gráfico avisa a página por `postMessage` e `core/chart_actions.py` valida tudo antes de agir.
 * **Papel da IA**: por padrão a IA só **explica resumidamente** o que acontece no mercado e dá uma **dica útil** do
   contexto, no tom da personalidade escolhida (professor, direto ao ponto, gestor cauteloso, mentor ou quant).
   Opcionalmente ela também **interfere** na ativação do bot: confirma ou veta o sinal naquele momento.
