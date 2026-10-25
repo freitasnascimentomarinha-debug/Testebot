@@ -55,6 +55,14 @@ st.markdown("""<style>
 [data-testid="stMetricValue"] {font-size: 1.35rem;}
 [data-testid="stMetricLabel"] p {font-size: .8rem;}
 .block-container {padding-top: 2.2rem;}
+/* abas em formato de pílulas */
+[role="tablist"] {gap: 4px; background: #181d2b; border: 1px solid #232839; border-radius: 12px; padding: 4px; width: fit-content; max-width: 100%; border-bottom: 1px solid #232839 !important;}
+[data-testid="stTab"] {height: auto; padding: 7px 14px; border-radius: 9px; background: transparent; margin: 0;}
+[data-testid="stTab"] p {font-weight: 600; font-size: .9rem;}
+[data-testid="stTab"]:hover {background: rgba(255,255,255,.05);}
+[data-testid="stTab"][aria-selected="true"] {background: #2a3042;}
+[data-testid="stTab"][aria-selected="true"] p {color: #fff;}
+[role="tablist"] .react-aria-SelectionIndicator, [role="tablist"] + div[aria-hidden] {display: none;}
 </style>""", unsafe_allow_html=True)
 
 _acct_pages = ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else []) + \

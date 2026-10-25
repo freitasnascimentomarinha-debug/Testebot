@@ -706,13 +706,13 @@ def test_bot_page_layout_and_analysis_with_advice(monkeypatch):
     at = AppTest.from_function(page, default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
     labels = [t.label for t in at.tabs]
-    assert "⚡ Tempo real" in labels and any("TradingView" in l for l in labels) and not any("Análise técnica" in l for l in labels)
+    assert "⚡ Tempo real" in labels and not any("TradingView" in l for l in labels) and not any("Análise técnica" in l for l in labels)
     # layout em L: painel de ordem ao lado do gráfico e painéis embaixo
     for want in ("✍️ Ordem", "🤖 Entrada do bot", "🧠 Análise do bot", "⚙️ Configurações", "Posições abertas"):
         assert want in labels, want
     # análise e configurações ficam ao lado das abas do gráfico (Tempo real, TradingView), não embaixo
-    tv = next(i for i, l in enumerate(labels) if "TradingView" in l)
-    assert labels[tv + 1:tv + 3] == ["🧠 Análise do bot", "⚙️ Configurações"] and labels.index("⚡ Tempo real") < tv
+    tv = labels.index("⚡ Tempo real")
+    assert labels[tv + 1:tv + 3] == ["🧠 Análise do bot", "⚙️ Configurações"]
     assert labels.index("✍️ Ordem") > labels.index("⚙️ Configurações") and labels.index("Posições abertas") > labels.index("🤖 Entrada do bot")
     captions = " ".join(c.value for c in at.caption)
     assert "Candles ao vivo direto da corretora" not in captions and "P&L líquido = variação de preço" not in captions
