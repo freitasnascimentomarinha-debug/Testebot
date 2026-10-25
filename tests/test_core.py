@@ -725,8 +725,58 @@ def test_bot_page_layout_and_analysis_with_advice(monkeypatch):
     # tudo automático: a leitura do ativo aparece sozinha, em um bloco só e sem jargão de gestor de risco
     assert at.session_state["day__scan"].viewed is not None
     text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption) + " ".join(i.value for i in at.info)
-    assert ("Sem oportunidade agora" in text or "Oportunidade de" in text) and "Detalhes técnicos" in [e.label for e in at.expander]
+    from core import analysis_view
+
+    view = analysis_view.view(PROFILES["day"], {"scan_minutes": 15}, at.session_state["day__scan"], on=False, next_at=None)
+    assert view["title"] in ("Sem oportunidade agora", "Oportunidade de compra", "Oportunidade de venda", "Sinal contrário: encerrando a posição")
+    assert view["drivers"] and view["facts"] and "dica" not in view                       # fatos medidos, sem dica genérica
     assert "deepseek" not in text.lower() and "Gestor de risco" not in text and "BLOQUEADA" not in text
+
+
+def test_scan_runs_by_time_not_on_page_entry(monkeypatch):
+    """A varredura é por tempo (padrão 15 min): reservar duas vezes seguidas só vale a primeira; reset libera na hora."""
+    from core import scanner
+
+    assert default_settings(PROFILES["day"])["scan_minutes"] == 15 and default_settings(PROFILES["day"])["ai_exit"] is False
+    scanner.reset("day")
+    assert scanner.claim("day", 15, now=1000.0) is True
+    assert scanner.claim("day", 15, now=1000.0 + 14 * 60) is False       # abrir a página/trocar de moeda não varre de novo
+    assert scanner.claim("day", 15, now=1000.0 + 15 * 60) is True
+    assert scanner.next_scan("day", 15) == 1000.0 + 30 * 60
+    assert scanner.claim("day", 30, now=1000.0 + 20 * 60 + 15 * 60) is False   # programável: 30 min
+    scanner.reset("day")
+    assert scanner.claim("day", 15, now=5000.0) is True                      # ligar o bot varre na hora
+    scanner.reset("day")
+
+
+def test_ai_exit_answers_are_safe():
+    """A IA só pode manter ou encerrar; resposta estranha vira HOLD e a confiança fica entre 0 e 100."""
+    from core import ai_exit
+
+    assert ai_exit.parse({"acao": "close", "confianca": 80, "motivo": "ADX caiu e o rompimento falhou."}) == {
+        "acao": "CLOSE", "confianca": 80, "motivo": "ADX caiu e o rompimento falhou."}
+    assert ai_exit.parse({"acao": "vender tudo", "confianca": "x"})["acao"] == "HOLD"
+    assert ai_exit.parse({"acao": "CLOSE", "confianca": 900})["confianca"] == 100
+
+
+def test_sidebar_groups_and_watchlist(monkeypatch):
+    from core import data, nav
+
+    class P:
+        def __init__(self, title, icon, url_path):
+            self.title, self.icon, self.url_path = title, icon, url_path
+
+    pages = {"Visão geral": [P("Painel", "📊", "")], "Mercado Cripto": [P("Futuros", "⚡", "futuros"), P("Spot", "🌊", "spot")]}
+    g = nav.groups(pages, "spot")
+    assert [i["active"] for grp in g for i in grp["items"]] == [False, False, True]
+    assert nav.market_of("spot") == "spot" and nav.market_of("futuros") == "futures" and nav.market_of("carteira", "spot") == "spot"
+    calls = []
+    monkeypatch.setattr(data, "_get", lambda url, params=None: calls.append(url) or [{"symbol": "BTCUSDT", "lastPrice": "100", "priceChangePercent": "2.5"}])
+    data._watch_cache.clear()
+    assert data.watch_prices("futures", ["BTCUSDT", "XXXUSDT"]) == {"BTCUSDT": (100.0, 2.5)}
+    data.watch_prices("futures", ["BTCUSDT"])
+    assert len(calls) == 1                                                  # uma chamada guardada por 15 s para a lista toda
+    data._watch_cache.clear()
 
 
 def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypatch):

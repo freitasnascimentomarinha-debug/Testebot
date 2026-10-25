@@ -1,7 +1,7 @@
 """Executor 24/7 sem navegador (piloto automático em segundo plano).
 
 Usa exatamente as configurações salvas na interface. Analisa cada bot com
-``autopilot`` ligado sempre que um novo candle fecha: varre os ativos da lista, usa o bot mais recomendado do ranking
+``autopilot`` ligado a cada ``scan_minutes`` (padrão 15 min): varre os ativos da lista, usa o bot mais recomendado do ranking
 para o contexto de cada um e opera as melhores oportunidades. Também monitora stops/alvos continuamente.
 
     export OPENROUTER_API_KEY=sk-or-...
@@ -15,7 +15,7 @@ import logging
 import time
 
 from core import accounts, engine, execution, personalities, scanner, storage
-from core.data import get_funding_rate, get_klines, get_ticker, last_closed_candle_time
+from core.data import get_funding_rate, get_klines, get_ticker
 from core.ai import get_api_key
 from core.profiles import PAGE_BOTS, PROFILES
 from core.settings import load_settings
@@ -37,11 +37,8 @@ def tick(bot: str, last_seen: dict) -> None:
     if not personalities.allowed(profile.market, cfg["interval"]):
         log.warning("[%s] nenhum bot foi treinado/testado em %s %s: análise ignorada", bot, profile.market, cfg["interval"])
         return
-    raw = get_klines(cfg["symbol"], cfg["interval"], 150, profile.market)
-    marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(raw, cfg['interval'])}"
-    if last_seen.get(bot) == marker:
+    if not scanner.claim(bot, float(cfg.get("scan_minutes") or scanner.DEFAULT_MINUTES)):   # varre de tempos em tempos, não a cada candle
         return
-    last_seen[bot] = marker
     if engine.ensure_ranking(profile, cfg):
         log.info("[%s] ranking semanal dos bots atualizado (%s %s)", bot, profile.market, cfg["interval"])
     report = scanner.run(profile, cfg, get_api_key(), klines=get_klines, ticker=get_ticker, funding=get_funding_rate)
