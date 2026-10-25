@@ -102,13 +102,16 @@ class CellData:
 
 
 def load_cell(market: str, interval: str, universe: list[str], getter, days: int | None = None) -> CellData:
+    """Baixa as moedas na ordem do volume até completar 6 (busca/validação) + 4 (prova final); moeda sem dados é pulada."""
     cell = CellData(market, interval, days or DAYS[interval])
-    for k, sym in enumerate(universe[:N_SEARCH + N_UNSEEN]):
+    for sym in universe:
+        if len(cell.search) >= N_SEARCH and len(cell.unseen) >= N_UNSEEN:
+            break
         try:
             votes = ranking.votes_for(sym, interval, market, cell.days, getter)
-        except Exception:  # noqa: BLE001 - moeda sem dados: segue com as outras
+        except Exception:  # noqa: BLE001 - moeda sem dados neste mercado: segue com as outras
             continue
-        (cell.search if k < N_SEARCH else cell.unseen)[sym] = votes
+        (cell.search if len(cell.search) < N_SEARCH else cell.unseen)[sym] = votes
     return cell
 
 

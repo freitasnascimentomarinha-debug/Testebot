@@ -1662,3 +1662,53 @@ def test_bots_gallery_renders_with_context_bots(monkeypatch):
     at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
     assert any("Suporte e resistência" in str(getattr(m, "value", "")) for m in at.markdown)
+
+
+def test_archive_klines_monthly_daily_fallback_and_formats(monkeypatch, tmp_path):
+    import io
+    import zipfile
+    from datetime import datetime, timezone
+
+    from core import archive
+
+    monkeypatch.setattr(archive, "CACHE", tmp_path)
+
+    def zipped(rows, header=False):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            head = "open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,taker_buy_quote_volume,ignore\n" if header else ""
+            z.writestr("x.csv", head + "\n".join(",".join(map(str, r)) for r in rows))
+        return buf.getvalue()
+
+    def rows(start, n, step_ms, mult=1):
+        return [[(start + i * step_ms) * mult, 1, 2, 0.5, 1.5, 10, 0, 0, 0, 6, 0, 0] for i in range(n)]
+
+    t0 = int(datetime(2026, 9, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    day = 86_400_000
+    served, asked = {}, []
+    served["monthly/klines/AAAUSDT/1d/AAAUSDT-1d-2026-09"] = zipped(rows(t0, 30, day), header=True)           # mês fechado, com cabeçalho
+    for d in range(1, 4):                                                                                       # 1 a 3/10: só diários
+        served[f"daily/klines/AAAUSDT/1d/AAAUSDT-1d-2026-10-{d:02d}"] = zipped(rows(t0 + (29 + d) * day, 1, day))
+    served["monthly/klines/BBBUSDT/1d/BBBUSDT-1d-2026-09"] = zipped(rows(t0, 30, day, mult=1000))             # spot em microssegundos
+
+    class Resp:
+        def __init__(self, url):
+            self.content = next((v for k, v in served.items() if url.endswith(k + ".zip")), b"")
+            self.status_code = 200 if self.content else 404
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(archive._session, "get", lambda url, timeout=0: asked.append(url) or Resp(url))
+    now = datetime(2026, 10, 4, 10, tzinfo=timezone.utc)                       # hoje = 4/10: os diários vão até 3/10
+    df = archive.klines("AAAUSDT", "1d", 33, "futures", now=now)
+    assert len(df) == 33 and df["time"].is_monotonic_increasing and "taker_buy" in df and df["taker_buy"].eq(6.0).all()
+    assert df["time"].iloc[-1].date().isoformat() == "2026-10-03" and any("futures/um" in u for u in asked)
+    assert len(archive.klines("AAAUSDT", "1d", 5, "futures", now=now)) == 5     # pede menos: usa só o mês corrente
+    n = len(asked)
+    archive.klines("AAAUSDT", "1d", 33, "futures", now=now)
+    assert len(asked) == n or all("2026-10-0" not in u for u in asked[n:])      # arquivos fechados vêm do cache em disco
+    us = archive.klines("BBBUSDT", "1d", 10, "spot", now=datetime(2026, 10, 1, 10, tzinfo=timezone.utc))
+    assert us["time"].iloc[-1].year == 2026                                      # microssegundos convertidos
+    with pytest.raises(RuntimeError):
+        archive.klines("ZZZUSDT", "1d", 10, "spot", now=now)
