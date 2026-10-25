@@ -2079,3 +2079,31 @@ def test_chart_has_a_live_source_for_every_exchange():
     native = {"binance", "bybit", "okx"}                       # com WebSocket próprio
     for ex in exchanges.EXCHANGES:
         assert ex in native or f"  {ex}: () =>" in html, ex      # as demais têm adaptador REST
+
+
+def test_polymarket_sentiment_for_ai(monkeypatch):
+    """O sentimento do Polymarket (preço mediano implícito e chance de tocar níveis) vira contexto para a IA; sem dados, nada muda."""
+    from datetime import datetime, timezone
+    from core import ai, sentiment
+
+    assert sentiment.parse_price("Will Bitcoin reach $150,000 in October?") == 150000 and sentiment.parse_price("above $1.5k") == 1500
+    assert [sentiment.kind_of(q) for q in ("Will Bitcoin dip to $60,000?", "Will Bitcoin reach $95,000?", "Will the price of Bitcoin be above $72,000 on X?", "Quem ganha?")] \
+        == ["down", "up", "above", None]
+    now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
+    mk = lambda q, yes: {"question": q, "outcomes": '["Yes","No"]', "outcomePrices": f'["{yes}","{1 - yes}"]'}  # noqa: E731
+    above = {"title": "Bitcoin above ___ on October 26?", "endDate": "2026-10-26T16:00:00Z", "volume24hr": 1000,
+             "markets": [mk(f"Will the price of Bitcoin be above ${p:,} on October 26?", y) for p, y in ((78000, 0.95), (80000, 0.7), (82000, 0.3), (84000, 0.05))]}
+    touch = {"title": "What price will Bitcoin hit in October?", "endDate": "2026-11-01T04:00:00Z",
+             "markets": [mk("Will Bitcoin reach $84,000 in October?", 0.2), mk("Will Bitcoin dip to $76,000 in October?", 0.1)]}
+    assert abs(sentiment.implied_median(sentiment._ladder(above, ("above",))) - 81000) < 1
+    r = sentiment.summarize([above, touch], "BTC", 80000, now)
+    assert r["vies"] == "altista" and r["mediana_implicita"]["vs_preco_pct"] > 1 and r["toque"]["alta"]["chance_pct"] == 20.0
+    assert "Sentimento altista" in r["leitura"] and sentiment.summarize([{"title": "Outra coisa", "endDate": "2026-12-01T00:00:00Z"}], "BTC", 80000, now) is None
+    sentiment._cache.clear()
+    sentiment._cache.clear()
+    assert sentiment.for_symbol("XYZUSDT", 1.0, fetch=lambda base: (_ for _ in ()).throw(RuntimeError("sem rede"))) is None   # falha vira None
+    sentiment._cache.clear()
+    cfg = default_settings(PROFILES["day"])
+    ctx = ai.build_context(profile=PROFILES["day"], cfg=cfg, symbol="BTCUSDT", interval="15m", plan={}, snapshot={}, indicators_now={}, account={},
+                           positions=[], risk_rules={}, sentiment=r)
+    assert ctx["sentimento_polymarket"]["vies"] == "altista" and "sentimento_polymarket" in ai.SYSTEM_PROMPT

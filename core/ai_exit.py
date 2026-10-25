@@ -15,13 +15,14 @@ SYSTEM_PROMPT = """Você é um gestor de risco de criptomoedas. Há uma posiçã
 Decida apenas: manter (HOLD) ou encerrar agora a mercado (CLOSE). Regras:
 1. Responda SOMENTE um JSON: {"acao":"HOLD|CLOSE","confianca":0-100,"motivo":"1 a 2 frases objetivas"}.
 2. O padrão é HOLD. Só use CLOSE se a tese da entrada foi invalidada ou o cenário virou contra a posição com evidência nos dados
-   (contexto do gráfico mudou, tendência do tempo maior virou, rompimento falhou, perda de suporte/resistência, volume contra),
+   (contexto do gráfico mudou, tendência do tempo maior virou, rompimento falhou, perda de suporte/resistência, volume contra, e o
+   "sentimento_polymarket" — probabilidades de apostadores no mercado de previsões — passou a contrariar a posição),
    ou se o lucro já está esticado e os dados mostram exaustão. Um recuo pequeno dentro do normal NÃO é motivo para sair.
 3. O "motivo" cita os fatos dos dados (contexto, ADX, RSI, volume, distância ao stop/alvo em ATR). Não repita lugares-comuns
    nem conselhos genéricos. Nunca invente números."""
 
 
-def build_context(pos: dict, price: float, sc: dict, snapshot: dict, personality: dict | None, cfg: dict) -> dict:
+def build_context(pos: dict, price: float, sc: dict, snapshot: dict, personality: dict | None, cfg: dict, sentiment: dict | None = None) -> dict:
     atr = sc.get("atr") or 0
     long = pos["side"] == "BUY"
     sign = 1 if long else -1
@@ -33,7 +34,7 @@ def build_context(pos: dict, price: float, sc: dict, snapshot: dict, personality
                     "distancia_do_stop_em_atr": d_atr(pos.get("stop_loss")), "distancia_do_alvo_em_atr": (None if not pos.get("take_profit") else
                                                                                                           round(-d_atr(pos["take_profit"]), 2)),
                     "motivo_da_entrada": (pos.get("note") or "")[:200], "bot": (personality or {}).get("name") or (pos.get("personality") or {}).get("name")},
-        "cenario_agora": sc, "candles_recentes": snapshot, "tempo_grafico": cfg["interval"],
+        "cenario_agora": sc, "candles_recentes": snapshot, "tempo_grafico": cfg["interval"], "sentimento_polymarket": sentiment,
     }
 
 

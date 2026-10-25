@@ -69,6 +69,8 @@ Você recebe dados REAIS já calculados. Regras:
    (sem alvo), take_profit coerente. Use CLOSE só se houver posição do bot (source diferente de "manual") e o cenário tiver virado.
 5. Siga a "personalidade" recebida (estratégia, direção e filtros). Se o cenário não combina com ela, responda HOLD.
 6. Spot não permite venda a descoberto. Nunca invente números: use só os dados recebidos.
+7. "sentimento_polymarket" (quando vier) é a probabilidade que apostadores com dinheiro real dão aos preços da moeda (mercado de previsões):
+   use como contexto de apoio (confirma ou enfraquece o cenário técnico), nunca como gatilho sozinho; se estiver ausente, ignore.
 Formato:
 {"decision":"BUY|SELL|HOLD|CLOSE","order_type":"MARKET|LIMIT","entry":number|null,"stop_loss":number|null,"take_profit":number|null,
  "confidence":0-100,"reasoning":"1 a 2 frases simples sobre a decisão",
@@ -84,7 +86,7 @@ def get_api_key(explicit: str | None = None) -> str | None:
 def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: dict,
                   indicators_now: dict, account: dict, positions: list[dict], risk_rules: dict,
                   funding_rate: float | None = None, personality: dict | None = None, scenario: dict | None = None,
-                  candidates: list | None = None, armed_plan: dict | None = None) -> dict:
+                  candidates: list | None = None, armed_plan: dict | None = None, sentiment: dict | None = None) -> dict:
     persona = None
     if personality:
         from core.personalities import DIRECTIONS, FILTERS
@@ -117,6 +119,7 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
         "candles_recentes": snapshot,
         "instrucoes_do_usuario": cfg.get("ai_instructions") or "",
         "cenario_calculado": scenario,
+        "sentimento_polymarket": sentiment,
     }
 
 
