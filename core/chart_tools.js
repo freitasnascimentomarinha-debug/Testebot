@@ -315,14 +315,26 @@ setTool("cursor");
 
 // ---------------------------------------------------------------- zoom (canto do gráfico)
 const zoomBox = document.createElement("div"); zoomBox.id = "zoom";
-zoomBox.innerHTML = `<button data-z="in" title="Aproximar">＋</button><button data-z="out" title="Afastar">－</button><button data-z="fit" title="Ajustar ao padrão">⤢</button>`;
+zoomBox.innerHTML = `<button data-z="in" title="Aproximar">＋</button><button data-z="out" title="Afastar">－</button><button data-z="fit" title="Voltar ao zoom padrão">↺</button><button data-z="full" title="Tela cheia (Esc para sair)">⛶</button>`;
 chartEl.style.position = "relative"; chartEl.appendChild(zoomBox);   // ancorado no canto do próprio gráfico
 function zoomBy(f) {   // mantém a vela mais recente na tela e muda a quantidade de velas visíveis
   const ts = chart.timeScale(), r = ts.getVisibleLogicalRange(); if (!r) return;
   const span = Math.min(Math.max((r.to - r.from) * f, 8), 5000);
   ts.setVisibleLogicalRange({from: r.to - span, to: r.to});
 }
+let isFull = false, savedStyle = "";
+function setFull(on) {   // o gráfico mora num iframe: em tela cheia ele ocupa a janela inteira, por cima da página
+  const f = window.frameElement;
+  if (!f) { if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); return; }
+  if (on === isFull) return;
+  isFull = on;
+  if (on) { savedStyle = f.getAttribute("style") || ""; f.style.cssText = savedStyle + ";position:fixed;top:60px;left:0;width:100vw;height:calc(100vh - 60px);z-index:2147483000;background:#0e1117;border:0"; }
+  else f.style.cssText = savedStyle;
+  setTimeout(() => { H = isFull ? window.innerHeight : C.height; chart.applyOptions({height: H - 40, width: document.body.clientWidth}); layoutPanes(); }, 80);
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape" && isFull) setFull(false); });
 zoomBox.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.z === "in") zoomBy(0.7);
   else if (b.dataset.z === "out") zoomBy(1 / 0.7);
+  else if (b.dataset.z === "full") setFull(!isFull);
   else { chart.priceScale("right").applyOptions({autoScale: true}); chart.timeScale().setVisibleLogicalRange({from: data.length - 150, to: data.length + 5}); } });

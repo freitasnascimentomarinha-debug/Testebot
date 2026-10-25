@@ -145,7 +145,7 @@ def render_bot_page(bot: str) -> None:
     # embaixo, posições/histórico, controle do bot e configurações.
     col_chart, col_side = st.columns([3.3, 1.2], gap="medium")
     with col_chart:
-        tab_rt, tab_ctl, tab_cfg = st.tabs(["⚡ Tempo real", "🧠 Análise do bot", "⚙️ Configurações"])
+        tab_rt, tab_book, tab_ctl, tab_cfg = st.tabs(["⚡ Tempo real", "📖 Book de ordens", "🧠 Análise do bot", "⚙️ Configurações"])
         with tab_rt:
             positions = [p for p in broker.account()["positions"] if p["symbol"] == cfg["symbol"] and p.get("market") == profile.market]
             height = chart_height(cfg)
@@ -153,6 +153,8 @@ def render_bot_page(bot: str) -> None:
             components.html(realtime_chart_html(symbol=cfg["symbol"], interval=cfg["interval"], market=profile.market,
                                                 cfg=cfg, lines=realtime_lines(bot, cfg), positions=positions, orders=orders,
                                                 height=height, symbols=all_symbols), height=height + 5)
+        with tab_book:
+            _book_component()(key=f"{bot}-book", data={"symbol": cfg["symbol"], "market": profile.market})
         with tab_ctl:
             analysis_panel(profile, cfg)
         with tab_cfg:
@@ -425,7 +427,7 @@ def leverage_controls(profile: BotProfile, cfg: dict) -> None:
     if st.session_state.get(_k(bot, "leverage_on")):
         st.slider(f"Alavancagem (máx. {max_lev}× em {cfg['symbol'] if futures else mode})", 1, max_lev, key=key,
                   help=f"Limite conforme a tabela da {source}. Em futuros, a posição máxima diminui conforme "
-                       "a alavancagem — veja Configurações → Alavancagem.")
+                       "a alavancagem.")
     else:
         st.caption("Sem alavancagem (1×)" + ("" if futures else " — compra à vista com saldo próprio."))
 
@@ -552,6 +554,15 @@ def _cards_component():
     return st.components.v2.component("tb_position_cards", css=_CARDS_CSS, js=_CARDS_JS)
 
 
+_BOOK_JS = Path(__file__).with_name("book.js").read_text(encoding="utf-8")
+_BOOK_CSS = Path(__file__).with_name("book.css").read_text(encoding="utf-8")
+
+
+@st.cache_resource(show_spinner=False)
+def _book_component():
+    return st.components.v2.component("tb_book", css=_BOOK_CSS, js=_BOOK_JS)
+
+
 _TICKET_JS = Path(__file__).with_name("ticket.js").read_text(encoding="utf-8")
 _TICKET_CSS = Path(__file__).with_name("ticket.css").read_text(encoding="utf-8")
 _HEADER_JS = Path(__file__).with_name("header.js").read_text(encoding="utf-8")
@@ -581,7 +592,8 @@ def ticket_panel(profile: BotProfile, cfg: dict) -> None:
         c = {**cfg, **{n: st.session_state[_k(bot, n)] for n in ENTRY_KEYS}}
         stats = get_broker(bot).stats({c["symbol"]: price})
         key = f"{bot}-ticket"
-        res = _ticket_component()(key=key, data=ticket_view.view(profile, c, st.session_state.get(f"{bot}__t_form"), price, atr_v, stats),
+        max_lev = cached_brackets(c["symbol"])[0][0].max_leverage if profile.market == "futures" else 1
+        res = _ticket_component()(key=key, data=ticket_view.view(profile, c, st.session_state.get(f"{bot}__t_form"), price, atr_v, stats, max_lev),
                                   on_form_change=lambda: None, on_send_change=lambda: None)
         form = getattr(res, "form", None)
         if form is not None and form != st.session_state.get(f"{bot}__t_form"):
@@ -590,7 +602,7 @@ def ticket_panel(profile: BotProfile, cfg: dict) -> None:
         ev = getattr(res, "send", None)
         if ev and ev.get("uid") != st.session_state.get(f"{bot}__t_uid"):
             st.session_state[f"{bot}__t_uid"] = ev.get("uid")
-            ok, msg = ticket_view.submit(profile, c, ev, price, atr_v)
+            ok, msg = ticket_view.submit(profile, c, ev, price, atr_v, max_lev)
             st.toast(msg, icon="✅" if ok else "🚫")
             if ok:
                 st.rerun(scope="app")
@@ -637,9 +649,9 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     k = lambda n: _k(bot, n)  # noqa: E731
     futures = profile.market == "futures"
-    labels = ["Gráfico"] + (["Alavancagem"] if futures else []) + ["Varredura", "Indicadores", "IA", "Níveis do usuário", "Conta"]
+    labels = ["Gráfico", "Varredura", "Indicadores", "IA", "Níveis do usuário", "Conta"]
     tabs = dict(zip(labels, st.tabs(labels)))
-    t_scan, t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[-5:])
+    t_scan, t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[1:])
 
     with tabs["Gráfico"]:
         c = st.columns(2)

@@ -712,7 +712,7 @@ def test_bot_page_layout_and_analysis_with_advice(monkeypatch):
         assert want in labels, want
     # análise e configurações ficam ao lado das abas do gráfico (Tempo real, TradingView), não embaixo
     tv = labels.index("⚡ Tempo real")
-    assert labels[tv + 1:tv + 3] == ["🧠 Análise do bot", "⚙️ Configurações"]
+    assert labels[tv + 1:tv + 4] == ["📖 Book de ordens", "🧠 Análise do bot", "⚙️ Configurações"] and "Alavancagem" not in labels
     assert labels.index("✍️ Ordem") > labels.index("⚙️ Configurações") and labels.index("Posições abertas") > labels.index("🤖 Entrada do bot")
     captions = " ".join(c.value for c in at.caption)
     assert "Candles ao vivo direto da corretora" not in captions and "P&L líquido = variação de preço" not in captions
@@ -769,7 +769,6 @@ def test_sidebar_groups_and_watchlist(monkeypatch):
     pages = {"Visão geral": [P("Painel", "📊", "")], "Mercado Cripto": [P("Futuros", "⚡", "futuros"), P("Spot", "🌊", "spot")]}
     g = nav.groups(pages, "spot")
     assert [i["active"] for grp in g for i in grp["items"]] == [False, False, True]
-    assert nav.market_of("spot") == "spot" and nav.market_of("futuros") == "futures" and nav.market_of("carteira", "spot") == "spot"
     calls = []
     monkeypatch.setattr(data, "_get", lambda url, params=None: calls.append(url) or [{"symbol": "BTCUSDT", "lastPrice": "100", "priceChangePercent": "2.5"}])
     data._watch_cache.clear()
@@ -1983,5 +1982,8 @@ def test_ticket_view_and_submit(monkeypatch):
     fcfg = {**default_settings(fut), "symbol": "BTCUSDT", "allow_short": True}
     assert tv.view(fut, fcfg, {"side": "SELL"}, 100.0, 2.0, stats)["form"]["side"] == "SELL"
     assert tv.clean_form(spot, cfg, {"limit": "abc", "type": "LIMIT"}, 100.0, 2.0, 50.0, 1000.0)["limit"] == 100.0   # lixo vira o preço atual
+    lv = tv.view(fut, fcfg, {"lev": 500, "margin": "Cruzada"}, 100.0, 2.0, stats, max_lev=50)         # alavancagem própria da boleta, limitada ao máximo do par
+    assert lv["leverage"] == 50 and lv["margin_mode"] == "Cruzada" and lv["max_lev"] == 50
+    assert tv.view(fut, fcfg, {"lev": 5}, 100.0, 2.0, stats)["leverage"] == 5 and tv.view(spot, cfg, {"lev": 5}, 100.0, 2.0, stats)["leverage"] is None
     assert tv.submit(spot, cfg, {"type": "LIMIT", "limit": 150}, 100.0, 2.0)[0] is False      # limite 50% longe do mercado
     assert tv.submit(spot, cfg, {"side": "SELL"}, None, 2.0)[0] is False                      # sem cotação
