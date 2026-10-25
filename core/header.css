@@ -1,0 +1,18 @@
+.hd { display: flex; flex-direction: column; gap: 12px; font-family: var(--st-font, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); color: var(--st-text-color, #d1d4dc); }
+.up { color: #26a69a; } .dn { color: #ef5350; }
+.top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.ttl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .ico { font-size: 1.7rem; }
+h1 { margin: 0; font-size: 1.7rem; letter-spacing: .2px; }
+.chip { font-size: .76rem; padding: 3px 10px; border-radius: 999px; background: #1e2433; border: 1px solid #2a3042; color: #b8bdc9; }
+.chip.st { background: rgba(66,165,245,.12); border-color: rgba(66,165,245,.35); color: #90caf9; }
+.chip.ac.real { background: rgba(239,83,80,.14); border-color: rgba(239,83,80,.45); color: #ef9a9a; }
+.tfs { display: flex; gap: 4px; flex-wrap: wrap; background: #181d2b; border: 1px solid #232839; border-radius: 10px; padding: 3px; }
+.tfs button { border: 0; background: transparent; color: #8a8f98; padding: 6px 11px; border-radius: 7px; font-weight: 700; cursor: pointer; font-size: .84rem; }
+.tfs button:hover { color: #e6e8ee; } .tfs button.on { background: #2a3042; color: #fff; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.tile { background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0)), #141824; border: 1px solid #262b3a; border-radius: 12px; padding: 9px 13px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile span { font-size: .7rem; color: #8a8f98; text-transform: uppercase; letter-spacing: .5px; }
+.tile b { font-size: 1.28rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile small { font-size: .74rem; color: #8a8f98; font-variant-numeric: tabular-nums; } .tile small.up { color: #26a69a; } .tile small.dn { color: #ef5350; }
+.tile.px { border-left: 3px solid #42a5f5; } .tile.px b { font-size: 1.5rem; }
+.ctx { background: #141824; border: 1px solid #262b3a; border-radius: 10px; padding: 8px 12px; font-size: .84rem; color: #b8bdc9; } .ctx span { color: #8a8f98; }
