@@ -37,6 +37,12 @@ pronta para receber a API de negociação da Binance numa segunda fase.
   indicadores, estejam ou não ligados no gráfico.
 * **Tudo automático**: não há botões para trocar de bot, armar/desarmar plano ou analisar na mão; o ranking semanal é acompanhado
   (e pode ser forçado) na página Personalidades.
+* **Bots por contexto** (`core/context_research.py`, `tools/pesquisa/gerar_bots.py`): backtest que procura, para cada mercado (futuros e
+  spot), tempo gráfico (5m, 15m, 1h, 4h), contexto (lateralidade, tendência, reversão, rompimento, suporte/resistência e fluxo de
+  ordens) e lado (comprado/vendido; spot só comprado), um bot com **resultado positivo no contexto** — provado na busca, na validação
+  e em moedas inéditas. Células sem candidato aprovado ficam sem bot (o relatório em `docs/` mostra quais). O fluxo de ordens usa o
+  volume comprador/vendedor agressivo (taker) da Binance; o livro de ofertas histórico não existe para backtest. Os bots gerados vão
+  para `core/context_bots.json` e entram sozinhos no ranking e na escolha por contexto.
 * **Papel da IA**: por padrão a IA só **explica resumidamente** o que acontece no mercado e dá uma **dica útil** do
   contexto, no tom da personalidade escolhida (professor, direto ao ponto, gestor cauteloso, mentor ou quant).
   Opcionalmente ela também **interfere** na ativação do bot: confirma ou veta o sinal naquele momento.

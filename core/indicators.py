@@ -191,5 +191,6 @@ def compute(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     out["ichi_tenkan"], out["ichi_kijun"], out["ichi_span_a"], out["ichi_span_b"] = ichimoku(out)
     from core.regime import classify  # contexto do gráfico (usa as colunas acima)
 
+    out["taker_ratio"] = out["taker_buy"] / out["volume"].replace(0, np.nan) if "taker_buy" in out else np.nan  # compra agressiva ÷ volume
     out["regime"] = classify(out)
     return out

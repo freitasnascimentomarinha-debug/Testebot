@@ -91,9 +91,12 @@ def okx_contract_value(symbol: str) -> float:
 
 
 def _frame(rows: list[list], source: str) -> pd.DataFrame:
-    df = pd.DataFrame([r[:6] for r in rows], columns=COLUMNS)
+    # A Binance informa também o volume comprador agressivo (taker buy, campo 9): serve ao contexto "fluxo de ordens".
+    taker = bool(rows) and all(len(r) > 9 for r in rows)
+    cols = COLUMNS + (["taker_buy"] if taker else [])
+    df = pd.DataFrame([list(r[:6]) + ([r[9]] if taker else []) for r in rows], columns=cols)
     df["time"] = pd.to_datetime(df["time"].astype("int64"), unit="ms", utc=True)
-    for col in COLUMNS[1:]:
+    for col in cols[1:]:
         df[col] = df[col].astype(float)
     df = df.drop_duplicates("time").sort_values("time").reset_index(drop=True)
     df.attrs["source"] = source
