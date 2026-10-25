@@ -708,21 +708,83 @@ def test_bot_page_layout_and_analysis_with_advice(monkeypatch):
     labels = [t.label for t in at.tabs]
     assert "⚡ Tempo real" in labels and any("TradingView" in l for l in labels) and not any("Análise técnica" in l for l in labels)
     # layout em L: painel de ordem ao lado do gráfico e painéis embaixo
-    for want in ("✍️ Ordem", "🤖 Entrada do bot", "💼 Posições e histórico", "🤖 Bot e análise", "⚙️ Configurações"):
+    for want in ("✍️ Ordem", "🤖 Entrada do bot", "💼 Posições e histórico", "🧠 Análise do bot", "⚙️ Configurações"):
         assert want in labels, want
     assert labels.index("✍️ Ordem") < labels.index("💼 Posições e histórico")
-    widget_labels = " ".join(str(getattr(w, "label", "")) for w in list(at.number_input) + list(at.radio) + list(at.toggle) + list(at.selectbox))
-    for gone in ("Meta de operações", "Limite de perda diária", "Máx. posições", "Risco:retorno mínimo", "Confiança mínima"):
-        assert gone not in widget_labels
-    assert "Bot automático" in widget_labels and "Perda máxima por trade" in widget_labels and "Alavancado" in widget_labels
-    btn = next(b for b in at.button if "Analisar agora" in b.label)
-    btn.click()
-    at = at.run()
-    assert not at.exception, [e.value for e in at.exception]
-    text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
-    assert "Leitura do especialista" in text and "Melhor bot para este momento" in text and "Plano condicional" in text
-    assert "deepseek" not in text.lower() and not any("Resposta bruta" in (e.label or "") for e in at.expander)
-    assert "Gestor de risco" not in text and "BLOQUEADA" not in text
+    widget_labels = " ".join(str(getattr(w, "label", "")) for w in list(at.number_input) + list(at.radio) + list(at.toggle) + list(at.selectbox)
+                             + list(at.button))
+    for gone in ("Meta de operações", "Limite de perda diária", "Máx. posições", "Risco:retorno mínimo", "Confiança mínima", "Analisar agora",
+                 "Usar este bot", "Armar", "Desarmar", "Atualizar ranking", "Personalidade (estratégia)", "Bot automático"):
+        assert gone not in widget_labels, gone
+    assert "Perda máxima por trade" in widget_labels and "Alavancado" in widget_labels and "Ligar o bot" in widget_labels
+    # tudo automático: a leitura do ativo aparece sozinha, em um bloco só e sem jargão de gestor de risco
+    assert at.session_state["day__scan"].viewed is not None
+    text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption) + " ".join(i.value for i in at.info)
+    assert ("Sem oportunidade agora" in text or "Oportunidade de" in text) and "Detalhes técnicos" in [e.label for e in at.expander]
+    assert "deepseek" not in text.lower() and "Gestor de risco" not in text and "BLOQUEADA" not in text
+
+
+def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypatch):
+    from core import ai, scanner
+    from core.engine import AnalysisResult  # noqa: F401
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    profile = PROFILES["day"]
+    cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_symbols": ["ETHUSDT", "SOLUSDT", "XRPUSDT"], "scan_max_entries": 2,
+           "candles": 400}
+    asked, fetched = [], []
+
+    def klines(sym, interval, limit=500, market="futures"):
+        fetched.append(sym)
+        raw = make_df(max(limit, 300), trend=0.3, seed=120)   # cenário sintético com sinal de venda e preços positivos
+        raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("15min") - pd.Timedelta(minutes=15), periods=len(raw), freq="15min")
+        raw.attrs["source"] = "teste"
+        return raw.tail(limit).reset_index(drop=True)
+
+    ticker = lambda sym, market="futures": __import__("core.data", fromlist=["Ticker"]).Ticker(sym, float(klines(sym, "15m", 400).close.iloc[-1]), 0, 0, 0, 0, "t")  # noqa: E731
+    monkeypatch.setattr(ai, "ask_ai", lambda ctx, **kw: asked.append(ctx["bot"]["ativo"]) or ai.AIDecision(
+        decision="HOLD", reasoning="Resumo simples.", source="ia", model="m", advice={"resumo": "Resumo simples.", "dica": "Dica."}))
+    monkeypatch.setattr(scanner.engine, "pick_bot", lambda *a, **k: (scanner.engine.personalities.get("esp_15m_ema_3x1"), {}))
+    monkeypatch.setattr(scanner.engine, "get_funding_rate", lambda s: None)
+    assert scanner.symbols_for(cfg) == ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
+    assert scanner.symbols_for({**cfg, "scan_on": False}) == ["BTCUSDT"]
+
+    rep = scanner.run(profile, cfg, "chave", klines=klines, ticker=ticker)
+    assert rep.scanned == 4 and {"BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"} <= set(fetched)
+    assert len(asked) <= 1                                     # no máximo uma consulta à IA por varredura (só para a melhor oportunidade)
+    assert 1 <= len(rep.executed) <= 2 and rep.viewed is not None             # o cenário sintético tem sinal: o bot opera
+    opened = {p["symbol"] for p in paper.get_account(paper.SHARED_ACCOUNT)["positions"]}
+    assert opened == {e["symbol"] for e in rep.executed if e["action"] in ("BUY", "SELL")}
+    # nova varredura no mesmo cenário: não abre outra posição nos ativos que já tem (nada de comprar e vender o mesmo ativo)
+    before = len(paper.get_account(paper.SHARED_ACCOUNT)["positions"])
+    rep2 = scanner.run(profile, cfg, None, klines=klines, ticker=ticker)
+    positions = paper.get_account(paper.SHARED_ACCOUNT)["positions"]
+    assert len(positions) <= before + 2 and len({(p["symbol"], p["side"]) for p in positions}) == len(positions)
+    for sym in {p["symbol"] for p in positions}:
+        assert len({p["side"] for p in positions if p["symbol"] == sym}) == 1
+
+
+def test_signal_against_open_position_closes_it_instead_of_opening_opposite(monkeypatch):
+    from core import engine
+
+    monkeypatch.setattr(engine, "get_funding_rate", lambda s: None)
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    profile = PROFILES["day"]
+    cfg = {**default_settings(profile), "symbol": "X", "auto_bot": False, "personality": "esp_15m_ema_3x1"}
+    df = ind.compute(make_df(400, trend=0.3, seed=120), cfg)            # cenário sintético com sinal de venda
+    price = float(df.close.iloc[-1])
+    plan = analyze(df, cfg, profile, engine.personalities.get("esp_15m_ema_3x1"))
+    assert plan.direction == "SELL"
+    other = "SELL" if plan.direction == "BUY" else "BUY"
+    broker = engine.get_broker("day")
+    broker.place_order(symbol="X", market="futures", side=other, qty=1, price=price, leverage=5, fee_pct=0.0, source="regras")
+    r = engine.run_analysis(profile, cfg, df, price, None)
+    assert r.decision.decision == "CLOSE" and "contrário" in r.decision.reasoning     # sinal contrário encerra a posição
+    broker.place_order(symbol="X", market="futures", side=plan.direction, qty=1, price=price, leverage=5, fee_pct=0.0, source="regras")
+    r = engine.run_analysis(profile, cfg, df, price, None)
+    assert r.decision.decision == "HOLD" and "Já posicionado" in r.decision.reasoning  # já posicionado: não abre outra igual
 
 
 def test_accounts_signup_requires_admin_approval(monkeypatch):

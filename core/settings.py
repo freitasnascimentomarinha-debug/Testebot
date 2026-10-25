@@ -71,8 +71,12 @@ def default_settings(profile: BotProfile) -> dict:
         "ai_temperature": 0.2,
         "ai_auto_execute": False,
         "ai_auto_arm": True,         # piloto automático arma os planos condicionais propostos pela IA
-        "ai_candles_context": 60,
+        "ai_candles_context": 30,
         "ai_instructions": "",
+        # Varredura: o bot procura oportunidades sozinho em vários ativos a cada candle fechado
+        "scan_on": True,
+        "scan_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT"],
+        "scan_max_entries": 2,       # entradas novas por varredura (as melhores oportunidades)
         # Automação
         "refresh_sec": profile.refresh_sec,
         "autopilot": False,
@@ -87,6 +91,7 @@ def load_settings(bot: str) -> dict:
     if stored and "ema_trend_on" not in stored:  # configuração anterior ao padrão enxuto
         stored = {k: v for k, v in stored.items() if k not in INDICATOR_KEYS}
     cfg = {**defaults, **{k: v for k, v in stored.items() if k in defaults}}
+    cfg["auto_bot"] = True  # o bot do momento é sempre escolhido sozinho, pelo ranking
     if PROFILES[bot].market == "spot":  # spot não tem alavancagem, margem nem venda a descoberto
         cfg.update(leverage_on=False, leverage=1, margin_mode="Isolada", allow_short=False)
     return cfg

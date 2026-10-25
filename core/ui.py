@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core import ai as ai_mod, engine, execution, paper, personalities, ranking, regime, risk
+from core import ai as ai_mod, engine, execution, paper, personalities, ranking, regime, risk, scanner
 from core.broker import get_broker
 from core.charts import tradingview_widget
 from core import leverage as lev_rules
@@ -144,7 +144,6 @@ def render_bot_page(bot: str) -> None:
     c2.selectbox("Timeframe", profile.intervals, key=_k(bot, "interval"))
     c3.number_input("Candles", 150, 1500, step=50, key=_k(bot, "candles"))
     c4.selectbox("Atualização (s)", (5, 10, 15, 30, 60, 120, 300, 600), key=_k(bot, "refresh_sec"))
-    ensure_personality(profile, st.session_state[_k(bot, "interval")])
     cfg = {name: st.session_state[_k(bot, name)] for name in cfg}
     cfg["symbol"] = str(cfg["symbol"]).upper().strip()
 
@@ -170,18 +169,18 @@ def render_bot_page(bot: str) -> None:
                        "*Configurações → Níveis do usuário*.")
             components.html(tradingview_widget(cfg["symbol"], cfg["interval"], profile.market, 720), height=730)
     with col_side:
-        st.markdown("🟢 **Bot ligado**" if cfg.get("autopilot") else "⚪ **Bot desligado**")
+        bot_power(profile, cfg)
         t_order, t_bot = st.tabs(["✍️ Ordem", "🤖 Entrada do bot"])
         with t_order:
             trade_ticket(profile, cfg)
         with t_bot:
             entry_panel(profile, cfg)
 
-    t_pos, t_ctl, t_cfg = st.tabs(["💼 Posições e histórico", "🤖 Bot e análise", "⚙️ Configurações"])
+    t_pos, t_ctl, t_cfg = st.tabs(["💼 Posições e histórico", "🧠 Análise do bot", "⚙️ Configurações"])
     with t_pos:
         portfolio_section(profile, cfg)
     with t_ctl:
-        ai_section(profile, cfg)
+        analysis_panel(profile, cfg)
     with t_cfg:
         settings_section(profile, cfg)
 
@@ -193,26 +192,6 @@ def execution_banner() -> None:
                + " · troque em **Minha conta**.")
     if (why := execution.orders_problem(mode)):
         st.warning(why)
-
-
-def ensure_personality(profile: BotProfile, interval: str) -> None:
-    """A personalidade precisa ter sido treinada e testada neste mercado e tempo gráfico: se o tempo mudou e a atual não
-    serve mais, troca pela melhor disponível (ou mantém a atual, bloqueada, quando não há nenhuma)."""
-    bot = profile.key
-    pkey = _k(bot, "personality")
-    ids = [p["id"] for p in personalities.allowed(profile.market, interval)]
-    cur = st.session_state.get(pkey)
-    if ids and cur not in ids:
-        new = personalities.DEFAULT_BY_BOT.get(bot) if personalities.DEFAULT_BY_BOT.get(bot) in ids else ids[0]
-        old = (personalities.get(cur) or {}).get("name", "A personalidade anterior")
-        set_setting(bot, "personality", new)
-        st.toast(f"{old} não foi treinada no {interval}: personalidade trocada para "
-                 f"{(personalities.get(new) or {}).get('name', new)}.", icon="🧠")
-
-
-def personality_blocked(profile: BotProfile, cfg: dict) -> bool:
-    """True quando nenhum bot foi treinado e se destacou neste mercado e tempo gráfico."""
-    return not personalities.allowed(profile.market, cfg["interval"])
 
 
 def indicator_picker(bot: str, cfg: dict) -> None:
@@ -290,14 +269,12 @@ def live_metrics(profile: BotProfile, cfg: dict) -> None:
         st.session_state[f"{bot}__context"] = ctx
         st.caption(f"🧭 **Contexto do gráfico agora ({interval}):** {regime.label(ctx)} — {regime.REGIMES[ctx][1]}")
 
-        if cfg_now.get("autopilot"):
-            if (why := execution.orders_problem()):
-                st.caption("🤖 Piloto automático em espera: " + why)
-            elif not personalities.allowed(profile.market, interval):
-                st.warning("Piloto automático em espera: não há bot treinado e testado neste tempo gráfico. Troque o tempo "
-                           "gráfico.")
-            else:
-                autopilot_step(profile, cfg_now, df, price)
+        # Posições abertas em outros ativos (abertas pela varredura) também precisam de stop e alvo conferidos
+        for ev in scanner.sync_open(profile, cached_klines, cached_ticker, cached_funding, skip={symbol}):
+            t = ev.get("trade")
+            st.toast(f"{ev['type']}: {t['side']} {t['symbol']} {t['pnl']:+.2f} USDT" if t else ev["type"], icon="🔔")
+            st.session_state[f"{bot}__need_rerun"] = True
+        auto_scan(profile, cfg_now, df, price)
         if st.session_state.pop(f"{bot}__need_rerun", False):
             st.rerun()  # posição encerrada/ordem executada: atualiza linhas do gráfico e carteira
 
@@ -349,49 +326,38 @@ def realtime_lines(bot: str, cfg: dict) -> list[dict]:
     return lines
 
 
-def autopilot_step(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float) -> None:
-    """Analisa automaticamente a cada candle fechado (enquanto a página estiver aberta)."""
+def auto_scan(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float) -> None:
+    """No fechamento de cada candle: com o bot ligado faz a varredura (procura oportunidades e opera); desligado, só atualiza a
+    leitura do ativo da tela, sem gastar IA."""
     from core.data import last_closed_candle_time
 
     bot = profile.key
-    marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(df, cfg['interval'])}"
-    if st.session_state.get(f"{bot}__autopilot_last") == marker:
-        st.caption(f"🤖 Piloto automático ativo — próxima análise no fechamento do candle ({marker.split('-', 2)[-1][:16]}).")
+    on = bool(cfg.get("autopilot"))
+    marker = f"{cfg['symbol']}-{cfg['interval']}-{last_closed_candle_time(df, cfg['interval'])}-{int(on)}"
+    if st.session_state.get(f"{bot}__scan_marker") == marker:
         return
-    st.session_state[f"{bot}__autopilot_last"] = marker
-    if ranking.is_stale(profile.market, cfg["interval"]):  # a cada 7 dias o ranking dos bots é refeito com o mercado recente
-        with st.spinner("Atualizando o ranking semanal dos bots com o mercado recente…"):
-            if engine.ensure_ranking(profile, cfg):
-                st.toast("Ranking semanal dos bots atualizado.", icon="🏆")
-    # 1) plano condicional armado: confere o gatilho no candle que acabou de fechar
-    state, planned = engine.check_armed_plan(profile, cfg, df, price)
-    if state and state.startswith("cancelado"):
-        st.toast(f"Plano condicional cancelado ({state.split(':')[1]}).", icon="📌")
-    if planned is not None:
-        st.session_state[f"{bot}__analysis"] = planned
-        if planned.check and planned.check.allowed:
-            try:
-                out = engine.execute(profile, cfg, planned, price)
-                st.toast(f"Plano condicional confirmado: ordem {out.get('status')} ({planned.decision.decision})", icon="📌")
-            except Exception as exc:  # noqa: BLE001
-                st.toast(f"Plano confirmado, mas falhou ao executar ({exc})", icon="⚠️")
-        else:
-            st.toast("Plano confirmado, mas a ordem não pôde ser montada: " + " | ".join(planned.check.reasons if planned.check else []), icon="🛑")
-        return
-    # 2) análise normal do candle
-    with st.spinner("Piloto automático analisando o candle fechado…"):
-        result = engine.run_analysis(profile, cfg, df, price, api_key())
-    st.session_state[f"{bot}__analysis"] = result
-    if result.check and result.check.allowed:
-        try:
-            out = engine.execute(profile, cfg, result, price)
-            st.toast(f"Piloto automático: ordem {out.get('status')} ({result.decision.decision})", icon="🤖")
-        except Exception as exc:  # noqa: BLE001
-            st.toast(f"Piloto automático: falha ao executar ({exc})", icon="⚠️")
-    elif result.decision.decision == "CLOSE":
-        engine.execute(profile, cfg, result, price)
-    elif engine.auto_arm(profile, cfg, result, df):
-        st.toast("Plano condicional da IA armado.", icon="📌")
+    st.session_state[f"{bot}__scan_marker"] = marker
+    if on and (why := execution.orders_problem()):
+        st.caption("🤖 Bot em espera: " + why)
+    if on and not personalities.allowed(profile.market, cfg["interval"]):
+        st.warning("Bot em espera: nenhum bot foi treinado e testado neste tempo gráfico. Troque o tempo gráfico.")
+        on = False
+    if on and not execution.orders_problem():
+        if ranking.is_stale(profile.market, cfg["interval"]):  # a cada 7 dias o ranking é refeito com o mercado recente
+            with st.spinner("Atualizando o ranking semanal dos bots…"):
+                if engine.ensure_ranking(profile, cfg):
+                    st.toast("Ranking semanal dos bots atualizado.", icon="🏆")
+        with st.spinner("Procurando oportunidades…"):
+            report = scanner.run(profile, cfg, api_key(), klines=cached_klines, ticker=cached_ticker,
+                                 funding=cached_funding)
+        for ex in report.executed:
+            word = {"BUY": "Comprou", "SELL": "Vendeu", "CLOSE": "Encerrou"}[ex["action"]]
+            st.toast(f"{word} {ex['symbol']} ({ex['status']})", icon="🤖")
+    else:  # bot desligado: só a leitura do ativo da tela (regras, sem IA)
+        res = engine.run_analysis(profile, cfg, df, price, None, log=False)
+        report = scanner.ScanReport(time=res.time, interval=cfg["interval"], scanned=1, viewed=res)
+    st.session_state[f"{bot}__scan"] = report
+    st.session_state[f"{bot}__need_rerun"] = True
 
 
 # ------------------------------------------------------- boleta de entrada
@@ -544,328 +510,76 @@ def leverage_controls(profile: BotProfile, cfg: dict) -> None:
         st.caption("Sem alavancagem (1×)" + ("" if futures else " — compra à vista com saldo próprio."))
 
 
-# ------------------------------------------------------------------- IA
-def ai_section(profile: BotProfile, cfg: dict) -> None:
+# ------------------------------------------------------------------- bot automático
+def bot_power(profile: BotProfile, cfg: dict) -> None:
+    """Liga/desliga o bot (no topo do painel lateral)."""
     bot = profile.key
-    key = api_key()
     on = bool(cfg.get("autopilot"))
-    allowed = personalities.allowed(profile.market, cfg["interval"])
-    options = [p["id"] for p in allowed]
-    blocked = not options
-    pkey = _k(bot, "personality")
-    if options and st.session_state.get(pkey) not in options:
-        st.session_state[pkey] = options[0]
-    persona = personalities.get(st.session_state.get(pkey)) if options else None
+    blocked = not personalities.allowed(profile.market, cfg["interval"])
+    st.markdown("🟢 **Bot ligado**" if on else "⚪ **Bot desligado**")
+    if st.button("⏹️ Desligar" if on else "▶️ Ligar o bot", type="secondary" if on else "primary", width="stretch",
+                 key=f"{bot}__power", disabled=blocked and not on,
+                 help="Ligado, o bot analisa os ativos da varredura a cada candle fechado e opera sozinho."):
+        set_setting(bot, "autopilot", not on)
+        st.session_state.pop(f"{bot}__scan_marker", None)
+        st.rerun()
+    if blocked:
+        trained = personalities.trained_intervals(profile.market)
+        st.caption(f"Nenhum bot treinado no {cfg['interval']}. Tempos com bots: {', '.join(trained) or '—'}.")
 
-    auto = bool(cfg.get("auto_bot", True))
-    with st.container(border=True):
-        c1, c2 = st.columns([1.3, 1])
-        with c1:
-            if on:
-                st.markdown("### 🟢 Bot LIGADO")
-                st.caption("Monitora o fechamento de cada candle no tempo gráfico atual e executa as ordens dos bots.")
-            else:
-                st.markdown("### ⚪ Bot desligado")
-                st.caption("Ligue para o bot operar sozinho, ou use **Analisar agora** para uma análise pontual.")
-            b1, b2 = st.columns(2)
-            if b1.button("⏹️ Desligar bot" if on else "▶️ Ligar bot", type="secondary" if on else "primary",
-                         width="stretch", key=f"{bot}__power", disabled=blocked and not on):
-                set_setting(bot, "autopilot", not on)
-                st.session_state.pop(f"{bot}__autopilot_last", None)
-                st.rerun()
-            run = b2.button("🔍 Analisar agora", width="stretch", key=f"{bot}__run_ai",
-                            type="primary" if not on else "secondary", disabled=blocked)
-            st.toggle("🏆 Bot automático: usar o bot mais recomendado para o contexto", key=_k(bot, "auto_bot"),
-                      help="No fechamento de cada candle, a IA e os bots leem o contexto do gráfico (tempo gráfico, indicadores e "
-                           "leitura de mercado) e entra o bot do ranking com melhor desempenho nesse contexto. O ranking é refeito "
-                           "sozinho toda semana com o mercado recente. Desligado, vale sempre a personalidade escolhida.")
-            st.toggle("Na análise manual, executar automaticamente a ordem montada", key=_k(bot, "ai_auto_execute"))
-        with c2:
-            if blocked:
-                trained = personalities.trained_intervals(profile.market)
-                st.warning(f"Nenhum bot foi treinado e se destacou no {cfg['interval']} em {profile.market_label.lower()}. "
-                           f"Escolha um tempo gráfico com bots treinados: {', '.join(trained) or '—'}.")
-            elif auto:
-                ranking_panel(profile, cfg)
-            else:
-                def _label(pid):
-                    p_ = personalities.get(pid) or {}
-                    tag = {"aprovado": "✅", "ressalva": "🟡"}.get((p_.get("research") or {}).get("status"), "·")
-                    return f"{tag} {p_.get('name', pid)}"
 
-                st.selectbox("🧠 Personalidade (estratégia)", options, key=pkey, format_func=_label,
-                             help="Só aparecem os bots treinados e testados neste mercado e tempo gráfico, que se destacaram "
-                                  "na pesquisa (✅ aprovado · 🟡 aprovado com ressalva · · criado por você, sem teste). Para "
-                                  "ver outros, mude o tempo gráfico. Compare o desempenho na página Personalidades.")
-            if persona and not auto:
-                st.caption(f"{persona.get('tip') or persona.get('summary') or persona.get('description', '')[:140]} · "
-                           f"{personalities.DIRECTIONS[persona.get('direction', 'misto')]} · "
-                           f"indicado: {persona.get('timeframes', '—')}")
-                rs = persona.get("research") or {}
-                if rs.get("monthly_pct") is not None:
-                    line = (f"Simulado: {rs['ret_pct']:+.1f}% em {rs['period_label']} (≈ {rs['monthly_pct']:+.1f}% ao mês) "
-                            f"no {rs['interval']}, acerto {rs['win_pct']:.0f}%.")
-                    if rs.get("status") == "fraco":
-                        st.warning("⚠️ Esta personalidade foi fraca na simulação recente. " + line +
-                                   " Veja os aprovados em 🤖 Bots especialistas.")
-                    else:
-                        st.caption(("✅ " if rs.get("status") == "aprovado" else "🟡 ") + line)
-            st.page_link("views/bots.py", label="Ver todos os bots especialistas", icon="🤖")
-            persona_label = ai_mod.AI_PERSONAS.get(cfg.get("ai_persona"), ai_mod.AI_PERSONAS[ai_mod.DEFAULT_PERSONA])[0]
-            role = ("pode confirmar ou vetar a ativação do bot" if cfg.get("ai_intervene") else "só explica o mercado e dá dicas")
-            st.markdown(f"**IA:** {persona_label} · {role}" if key else "**IA:** desligada — o bot decide só pelas regras")
-            if not key:
-                st.caption("Funciona sem a IA: as habilidades de programação decidem sozinhas. Com a chave da "
-                           "OpenRouter, a IA resume o que acontece no mercado e dá a dica do contexto.")
-        if not auto:
-            rs = (persona or {}).get("research") or {}
-            best = rs.get("best_contexts") or []
-            fav_key = f"{bot}__fav_toggle"
-            st.session_state[fav_key] = cfg.get("context_mode") == "favoraveis"
-            st.toggle("🎯 Operar só nos contextos favoráveis desta personalidade", key=fav_key, disabled=not best,
-                      on_change=lambda: set_setting(bot, "context_mode",
-                                                    "favoraveis" if st.session_state[fav_key] else "sempre"),
-                      help="O bot só entra quando o gráfico está num dos contextos em que esta personalidade teve melhor "
-                           "resultado na simulação (escolhidos nas moedas da busca e provados nas moedas inéditas).")
-            if best:
-                filt = rs.get("context_filtered") or {}
-                st.caption(f"Contextos favoráveis: {', '.join(regime.label(c) for c in best)}. "
-                           + (f"Simulado só neles: {filt['ret_pct']:+.1f}% em {rs['period_label']} (≈ {filt['monthly_pct']:+.1f}% "
-                              f"ao mês, acerto {filt['win_pct']:.0f}%) contra {rs['ret_pct']:+.1f}% operando sempre."
-                              if filt else ""))
-            else:
-                st.caption("Esta personalidade não teve contexto com resultado positivo consistente na simulação.")
-        ctx = st.session_state.get(f"{bot}__context")
-        if ctx and ctx != "indefinido":
-            recs = personalities.best_for_context(ctx, market=profile.market, interval=cfg["interval"], min_trades=15)
-            if recs:
-                st.markdown(f"**Melhores bots para o contexto atual ({regime.label(ctx)}) no {cfg['interval']}:** " + " · ".join(
-                    f"{p['name']} ({c['avg_r']:+.2f}R/op, acerto {c['win_pct']:.0f}%, {p['research']['interval']})"
-                    for p, c in recs))
-        if on:
-            st.caption("⚠️ O bot fica ligado enquanto esta página estiver aberta no navegador. Para operar 24 h, "
-                       "use o worker.py num servidor.")
-
-    armed_panel(profile, cfg)
-
-    if run:
-        df = st.session_state.get(f"{bot}__df")
-        price = st.session_state.get(f"{bot}__last_price")
-        if df is None or not price:
-            st.warning("Aguarde o carregamento do gráfico.")
-        else:
-            with st.spinner(f"Executando habilidades e consultando {cfg['ai_model'] if key else 'regras'}…"):
-                result = engine.run_analysis(profile, cfg, df, price, key)
-            st.session_state[f"{bot}__analysis"] = result
-            if cfg["ai_auto_execute"] and execution.orders_problem():
-                st.warning(execution.orders_problem())
-            elif cfg["ai_auto_execute"] and ((result.check and result.check.allowed) or result.decision.decision == "CLOSE"):
-                try:
-                    out = engine.execute(profile, cfg, result, price)
-                    st.success(f"Ordem programada automaticamente: {out.get('status')}.")
-                except Exception as exc:  # noqa: BLE001
-                    st.error(f"Falha ao executar: {exc}")
-
-    result = st.session_state.get(f"{bot}__analysis")
-    if not result:
-        st.caption("Clique em **Analisar agora** para o bot executar as habilidades da personalidade escolhida"
-                   + (", consultar a IA" if key else "") + " e propor a ordem já dimensionada pela sua perda "
-                   "máxima por trade — ou **Ligar bot** para ele fazer isso sozinho a cada candle.")
+def analysis_panel(profile: BotProfile, cfg: dict) -> None:
+    """Resumo automático do que o bot enxerga: um único bloco simples, com os detalhes técnicos recolhidos."""
+    bot = profile.key
+    rep = st.session_state.get(f"{bot}__scan")
+    if rep is None or rep.viewed is None:
+        st.info("A leitura aparece em instantes, no fechamento do candle.")
         return
-    render_analysis(profile, cfg, result)
-
-
-def ranking_panel(profile: BotProfile, cfg: dict) -> None:
-    """Ranking semanal dos bots deste tempo gráfico e o bot que está no comando agora."""
-    bot = profile.key
-    market, interval = profile.market, cfg["interval"]
-    result = st.session_state.get(f"{bot}__analysis")
-    active = (result.personality or {}).get("name") if result and result.symbol == cfg["symbol"] and result.interval == interval else None
-    st.markdown(f"**🏆 Bot do momento:** {active}" if active else "**🏆 Bot do momento:** definido no fechamento do próximo candle")
-    age = ranking.age_days(market, interval)
-    rows = ranking.leaderboard(market, interval, top=3)
-    if rows:
-        st.caption("Ranking da semana (retorno simulado nos candles recentes): " + " · ".join(
-            f"{i + 1}º {r['name']} ({r['monthly_pct']:+.1f}%/mês)" for i, r in enumerate(rows)))
-        st.caption(f"Atualizado há {age:.0f} dia(s); se refaz sozinho a cada {ranking.MAX_AGE_DAYS} dias.")
-    else:
-        st.caption("O ranking semanal ainda não foi calculado neste tempo gráfico: vale o desempenho da pesquisa original até a "
-                   "primeira atualização, que acontece sozinha quando o bot estiver ligado.")
-    if st.button("🔄 Atualizar ranking agora", key=f"{bot}__rank_now"):
-        bar = st.progress(0.0, text="Baixando candles recentes…")
-        try:
-            ranking.refresh(market, interval, progress=lambda f, t: bar.progress(min(f, 1.0), text=t))
-            st.rerun()
-        except Exception as exc:  # noqa: BLE001
-            bar.empty()
-            st.error(f"Não foi possível atualizar agora: {exc}")
-
-
-def render_analysis(profile: BotProfile, cfg: dict, result: engine.AnalysisResult) -> None:
-    bot = profile.key
-    d = result.decision
-    label = {"BUY": "🟢 COMPRA", "SELL": "🔴 VENDA", "HOLD": "⚪ AGUARDAR", "CLOSE": "🟠 ENCERRAR POSIÇÕES"}[d.decision]
-    if result.error:
-        st.warning(f"A IA falhou e foi usada a decisão por regras: {result.error}")
+    res, d = rep.viewed, rep.viewed.decision
+    adv = d.advice or {}
+    on = bool(cfg.get("autopilot"))
     with st.container(border=True):
-        h = st.columns([1.3, 1, 1, 1, 1, 1])
-        h[0].markdown(f"### {label}")
-        h[1].metric("Confiança", f"{d.confidence}%")
-        h[2].metric("Entrada", fmt_price(d.entry or result.price), d.order_type)
-        h[3].metric("Stop", fmt_price(d.stop_loss))
-        h[4].metric("Alvo", fmt_price(d.take_profit))
-        h[5].metric("Placar regras", f"{result.plan['score']:+.0f}", result.plan["regime"], delta_color="off")
-        st.markdown(f"**Análise ({'IA' if d.model not in ('regras', '') else 'somente regras'}):** {d.reasoning}")
-        if d.risks:
-            st.markdown(f"**Riscos:** {d.risks}")
-        if d.invalidation:
-            st.markdown(f"**Invalidação:** {d.invalidation}")
-        if d.management:
-            st.markdown(f"**Condução:** {d.management}")
-        if result.plan.get("note"):
-            st.info(result.plan["note"])
-
-        if result.check:
-            calc = result.check.calc
-            if calc:
-                st.markdown(f"**Dimensionamento:** {calc.qty:g} {result.symbol} · nocional {fmt(calc.notional)} USDT · "
-                            f"margem {fmt(calc.margin)} USDT ({calc.leverage:g}×) · risco {fmt(calc.risk_usdt)} USDT · "
-                            f"retorno {fmt(calc.reward_usdt)} USDT · R:R {fmt(calc.rr) if calc.rr else '—'}")
-            if result.check.allowed:
-                st.success("Ordem montada e pronta para executar.")
-            else:
-                st.error("Não foi possível montar a ordem: " + " | ".join(result.check.reasons))
-            for note in result.check.notes:
-                st.caption(note)
-
-        executable = (result.check and result.check.allowed) or d.decision == "CLOSE"
-        if result.executed:
-            st.success(f"Ordem enviada: {result.executed.get('status')}")
-        elif executable and execution.orders_problem():
-            st.caption(execution.orders_problem())
-        elif executable and st.button("✅ Executar plano", key=f"{bot}__exec_plan", type="primary"):
-            price = st.session_state.get(f"{bot}__last_price", result.price)
-            try:
-                out = engine.execute(profile, cfg, result, price)
-                st.success(f"Ordem enviada: {out.get('status')}")
-                st.rerun()
-            except Exception as exc:  # noqa: BLE001
-                st.error(str(exc))
-
-        render_advice(profile, cfg, result)
-
-        persona = personalities.get((result.personality or {}).get("id"))
+        head = {"BUY": "🟢 Oportunidade de compra", "SELL": "🔴 Oportunidade de venda", "HOLD": "⚪ Sem oportunidade agora",
+                "CLOSE": "🟠 Sinal contrário: encerrando a posição"}[d.decision]
+        bot_name = (res.personality or {}).get("name")
+        st.markdown(f"### {head} em {res.symbol} · {res.interval}")
+        if bot_name:
+            st.caption(f"Bot do momento: {bot_name}")
+        st.markdown(adv.get("resumo") or adv.get("cenario") or d.reasoning)
+        if adv.get("dica"):
+            st.info("💡 " + adv["dica"])
+        if d.decision in ("BUY", "SELL") and res.check and res.check.calc:
+            c = res.check.calc
+            st.caption(f"Entrada {fmt_price(d.entry or res.price)} · stop {fmt_price(d.stop_loss)} · alvo {fmt_price(d.take_profit)} · "
+                       f"{c.qty:g} unidades · risco {fmt(c.risk_usdt)} USDT")
+        for ex in rep.executed:
+            word = {"BUY": "Comprou", "SELL": "Vendeu", "CLOSE": "Encerrou posição em"}[ex["action"]]
+            st.success(f"✅ {word} {ex['symbol']} ({ex['status']})")
+    when = res.time[11:16] + " UTC" if res.time else ""
+    if on:
+        names = ", ".join(sorted({o.symbol for o in rep.opportunities})) or "nenhuma"
+        st.caption(f"Última varredura {when}: {rep.scanned} ativo(s) analisados no {rep.interval} · oportunidades: {names}.")
+    else:
+        st.caption(f"Bot desligado: leitura só do ativo na tela ({when}), sem usar a IA. Ligue o bot para ele procurar oportunidades sozinho.")
+    for note in rep.notes[:3]:
+        st.caption("⚠️ " + note)
+    with st.expander("Detalhes técnicos"):
+        st.write(d.reasoning)
+        if adv.get("leitura_tecnica"):
+            st.markdown("\n".join(f"- {x}" for x in adv["leitura_tecnica"]))
+        persona = personalities.get((res.personality or {}).get("id"))
         weights = (persona or {}).get("skills") or profile.skill_weights
-        skills = result.plan.get("skills")  # a ordem de um plano condicional confirmado não passa pelas habilidades
-        if not skills:
-            return
-        with st.expander(f"Habilidades da personalidade {persona['name'] if persona else ''} (votos que alimentaram a decisão)"):
-            st.dataframe(pd.DataFrame([{"Habilidade": sk["name"], "Voto": round(sk["vote"], 2),
-                                        "Peso": weights.get(sk["key"], 1.0), "Leitura": sk["detail"]}
-                                       for sk in skills]),
-                         hide_index=True, column_config={"Voto": st.column_config.ProgressColumn(
-                             min_value=-1, max_value=1, format="%.2f")})
-            lv = result.plan.get("levels")
-            if lv:
-                st.caption("Suportes: " + ", ".join(fmt_price(x["price"]) for x in lv["supports"]) +
-                           " · Resistências: " + ", ".join(fmt_price(x["price"]) for x in lv["resistances"]))
-
-
-def armed_panel(profile: BotProfile, cfg: dict) -> None:
-    """Mostra o plano condicional armado (se houver) e permite desarmar."""
-    from core import advisor
-
-    bot = profile.key
-    rec = advisor.armed(bot)
-    if not rec:
-        return
-    with st.container(border=True):
-        c1, c2 = st.columns([4, 1])
-        c1.markdown("**📌 Plano condicional armado** — o sistema confere o gatilho a cada candle fechado.")
-        c1.write(rec["descricao"])
-        df = st.session_state.get(f"{bot}__df")
-        extra = ""
-        if rec["ativo"] != cfg["symbol"] or rec["tempo"] != cfg["interval"]:
-            extra = f" ⚠️ Plano de {rec['ativo']} no {rec['tempo']}: só é conferido enquanto o bot estiver nesse ativo e tempo gráfico."
-        elif df is not None:
-            state, info = advisor.evaluate(rec, df, cfg["interval"])
-            extra = f" Situação: **{state}**" + (f" ({info['candles']} de {rec['plano']['validade_candles']} candles)" if "candles" in info else "")
-        c1.caption(f"Armado em {rec['criado'][:16].replace('T', ' ')} UTC · origem: {rec['origem']}.{extra}"
-                   + ("" if cfg.get("autopilot") else " O bot está desligado: ligue o piloto automático para o plano abrir a ordem."))
-        if c2.button("Desarmar", key=f"{bot}__disarm", width="stretch"):
-            advisor.disarm(bot, "desarmado pelo usuário")
-            st.rerun()
-
-
-def render_advice(profile: BotProfile, cfg: dict, result: engine.AnalysisResult) -> None:
-    """Leitura do especialista: cenário, oportunidade, dica, bot recomendado e plano condicional."""
-    from core import advisor
-
-    bot = profile.key
-    adv = result.decision.advice
-    if not adv:
-        return
-    fonte = "IA" if adv.get("fonte") == "ia" else "regras (sem IA)"
-    st.divider()
-    st.markdown(f"#### 🎓 Leitura do especialista · {result.symbol} no {result.interval}")
-    st.caption(f"Fonte: {fonte}. Conteúdo educativo; não é recomendação de investimento.")
-    st.markdown(adv.get("cenario", ""))
-    if adv.get("leitura_tecnica"):
-        st.markdown("**Leitura técnica**\n" + "\n".join(f"- {x}" for x in adv["leitura_tecnica"]))
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"**🎯 Melhor oportunidade no {result.interval}**")
-        st.info(adv.get("oportunidade", "—"))
-    with c2:
-        st.markdown("**💡 Dica**")
-        st.success(adv.get("dica", "—"))
-
-    best = adv.get("bot")
-    st.markdown("**🤖 Melhor bot para este momento**")
-    if best and best.get("id"):
-        p = personalities.get(best["id"]) or {}
-        rs = p.get("research") or {}
-        tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}.get(rs.get("status"), "")
-        st.markdown(f"{tag} **{best['nome']}** — {best['motivo']}")
-        if p.get("tip"):
-            st.caption(p["tip"])
-        b1, b2 = st.columns([1.2, 2])
-        if best.get("ativo"):
-            b1.success("Já é o bot ativo")
-        elif b1.button("Usar este bot", key=f"{bot}__use_best", type="primary", width="stretch"):
-            changes = {"personality": best["id"], "auto_bot": False}  # escolha manual: desliga o bot automático
-            tested = p.get("tested_interval")
-            if tested and tested in profile.intervals:
-                changes["interval"] = tested
-            queue_setting(bot, **changes)
-            st.rerun()
-        if best.get("alternativas"):
-            b2.caption("Alternativas: " + " · ".join(a["nome"] for a in best["alternativas"]))
-    elif best:
-        st.warning(best.get("motivo", "Nenhum bot com vantagem comprovada agora: aguardar."))
-
-    plan = adv.get("plano")
-    st.markdown("**📌 Plano condicional (a ordem só abre se o mercado confirmar)**")
-    if not plan:
-        st.caption("Nenhum gatilho claro no momento.")
-        return
-    st.write(advisor.describe_plan(plan, result.symbol, result.interval))
-    if plan.get("explicacao"):
-        st.caption("Por quê: " + plan["explicacao"])
-    rec = advisor.armed(bot)
-    same = rec and rec["plano"] == plan and rec["ativo"] == result.symbol
-    if same:
-        st.success("Este plano está armado. O sistema confere o gatilho a cada candle fechado.")
-    else:
-        auto = cfg.get("autopilot") and cfg.get("ai_auto_arm") and adv.get("fonte") == "ia"
-        st.caption(("O piloto automático arma planos da IA sozinho. " if auto else "") +
-                   "Armar não abre ordem agora: só se o candle fechar confirmando o gatilho, e o tamanho da ordem sai da sua perda máxima por trade. "
-                   "Esse tipo de entrada condicional não tem backtest.")
-        if st.button("📌 Armar este plano", key=f"{bot}__arm_plan", type="primary"):
-            df = st.session_state.get(f"{bot}__df")
-            if df is not None:
-                engine.arm_plan(profile, cfg, plan, df, "ia" if adv.get("fonte") == "ia" else "regras")
-                st.rerun()
+        skills = res.plan.get("skills")
+        if skills:
+            st.dataframe(pd.DataFrame([{"Habilidade": sk["name"], "Voto": round(sk["vote"], 2), "Peso": weights.get(sk["key"], 1.0),
+                                        "Leitura": sk["detail"]} for sk in skills]), hide_index=True,
+                         column_config={"Voto": st.column_config.ProgressColumn(min_value=-1, max_value=1, format="%.2f")})
+    if rep.opportunities:
+        st.markdown("**Oportunidades da última varredura**")
+        st.dataframe(pd.DataFrame([{"Ativo": o.symbol, "Lado": "Compra" if o.decision.decision == "BUY" else "Venda",
+                                    "Bot": (o.personality or {}).get("name", ""), "Entrada": o.decision.entry or o.price,
+                                    "Stop": o.decision.stop_loss, "Alvo": o.decision.take_profit} for o in rep.opportunities]),
+                     hide_index=True)
 
 
 # ------------------------------------------------------------- carteira
@@ -977,9 +691,22 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
     bot = profile.key
     k = lambda n: _k(bot, n)  # noqa: E731
     futures = profile.market == "futures"
-    labels = (["Alavancagem"] if futures else []) + ["Indicadores", "IA", "Níveis do usuário", "Conta"]
+    labels = (["Alavancagem"] if futures else []) + ["Varredura", "Indicadores", "IA", "Níveis do usuário", "Conta"]
     tabs = dict(zip(labels, st.tabs(labels)))
-    t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[-4:])
+    t_scan, t_ind, t_ai, t_lv, t_acct = (tabs[n] for n in labels[-5:])
+
+    with t_scan:
+        st.toggle("🔎 Procurar oportunidades em vários ativos", key=k("scan_on"),
+                  help="Com o bot ligado, a cada candle fechado ele analisa todos os ativos da lista (só com regras, sem gastar IA), escolhe "
+                       "sozinho o melhor bot do ranking para o contexto de cada um e entra nas melhores oportunidades. "
+                       "Desligado, opera só o ativo da tela.")
+        all_syms = cached_symbols(profile.market)
+        st.multiselect("Ativos da varredura", list(dict.fromkeys(list(cfg["scan_symbols"]) + all_syms)), key=k("scan_symbols"),
+                       disabled=not st.session_state[k("scan_on")])
+        st.number_input("Entradas novas por varredura", 1, 10, key=k("scan_max_entries"), disabled=not st.session_state[k("scan_on")],
+                        help="Quantas das melhores oportunidades o bot abre a cada candle fechado. O bot mantém no máximo uma posição por ativo.")
+        st.caption("A IA é consultada só para a melhor oportunidade de cada varredura (e só quando o bot encontra uma), "
+                   "para economizar tokens. Sem oportunidade, nada é enviado à IA.")
 
     if futures:
         with tabs["Alavancagem"]:
@@ -1063,10 +790,6 @@ def settings_section(profile: BotProfile, cfg: dict) -> None:
                        "também confirma ou veta o sinal — se discordar, o bot não entra naquele momento. Sem sinal das regras, "
                        "a IA nunca abre operação sozinha.")
         c[1].slider("Temperatura", 0.0, 1.0, step=0.05, key=k("ai_temperature"))
-        st.toggle("📌 Piloto automático: armar sozinho os planos condicionais propostos pela IA", key=k("ai_auto_arm"),
-                  help="Com o piloto ligado, quando a IA diz 'só entro se o preço fechar acima de X com volume', o sistema arma esse "
-                       "gatilho e abre a ordem sozinho se ele se confirmar (o tamanho da ordem sai da sua perda máxima por trade). Desligado, "
-                       "você arma manualmente no botão do plano. Esse tipo de entrada condicional ainda não tem backtest.")
         st.slider("Candles enviados como contexto", 20, 200, step=10, key=k("ai_candles_context"))
         st.text_area("Instruções da sua estratégia para a IA", key=k("ai_instructions"), height=110,
                      placeholder="Ex.: Só operar a favor da EMA 200. Evitar entradas 30 min antes de notícias dos EUA. "
