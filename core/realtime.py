@@ -241,6 +241,9 @@ if (fut) SOURCES.push({name: "Binance Futuros", kind: "bn", rest: `https://fapi.
 else {
   SOURCES.push({name: "Binance Spot", kind: "bn", rest: `https://api.binance.com/api/v3/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
     t24: `https://api.binance.com/api/v3/ticker/24hr?symbol=${C.symbol}`, ws: `wss://stream.binance.com:443/ws/${sl}@kline_${C.interval}`});
+  // Mesma Binance, porta oficial 9443 do WebSocket: alternativa quando a 443 é bloqueada na rede do usuário
+  SOURCES.push({name: "Binance Spot (porta 9443)", kind: "bn", rest: `https://api.binance.com/api/v3/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
+    t24: `https://api.binance.com/api/v3/ticker/24hr?symbol=${C.symbol}`, ws: `wss://stream.binance.com:9443/ws/${sl}@kline_${C.interval}`});
   SOURCES.push({name: "Binance Spot (espelho)", kind: "bn", rest: `https://data-api.binance.vision/api/v3/klines?symbol=${C.symbol}&interval=${C.interval}&limit=1000`,
     t24: `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${C.symbol}`, ws: `wss://data-stream.binance.vision/ws/${sl}@kline_${C.interval}`});
 }
