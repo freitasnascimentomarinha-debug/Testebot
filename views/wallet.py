@@ -72,7 +72,7 @@ m[0].metric("Banca", f"{fmt(s['equity'])} USDT", f"{fmt(s['total_pnl'])} ({s['to
             help="Saldo livre + margens + resultado das posições abertas.")
 m[1].metric("Capital investido", fmt(s["invested"]), f"inicial {fmt(acct['initial'])}", delta_color="off")
 m[2].metric("Saldo livre", fmt(s["available"]))
-m[3].metric("Em margem", fmt(s["in_margin"]), f"{s['open_positions']} posição(ões)", delta_color="off")
+m[3].metric("Alocado em posições", fmt(s["in_margin"]), f"{s['open_positions']} posição(ões)", delta_color="off")
 m[4].metric("P&L aberto (líquido)", fmt(s["unrealized_net"]))
 m[5].metric("Hoje", fmt(s["pnl_today"]), f"{s['trades_today']} operações", delta_color="off")
 if brl:
