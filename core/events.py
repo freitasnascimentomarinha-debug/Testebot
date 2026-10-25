@@ -23,7 +23,8 @@ STALE_OK = 3600          # se a atualização falhar, os dados antigos valem por
 TIMEOUT = 8
 CATEGORIES = {
     "macro": ("🏦 Macro e juros", ["Fed decision", "Fed rate cuts", "US recession", "CPI inflation", "unemployment rate", "tariff"]),
-    "politica": ("🗳️ Política e eleições", ["Brazil Presidential Election", "Presidential Election Winner 2028", "Trump"]),
+    "geopolitica": ("🌍 Guerra e geopolítica", ["ceasefire", "Russia Ukraine", "Israel Iran", "Taiwan invade", "Hormuz", "nuclear deal", "NATO Russia"]),
+    "politica": ("🗳️ Política e eleições", ["Brazil Presidential Election", "Presidential Election Winner 2028", "midterms Senate", "midterms House", "Trump", "Supreme Court"]),
     "commodities": ("🛢️ Commodities e índices", ["gold XAUUSD", "WTI crude oil", "S&P 500", "silver XAGUSD"]),
     "cripto": ("₿ Cripto", ["bitcoin", "ethereum", "solana", "crypto ETF"]),
 }
@@ -31,10 +32,12 @@ CATEGORIES = {
 KEYWORDS = {
     "macro": ("fed", "fomc", "interest rate", "rate cut", "rate hike", "inflation", "cpi", "recession", "unemployment", "gdp", "tariff", "jobs", "payroll", "treasury", "yield"),
     "commodities": ("gold", "silver", "oil", "crude", "wti", "brent", "s&p", "nasdaq", "dow jones", "copper", "natural gas", "xau", "xag", "spx"),
+    "geopolitica": ("war", "ceasefire", "invade", "invasion", "ukraine", "russia", "israel", "iran", "gaza", "china", "taiwan", "nato", "sanction", "military",
+                    "nuclear", "hormuz", "missile", "peace", "strait", "attack", "hamas", "hezbollah", "korea"),
     "cripto": ("bitcoin", "btc", "ethereum", "eth ", "solana", "crypto", "xrp", "dogecoin", "etf", "coinbase", "stablecoin", "microstrategy"),
 }
 NOISE = re.compile(r"\b(say|says|mention|tweet|post)\b|earnings call|vs\.", re.I)
-AI_PICK = {"macro": 2, "politica": 2, "commodities": 1, "cripto": 1}   # quantos eventos de cada categoria resumem para a IA
+AI_PICK = {"macro": 2, "geopolitica": 2, "politica": 2, "commodities": 1, "cripto": 1}   # quantos eventos de cada categoria resumem para a IA
 MIN_VOL24 = 300.0
 MIN_LIQ = 50_000.0
 _state: dict = {"at": 0.0, "events": []}
@@ -97,7 +100,7 @@ def card(e: dict, category: str, now: datetime | None = None) -> dict | None:
         opts = [(_label(m), p) for p, m in sorted(rows, key=lambda r: -r[0])[:4]]
     return {"id": str(e.get("id")), "titulo": e.get("title", ""), "categoria": category, "slug": e.get("slug", ""), "vence": end.isoformat(),
             "volume_24h": round(float(e.get("volume24hr") or 0)), "liquidez": round(float(e.get("liquidity") or 0)),
-            "escada": ladder, "opcoes": [{"nome": n, "pct": round(p * 100, 1)} for n, p in opts]}
+            "escada": ladder, "desc": re.sub(r"\s+", " ", e.get("description") or "")[:600], "opcoes": [{"nome": n, "pct": round(p * 100, 1)} for n, p in opts]}
 
 
 def _search(q: str) -> list[dict]:
