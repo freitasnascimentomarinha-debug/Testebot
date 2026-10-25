@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from core import context_research as cr  # noqa: E402
-from core import data  # noqa: E402
+from core import archive, data  # noqa: E402
 
 
 def main() -> None:
@@ -25,11 +25,16 @@ def main() -> None:
     ap.add_argument("--markets", nargs="*", default=list(cr.MARKET_SIDES), choices=list(cr.MARKET_SIDES))
     ap.add_argument("--intervals", nargs="*", default=list(cr.INTERVALS), choices=list(cr.INTERVALS))
     ap.add_argument("--contexts", nargs="*", default=list(cr.CONTEXTS), choices=list(cr.CONTEXTS))
+    ap.add_argument("--source", choices=["archive", "api"], default="archive",
+                    help="archive = arquivo público data.binance.vision (funciona onde a API é bloqueada, com volume taker); api = API da Binance/OKX")
     ap.add_argument("--fast", action="store_true", help="grade menor de candidatos")
     ap.add_argument("--merge", action="store_true", help="mantém os bots já salvos das células não pesquisadas agora")
     args = ap.parse_args()
 
-    result = cr.run(args.markets, args.intervals, args.contexts, universe=data.volume_ranking, getter=data.get_klines, fast=args.fast)
+    getter = archive.klines if args.source == "archive" else data.get_klines
+    # moedas por volume do spot (a lista de futuros da API pode estar bloqueada); as que não existirem em futuros são puladas
+    universe = (lambda market: data.volume_ranking("spot")) if args.source == "archive" else data.volume_ranking
+    result = cr.run(args.markets, args.intervals, args.contexts, universe=universe, getter=getter, fast=args.fast)
     if args.merge and cr.OUT_FILE.exists():
         import json
 

@@ -661,7 +661,7 @@ def test_personality_only_where_trained():
             assert rs["market"] == market and rs["interval"] == interval and rs["status"] in ("aprovado", "ressalva")
     assert not any(p["id"] == "esp_5m_bb_reversal_2x1" for p in Pm.allowed("futures", "5m"))  # fraco no teste
     assert Pm.allowed("futures", "30m") == [] and Pm.allowed("spot", "5m") == []
-    assert Pm.trained_intervals("futures") == ["5m", "15m", "1h"]
+    assert [i for i in Pm.trained_intervals("futures") if i != "4h"] == ["5m", "15m", "1h"]   # 4h vem dos bots por contexto, se gerados
     assert "experimental" not in Pm.allowed("futures", "5m")[0]["name"].lower()
     for bot, pid in Pm.DEFAULT_BY_BOT.items():  # o padrão de cada bot vale no tempo gráfico padrão dele
         assert Pm.is_allowed(pid, PROFILES[bot].market, PROFILES[bot].default_interval)
@@ -1662,3 +1662,97 @@ def test_bots_gallery_renders_with_context_bots(monkeypatch):
     at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
     assert any("Suporte e resistência" in str(getattr(m, "value", "")) for m in at.markdown)
+
+
+def test_archive_klines_monthly_daily_fallback_and_formats(monkeypatch, tmp_path):
+    import io
+    import zipfile
+    from datetime import datetime, timezone
+
+    from core import archive
+
+    monkeypatch.setattr(archive, "CACHE", tmp_path)
+
+    def zipped(rows, header=False):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            head = "open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,taker_buy_quote_volume,ignore\n" if header else ""
+            z.writestr("x.csv", head + "\n".join(",".join(map(str, r)) for r in rows))
+        return buf.getvalue()
+
+    def rows(start, n, step_ms, mult=1):
+        return [[(start + i * step_ms) * mult, 1, 2, 0.5, 1.5, 10, 0, 0, 0, 6, 0, 0] for i in range(n)]
+
+    t0 = int(datetime(2026, 9, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    day = 86_400_000
+    served, asked = {}, []
+    served["monthly/klines/AAAUSDT/1d/AAAUSDT-1d-2026-09"] = zipped(rows(t0, 30, day), header=True)           # mês fechado, com cabeçalho
+    for d in range(1, 4):                                                                                       # 1 a 3/10: só diários
+        served[f"daily/klines/AAAUSDT/1d/AAAUSDT-1d-2026-10-{d:02d}"] = zipped(rows(t0 + (29 + d) * day, 1, day))
+    served["monthly/klines/BBBUSDT/1d/BBBUSDT-1d-2026-09"] = zipped(rows(t0, 30, day, mult=1000))             # spot em microssegundos
+
+    class Resp:
+        def __init__(self, url):
+            self.content = next((v for k, v in served.items() if url.endswith(k + ".zip")), b"")
+            self.status_code = 200 if self.content else 404
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(archive._session, "get", lambda url, timeout=0: asked.append(url) or Resp(url))
+    now = datetime(2026, 10, 4, 10, tzinfo=timezone.utc)                       # hoje = 4/10: os diários vão até 3/10
+    df = archive.klines("AAAUSDT", "1d", 33, "futures", now=now)
+    assert len(df) == 33 and df["time"].is_monotonic_increasing and "taker_buy" in df and df["taker_buy"].eq(6.0).all()
+    assert df["time"].iloc[-1].date().isoformat() == "2026-10-03" and any("futures/um" in u for u in asked)
+    assert len(archive.klines("AAAUSDT", "1d", 5, "futures", now=now)) == 5     # pede menos: usa só o mês corrente
+    n = len(asked)
+    archive.klines("AAAUSDT", "1d", 33, "futures", now=now)
+    assert len(asked) == n or all("2026-10-0" not in u for u in asked[n:])      # arquivos fechados vêm do cache em disco
+    us = archive.klines("BBBUSDT", "1d", 10, "spot", now=datetime(2026, 10, 1, 10, tzinfo=timezone.utc))
+    assert us["time"].iloc[-1].year == 2026                                      # microssegundos convertidos
+    with pytest.raises(RuntimeError):
+        archive.klines("ZZZUSDT", "1d", 10, "spot", now=now)
+
+
+def test_context_research_two_tiers_aprovado_and_ressalva():
+    from core import context_research as cr
+
+    cell = _fake_cell()
+    thin = [0.03] * 40                                                    # R médio +0,03: positivo, mas abaixo do corte de aprovado
+    strong = [1.5, -1.0, 1.5, -1.0, 1.5, 1.5, -1.0, 1.5] * 5
+    v = cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, thin)), "15m")
+    assert v["ok"] and v["tier"] == "ressalva"
+    v = cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, strong)), "15m")
+    assert v["tier"] == "aprovado"
+    zero = [0.0] * 40                                                    # R médio 0: nem ressalva
+    assert cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, zero)), "15m")["tier"] is None
+    res = cr.search_cell(cell, "tendencia", "long", fast=True, simulate=lambda vt, cfg, p: _fake_trades(vt, thin))
+    assert res["research"]["status"] == "ressalva" and "ressalva" in res["bot"]["description"] and res["row"]["status"] == "ressalva"
+    # entre candidatos, o aprovado ganha do ressalva mesmo com R menor
+    calls = {"n": 0}
+
+    def mixed(vt, cfg, p):
+        return _fake_trades(vt, strong if p["threshold"] == 20 else thin)
+
+    res = cr.search_cell(cell, "tendencia", "long", fast=True, simulate=mixed)
+    assert res["research"]["status"] == "aprovado" and res["bot"]["threshold"] == 20
+    assert (1.0, 2.0) not in cr.EXITS[:1] and (4.0, 6.0) in cr.EXITS and (5.0, 5.0) in cr.EXITS     # stops largos diluem as taxas nos tempos curtos
+
+
+def test_bots_gallery_survives_weekly_ranking_contexts_without_extra_fields(monkeypatch):
+    """Depois da 1ª atualização semanal os contextos vêm só com n, R médio e acerto: a galeria não pode quebrar."""
+    from streamlit.testing.v1 import AppTest
+
+    from core import personalities as Pm
+    from core import ranking
+
+    base = next(b for b in Pm.BUILTINS if (b.get("research") or {}).get("market") == "futures" and b["research"].get("contexts"))
+    rs = base["research"]
+    res = {"ret_pct": 3.0, "monthly_pct": 3.0, "win_pct": 50.0, "dd_pct": 4.0, "trades": 50, "positive": 4, "symbols": 5, "status": "aprovado",
+           "contexts": {"lateral": {"n": 12, "avg_r": 0.2, "win_pct": 55.0}}}
+    rank = {f"{rs['market']}|{rs['interval']}": {"updated": "2026-10-20T00:00:00+00:00", "days": 30, "results": {base["id"]: res}, "order": [base["id"]]}}
+    monkeypatch.setattr(ranking, "load", lambda: rank)
+    assert Pm.get(base["id"])["research"]["contexts"]["lateral"] == {"n": 12, "avg_r": 0.2, "win_pct": 55.0}
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
