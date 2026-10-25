@@ -158,6 +158,14 @@ try:
     _RESULTS = json.loads((_HERE / "research_results.json").read_text(encoding="utf-8"))
 except FileNotFoundError:  # pragma: no cover
     _RESULTS = {}
+# Bots por contexto (lateralidade, tendência, reversão, rompimento, suporte/resistência e fluxo de ordens), gerados por
+# ``tools/pesquisa/gerar_bots.py`` (core/context_research.py): só entram os que deram resultado positivo no contexto.
+try:
+    _CTX = json.loads((_HERE / "context_bots.json").read_text(encoding="utf-8"))
+    BUILTINS += _CTX.get("bots", [])
+    _RESULTS.update(_CTX.get("research", {}))
+except FileNotFoundError:  # ainda não gerados
+    pass
 for _p in BUILTINS:
     if _p["id"] in _RESULTS:
         _p["research"] = _RESULTS[_p["id"]]

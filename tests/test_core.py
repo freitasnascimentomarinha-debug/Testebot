@@ -1519,3 +1519,146 @@ def test_scan_tries_the_best_bots_for_the_context_until_one_signals(monkeypatch)
     monkeypatch.setattr(scanner.engine, "pick_bots", lambda *a, **k: ([], {"contexto_nome": "Lateralidade"}))
     monkeypatch.setattr(scanner.engine, "pick_bot", lambda *a, **k: (None, {"contexto_nome": "Lateralidade"}))
     assert scanner._best_signal(profile, cfg, df, price).decision.decision == "HOLD"
+
+
+# ----------------------------------------------------------------- bots por contexto (pesquisa)
+def _fake_cell(market="futures", interval="15m", n=300):
+    from core import context_research as cr
+
+    t = pd.date_range("2026-01-01", periods=n, freq="15min", tz="UTC")
+    vt = pd.DataFrame({"time": t, "regime": ["tendencia_alta"] * n})
+    cfg = {"fee_pct": 0.05}
+    cell = cr.CellData(market, interval, 40)
+    cell.search = {f"S{i}": (vt, cfg) for i in range(6)}
+    cell.unseen = {f"U{i}": (vt, cfg) for i in range(4)}
+    return cell
+
+
+def _fake_trades(vt, r_list, regime="tendencia_alta"):
+    """Operações espalhadas no tempo, com os R dados (repetidos), todas no contexto."""
+    idx = np.linspace(5, len(vt) - 10, len(r_list)).astype(int)
+    return [{"entrada": vt["time"].iloc[i], "saida": vt["time"].iloc[i + 2], "r": float(r), "regime": regime} for i, r in zip(idx, r_list)]
+
+
+def test_context_research_approval_needs_positive_results_in_all_three_tests():
+    from core import context_research as cr
+
+    cell = _fake_cell()
+    winners = [1.5, -1.0, 1.5, -1.0, 1.5, 1.5, -1.0, 1.5] * 5                    # R médio positivo (+0,5)
+    losers = [1.0, -1.0, -1.0, 1.0, -1.0] * 8                                    # R médio negativo (−0,2)
+    sim_ok = lambda vt, cfg, p: _fake_trades(vt, winners)  # noqa: E731
+    ev = cr.evaluate({"direction": "compra"}, cell, sim_ok)
+    v = cr.verdict(ev, "15m")
+    assert v["ok"] and all(a > 0.4 for a in v["avg_r"]) and v["pos_coins"] == (10, 10) and len(ev["unseen"]) == 4 * len(winners)
+    # negativo nas moedas inéditas (prova final): reprovado, mesmo bom na busca e na validação
+    calls = {"n": 0}
+
+    def overfit(vt, cfg, p):
+        calls["n"] += 1
+        return _fake_trades(vt, winners if calls["n"] <= 6 else losers)           # as 6 primeiras chamadas são as moedas da busca
+
+    assert not cr.verdict(cr.evaluate({"direction": "compra"}, cell, overfit), "15m")["ok"]
+    assert not cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, losers)), "15m")["ok"]
+    assert not cr.verdict(cr.evaluate({"direction": "compra"}, cell, lambda vt, cfg, p: _fake_trades(vt, winners[:2])), "15m")["ok"]  # amostra pequena
+    # bom só na 1ª metade e ruim na validação: reprovado
+    def early(vt, cfg, p):
+        ts = _fake_trades(vt, winners)
+        return [{**t, "r": (abs(t["r"]) if t["entrada"] < vt["time"].iloc[200] else -abs(t["r"]))} for t in ts]
+
+    assert not cr.verdict(cr.evaluate({"direction": "compra"}, cell, early), "15m")["ok"]
+
+
+def test_context_research_builds_compatible_bot_and_reports_cells_without_bot(monkeypatch, tmp_path):
+    from core import context_research as cr
+    from core import personalities as Pm
+
+    cell = _fake_cell()
+    winners = [1.5, -1.0, 1.5, -1.0, 1.5, 1.5, -1.0, 1.5] * 5
+    good = cr.search_cell(cell, "tendencia", "long", fast=True, simulate=lambda vt, cfg, p: _fake_trades(vt, winners))
+    assert good["bot"] and good["row"]["passed"] == good["row"]["tested"] > 0
+    bad = cr.search_cell(cell, "tendencia", "short", fast=True, simulate=lambda vt, cfg, p: _fake_trades(vt, [-1.0, 1.0, -1.0] * 12))
+    assert bad["bot"] is None and bad["row"]["status"] == "sem bot aprovado"
+    bot, rs = good["bot"], good["research"]
+    assert bot["id"] == "ctx_futures_15m_tendencia_long" and bot["direction"] == "compra" and bot["bot"] == "day"
+    assert bot["filters"]["contexts"] == ["tendencia_alta", "pullback_alta"] and bot["markets"] == ["futures"]
+    keys = {"period_label", "period_days", "ret_pct", "monthly_pct", "win_pct", "dd_pct", "trades_month", "pos_coins", "per_symbol", "status", "interval"}
+    assert keys <= set(rs) and rs["status"] in ("aprovado", "ressalva") and rs["market"] == "futures"
+    assert rs["monthly_pct"] == pytest.approx(((1 + rs["ret_pct"] / 100) ** (30 / rs["period_days"]) - 1) * 100, abs=0.02)
+    assert set(rs["contexts"]) == {"tendencia_alta", "pullback_alta"} or set(rs["contexts"]) <= {"tendencia_alta", "pullback_alta"}
+    assert rs["contexts"]["tendencia_alta"]["avg_r"] > 0 and rs["contexts"]["tendencia_alta"]["n"] > 0
+    # spot só opera comprado
+    assert cr.MARKET_SIDES["spot"] == ("long",) and set(cr.CONTEXTS) == {"lateralidade", "tendencia", "reversao", "rompimento",
+                                                                         "suporte_resistencia", "fluxo_ordens"}
+    # entra no app como qualquer outro bot (cards, escolha por contexto e relatório)
+    monkeypatch.setattr(Pm, "BUILTINS", Pm.BUILTINS + [{**bot, "research": rs, "builtin": True}])
+    assert Pm.get(bot["id"])["research"]["status"] == rs["status"]
+    assert any(p["id"] == bot["id"] for p in Pm.allowed("futures", "15m"))
+    assert Pm.best_for_context("tendencia_alta", market="futures", interval="15m", min_trades=1)
+    md = cr.report_markdown({"generated": "x", "report": [good["row"], bad["row"]]})
+    assert "✅" in md and "sem bot aprovado" in md and "Tendência" in md
+    out = tmp_path / "ctx.json"
+    cr.save({"bots": [bot], "research": {bot["id"]: rs}, "report": []}, out)
+    assert json.loads(out.read_text(encoding="utf-8"))["bots"][0]["id"] == bot["id"]
+
+
+def test_context_research_pipeline_runs_end_to_end_on_synthetic_candles():
+    """Roda a pesquisa de verdade (votos, simulação, provas) em candles sintéticos: o pipeline funciona e relata cada célula."""
+    from core import context_research as cr
+    from core import htf
+
+    def getter(symbol, interval, limit, market):
+        rng = np.random.default_rng(abs(sum(map(ord, symbol))) % 997)
+        close = 100 + np.cumsum(rng.normal(0, 1, limit))
+        close = np.maximum(close, 5)
+        o = np.r_[close[0], close[:-1]]
+        sec = htf.SECONDS[interval]
+        vol = rng.random(limit) * 100 + 10
+        df = pd.DataFrame({"time": pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("min"), periods=limit, freq=pd.Timedelta(seconds=sec)),
+                           "open": o, "high": np.maximum(o, close) + rng.random(limit), "low": np.minimum(o, close) - rng.random(limit),
+                           "close": close, "volume": vol, "taker_buy": vol * rng.uniform(0.3, 0.7, limit)})
+        df.attrs["source"] = "teste"
+        return df
+
+    logs = []
+    res = cr.run(("futures",), ("1h",), ("fluxo_ordens", "rompimento"), universe=lambda m: [f"C{i}USDT" for i in range(10)], getter=getter,
+                 fast=True, days={"1h": 40}, log=logs.append)
+    assert len(res["report"]) == 4                                    # 2 contextos × (long, short)
+    assert {r["status"] for r in res["report"]} <= {"sem bot aprovado", "aprovado", "ressalva"}
+    assert all(r["tested"] >= r["passed"] for r in res["report"]) and any("baixando candles" in l for l in logs)
+    for b in res["bots"]:                                             # se algum passou, vem com as três provas positivas
+        assert all(x > cr.MIN_AVG_R for x in (b["selection"]["busca_r"], b["selection"]["validacao_r"], b["selection"]["inedito_r"]))
+
+
+def test_new_contexts_taker_flow_and_support_resistance():
+    from core import data, regime
+
+    rows = [[1_700_000_000_000 + i * 60_000, 1.0, 2.0, 0.5, 1.5, 10.0, 0, 0, 0, 6.0, 0, 0] for i in range(3)]
+    assert "taker_buy" in data._frame(rows, "x") and list(data._frame(rows, "x")["taker_buy"]) == [6.0] * 3
+    assert "taker_buy" not in data._frame([r[:6] for r in rows], "x")                       # OKX não informa
+    assert {"suporte_teste", "resistencia_teste", "fluxo_comprador", "fluxo_vendedor"} <= set(regime.REGIMES)
+    cfg = default_settings(PROFILES["day"])
+    raw = make_df(600, trend=0.0, seed=4)
+    seen = set(ind.compute(raw, cfg)["regime"])
+    assert not seen & {"fluxo_comprador", "fluxo_vendedor"}                                 # sem volume taker não há fluxo de ordens
+    rng = np.random.default_rng(1)
+    raw["taker_buy"] = raw["volume"] * rng.uniform(0.2, 0.8, len(raw))
+    df = ind.compute(raw, cfg)
+    assert df["taker_ratio"].between(0.2, 0.8).all() and {"fluxo_comprador", "fluxo_vendedor"} & set(df["regime"])
+    assert set(df["regime"]) <= set(regime.REGIMES)
+
+
+def test_bots_gallery_renders_with_context_bots(monkeypatch):
+    """A galeria (com a aba de contextos, que agora tem 4 contextos a mais) abre com bots antigos e com um bot por contexto."""
+    from streamlit.testing.v1 import AppTest
+
+    from core import context_research as cr
+    from core import personalities as Pm
+
+    good = cr.search_cell(_fake_cell(), "suporte_resistencia", "long", fast=True,
+                          simulate=lambda vt, cfg, p: _fake_trades(vt, [1.5, -1.0, 1.5, -1.0, 1.5, 1.5, -1.0, 1.5] * 5, "suporte_teste"))
+    assert good["bot"]
+    monkeypatch.setattr(Pm, "BUILTINS", Pm.BUILTINS + [{**good["bot"], "research": good["research"], "builtin": True}])
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Suporte e resistência" in str(getattr(m, "value", "")) for m in at.markdown)

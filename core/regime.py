@@ -22,6 +22,11 @@ REGIMES: dict[str, tuple[str, str]] = {
     "tendencia_alta": ("📈 Tendência de alta", "ADX ≥ 25, +DI > −DI e preço > EMA lenta > EMA 200."),
     "tendencia_baixa": ("📉 Tendência de baixa", "ADX ≥ 25, −DI > +DI e preço < EMA lenta < EMA 200."),
     "lateral": ("↔️ Lateralidade", "ADX < 18 e Bandas de Bollinger mais estreitas que o normal."),
+    # Contextos de prioridade mais baixa: só valem onde nenhum dos acima se aplica
+    "suporte_teste": ("🧱 Teste de suporte", "Mínima toca a menor mínima dos últimos 50 candles, sem romper, com candle de alta e RSI < 50."),
+    "resistencia_teste": ("🧱 Teste de resistência", "Máxima toca a maior máxima dos últimos 50 candles, sem romper, com candle de baixa e RSI > 50."),
+    "fluxo_comprador": ("🟢 Fluxo comprador", "Compra agressiva ≥ 58% do volume nos últimos 3 candles, volume acima da média e candle de alta."),
+    "fluxo_vendedor": ("🔴 Fluxo vendedor", "Venda agressiva ≥ 58% do volume nos últimos 3 candles, volume acima da média e candle de baixa."),
     "indefinido": ("❔ Sem sinal claro", "Nenhum dos contextos acima com sinal claro."),
 }
 ORDER = list(REGIMES)
@@ -29,6 +34,11 @@ ORDER = list(REGIMES)
 
 def label(key: str) -> str:
     return REGIMES.get(key, (key, ""))[0]
+
+
+def vol_spike_any(df: pd.DataFrame) -> pd.Series:
+    """Volume acima da média de 20 candles."""
+    return df["volume"] > df["vol_sma"]
 
 
 def classify(df: pd.DataFrame) -> pd.Series:
@@ -53,6 +63,17 @@ def classify(df: pd.DataFrame) -> pd.Series:
         ("tendencia_baixa", (adx >= 25) & (dim > dip) & (c < es) & (es < et)),
         ("lateral", (adx < 18) & (width < width_med)),
     ]
+    # Suporte/resistência e fluxo de ordens (compra x venda agressiva, da Binance) vêm depois dos demais para não mudar o que já foi medido
+    o, atr = df["open"], df["atr"]
+    sup, res = l.shift(1).rolling(50).min(), h.shift(1).rolling(50).max()
+    conds += [
+        ("suporte_teste", (l <= sup + 0.3 * atr) & (c > sup) & (c > o) & (rsi < 50)),
+        ("resistencia_teste", (h >= res - 0.3 * atr) & (c < res) & (c < o) & (rsi > 50)),
+    ]
+    if "taker_ratio" in df and df["taker_ratio"].notna().any():
+        tr = df["taker_ratio"].rolling(3).mean()
+        conds += [("fluxo_comprador", (tr >= 0.58) & vol_spike_any(df) & (c > o)),
+                  ("fluxo_vendedor", (tr <= 0.42) & vol_spike_any(df) & (c < o))]
     out = np.full(len(df), "indefinido", dtype=object)
     assigned = np.zeros(len(df), dtype=bool)
     for key, cond in conds:

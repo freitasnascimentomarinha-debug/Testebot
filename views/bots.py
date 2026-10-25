@@ -196,7 +196,7 @@ with tab_ctx:
         if not rs.get("contexts"):
             continue
         names.append(f"{p['name']} · {rs['interval']}")
-        rows.append([rs["contexts"][k][field] if rs["contexts"][k]["n"] >= 3 else None for k in ctx_keys])
+        rows.append([rs["contexts"][k][field] if k in rs["contexts"] and rs["contexts"][k]["n"] >= 3 else None for k in ctx_keys])
     if rows:
         z = pd.DataFrame(rows, index=names, columns=[regime.label(k) for k in ctx_keys])
         mid = 50 if field == "win_pct" else 0
