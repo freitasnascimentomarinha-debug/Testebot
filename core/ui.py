@@ -1,6 +1,8 @@
 """Interface Streamlit compartilhada pelas três páginas de bot."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -679,85 +681,38 @@ def position_details(p: dict, price_now: float) -> dict:
             "gain_tp": net_at(p["take_profit"]) if p.get("take_profit") else None}
 
 
+_CARDS_JS = (Path(__file__).with_name("position_cards.js")).read_text(encoding="utf-8")
+_CARDS_CSS = (Path(__file__).with_name("position_cards.css")).read_text(encoding="utf-8")
+
+
+@st.cache_resource(show_spinner=False)
+def _cards_component():
+    return st.components.v2.component("tb_position_cards", css=_CARDS_CSS, js=_CARDS_JS)
+
+
 def open_positions(profile: BotProfile, cfg: dict) -> None:
-    """Cards das posições abertas, com o resultado atualizado automaticamente."""
+    """Cards das posições abertas (componente em HTML/CSS/JS), com o resultado atualizado automaticamente."""
 
     @st.fragment(run_every=int(cfg["refresh_sec"]))
     def _cards():
         bot = profile.key
-        broker = get_broker(bot)
-        acct = broker.account()
+        acct = get_broker(bot).account()
         price = st.session_state.get(f"{bot}__last_price", 0)
         positions = [p for p in acct["positions"] if p.get("market") == profile.market]
         if not positions:
             st.caption("Nenhuma posição aberta.")
-        for p in positions:
-            p_price = price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]
-            v = positions_view.summarize(p, p_price)
-            coin = v["base_asset"]
-            with st.container(border=True):
-                head = st.columns([2.2, 1.6, 1.2])
-                head[0].markdown(f"### {'🟢 COMPRA' if p['side'] == 'BUY' else '🔴 VENDA'} {p['symbol']} "
-                                 f"· {'Spot' if v['spot'] else 'Futuros'}")
-                head[1].markdown(f"**Entrou:** {v['who']}")
-                head[2].caption(f"Aberta {v['opened_ago']} · {p['opened'][8:10]}/{p['opened'][5:7]} {p['opened'][11:16]} UTC")
-
-                m = st.columns(5)
-                if v["spot"]:
-                    m[0].metric("Valor investido", f"{fmt(v['cost'])} USDT", help="Quanto você pagou nesta compra, sem contar as taxas.")
-                    m[1].metric("Moedas compradas", f"{v['qty']:g} {coin}")
-                else:
-                    m[0].metric("Valor da posição", f"{fmt(v['cost'])} USDT", help="Quantidade × preço de entrada.")
-                    m[1].metric("Quantidade", f"{v['qty']:g} {coin}")
-                m[2].metric("Preço de entrada", fmt_price(v["entry"]))
-                m[3].metric("Preço agora", fmt_price(v["price_now"]), f"{v['move_pct']:+.2f}% desde a entrada")
-                m[4].metric("Resultado agora (líquido)", f"{fmt(v['net'])} USDT", f"{v['net_pct']:+.2f}% " + ("do valor investido" if v["spot"] else "da margem"),
-                            help=f"Variação de preço ({fmt(v['gross'])} USDT) − taxa paga na entrada ({fmt(v['fees_open'])}) − taxa estimada de saída "
-                                 f"({fmt(v['fees_close'])}). Vale o que você leva se encerrar agora.")
-
-                t = st.columns(5)
-                tg, sp = v["target"], v["stop"]
-                if tg:
-                    t[0].metric("🎯 Venda esperada (alvo)" if v["spot"] else "🎯 Alvo (saída com lucro)", fmt_price(tg["price"]),
-                                f"{tg['per_coin']:+,.2f} USDT por {coin} ({tg['pct_price']:+.2f}%)".replace(",", "X").replace(".", ",").replace("X", "."),
-                                help="Diferença entre o preço do alvo e o de entrada, por moeda.")
-                    t[1].metric("Se bater o alvo", f"{fmt(tg['net'])} USDT", f"{tg['pct']:+.2f}%", help="Lucro líquido total (já com as taxas).")
-                else:
-                    t[0].metric("🎯 Alvo", "sem alvo")
-                    t[1].metric("Se bater o alvo", "—")
-                if sp:
-                    t[2].metric("🛑 Stop (limite de perda)", fmt_price(sp["price"]),
-                                f"{sp['per_coin']:+,.2f} USDT por {coin} ({sp['pct_price']:+.2f}%)".replace(",", "X").replace(".", ",").replace("X", "."),
-                                delta_color="inverse" if sp["per_coin"] > 0 else "normal")
-                    t[3].metric("Se bater o stop", f"{fmt(sp['net'])} USDT", f"{sp['pct']:+.2f}%", help="Resultado líquido total (já com as taxas).")
-                else:
-                    t[2].metric("🛑 Stop", "sem stop")
-                    t[3].metric("Se bater o stop", "—")
-                t[4].metric("Risco:retorno", fmt(v["rr"]) if v["rr"] else "—", help="Quanto o alvo rende para cada 1 que o stop perde (preço).")
-
-                x = st.columns(5)
-                x[0].metric("Taxas (entrada + saída est.)", f"{fmt(v['fees_open'] + v['fees_close'])} USDT")
-                if v["spot"]:
-                    x[1].metric("Valor agora", f"{fmt(v['value_now'])} USDT", help="Moedas × preço atual: o que você receberia pela venda, antes da taxa.")
-                else:
-                    x[1].metric("Margem", f"{fmt(v['margin'])} USDT", help="Saldo travado nesta posição.")
-                    x[2].metric("Alavancagem", f"{v['leverage']:g}× {v['margin_mode'] or ''}")
-                    x[3].metric("Preço de liquidação", fmt_price(v["liquidation"]) if v["liquidation"] else "—",
-                                help="Se o preço chegar aqui, a margem é perdida.")
-                    x[4].metric("Funding pago", f"{fmt(v['funding'])} USDT", help="Financiamento dos perpétuos a cada 8 h.")
-
-                e = st.columns([1, 1, 1, 1])
-                new_sl = e[0].number_input("Stop", value=float(p["stop_loss"] or 0), format="%.6f", key=f"{bot}_sl_{p['id']}")
-                new_tp = e[1].number_input("Alvo", value=float(p["take_profit"] or 0), format="%.6f", key=f"{bot}_tp_{p['id']}")
-                if e[2].button("Atualizar stop/alvo", key=f"{bot}_upd_{p['id']}", width="stretch"):
-                    broker.update_protection(p["id"], new_sl or None, new_tp or None)
-                    st.rerun(scope="app")
-                if e[3].button("Zerar posição" if not v["spot"] else "Vender tudo agora", key=f"{bot}_close_{p['id']}", type="primary", width="stretch"):
-                    tr = broker.close_position(p["id"], p_price, "Manual")
-                    st.toast(f"Posição encerrada: {tr['pnl']:+.2f} USDT")
-                    st.rerun(scope="app")
-                if p.get("note"):
-                    st.caption("Motivo da entrada: " + p["note"][:240])
+            return
+        prices = {p["symbol"]: (price if p["symbol"] == cfg["symbol"] else _safe_price(p["symbol"], profile.market) or p["entry"]) for p in positions}
+        cards = [positions_view.card_data(p, prices[p["symbol"]]) for p in positions]
+        res = _cards_component()(key=f"{bot}-position-cards", data={"cards": cards}, on_action_change=lambda: None)
+        ev = getattr(res, "action", None)
+        if ev and ev.get("uid") != st.session_state.get(f"{bot}__card_uid"):
+            st.session_state[f"{bot}__card_uid"] = ev.get("uid")
+            ok, msg = chart_actions.handle_card(profile, ev, lambda sym: prices.get(sym) or _safe_price(sym, profile.market))
+            if msg:
+                st.toast(msg, icon="✅" if ok else "🚫")
+            if ok:
+                st.rerun(scope="app")
 
     _cards()
 

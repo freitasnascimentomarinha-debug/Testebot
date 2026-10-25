@@ -48,6 +48,10 @@ pronta para receber a API de negociação da Binance numa segunda fase.
   desenhos ficam salvos no navegador por ativo. No topo: tipo de vela (velas, Heikin-Ashi, linha, área), escala logarítmica e liga/desliga
   de indicadores. **Stop e alvo das posições são arrastáveis** (com confirmação), clicar na linha de uma ordem limite a cancela e o botão
   Zerar encerra a posição. O gráfico avisa a página por `postMessage` e `core/chart_actions.py` valida tudo antes de agir.
+* **Cards das posições abertas** (`core/position_cards.js/.css`, componente do Streamlit em HTML/CSS/JS): quem deu a entrada (personalidade do bot),
+  resultado líquido agora em destaque, faixa visual stop ─ entrada ─ alvo com o preço atual, e os números de cada posição. No **spot**:
+  valor investido, moedas compradas, venda esperada, lucro/perda no alvo e no stop (por moeda e total), taxas — sem margem nem alavancagem.
+  Nos **futuros**: também margem, alavancagem, liquidação e funding. Editar stop/alvo e encerrar a posição ali mesmo.
 * **Papel da IA**: por padrão a IA só **explica resumidamente** o que acontece no mercado e dá uma **dica útil** do
   contexto, no tom da personalidade escolhida (professor, direto ao ponto, gestor cauteloso, mentor ou quant).
   Opcionalmente ela também **interfere** na ativação do bot: confirma ou veta o sinal naquele momento.
