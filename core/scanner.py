@@ -1,8 +1,7 @@
 """Varredura automática: de tempos em tempos (padrão 15 min, configurável) o bot procura oportunidades em vários ativos, sozinho.
 
 Para cada ativo da lista: baixa os candles, escolhe o bot do ranking para o contexto dele, aplica as regras e (sem gastar IA) vê se
-há sinal. As melhores oportunidades — e só elas — passam pela IA (no máximo uma consulta por varredura, a não ser que a IA esteja
-autorizada a confirmar/vetar a entrada) e viram ordem. Sinais contrários a posições abertas do bot as encerram. Também confere
+há sinal. As melhores oportunidades — e só elas — passam pela IA (a IA confirma ou veta as melhores, até AI_MAX_PER_SCAN por varredura) e viram ordem. Sinais contrários a posições abertas do bot as encerram. Também confere
 stops e alvos das posições abertas em todos os ativos, não só no que está na tela.
 """
 from __future__ import annotations
@@ -25,6 +24,7 @@ DEFAULT_SCAN = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT
 WINDOW = 120      # candles fechados analisados em cada moeda
 WARMUP = 210      # candles anteriores só para os indicadores "esquentarem" (médias de 200 períodos etc.)
 DEFAULT_COUNT = 15
+AI_MAX_PER_SCAN = 5   # a IA confirma ou veta só as melhores oportunidades de cada varredura (limita as consultas)
 
 
 SCAN_STATE = "scan_state.json"
@@ -158,7 +158,9 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
             break
         # A IA só entra com a melhor oportunidade (ou em todas, se ela puder confirmar/vetar a entrada); as demais são
         # refeitas só com regras porque o saldo disponível mudou depois da ordem anterior.
-        use_ai = bool(api_key) and (idx == 0 or cfg.get("ai_intervene"))
+        if idx >= AI_MAX_PER_SCAN and api_key and cfg.get("ai_intervene"):
+            break
+        use_ai = bool(api_key) and (idx == 0 or bool(cfg.get("ai_intervene")))
         res = engine.run_analysis(profile, cfg_s, df, price, api_key if use_ai else None, log=False,
                                   personality_id=(res.personality or {}).get("id"))
         if sym == symbols[0] or report.viewed is None:

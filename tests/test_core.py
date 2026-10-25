@@ -737,7 +737,7 @@ def test_scan_runs_by_time_not_on_page_entry(monkeypatch):
     """A varredura é por tempo (padrão 15 min): reservar duas vezes seguidas só vale a primeira; reset libera na hora."""
     from core import scanner
 
-    assert default_settings(PROFILES["day"])["scan_minutes"] == 15 and default_settings(PROFILES["day"])["ai_exit"] is False
+    assert default_settings(PROFILES["day"])["scan_minutes"] == 15 and default_settings(PROFILES["day"])["ai_exit"] is True
     scanner.reset("day")
     assert scanner.claim("day", 15, now=1000.0) is True
     assert scanner.claim("day", 15, now=1000.0 + 14 * 60) is False       # abrir a página/trocar de moeda não varre de novo
@@ -786,7 +786,7 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
     profile = PROFILES["day"]
     cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_count": 18, "scan_pool": 40, "scan_max_entries": 2,
-           "candles": 400}
+           "candles": 400, "ai_intervene": False}
     asked, fetched = [], []
 
     limits = []
@@ -823,7 +823,7 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
     rep = scanner.run(profile, cfg, "chave", klines=klines, ticker=ticker, pool=pool, rng=random.Random(3))
     assert rep.scanned == 18 and len(set(fetched)) >= 18 and "BTCUSDT" in fetched
     assert all(n == scanner.WINDOW + scanner.WARMUP + 1 for n in limits)                      # 120 candles fechados + aquecimento + o em formação
-    assert len(asked) <= 1                                     # no máximo uma consulta à IA por varredura (só para a melhor oportunidade)
+    assert len(asked) <= 1                                     # IA só explicando: uma consulta por varredura (a melhor oportunidade); interferindo, no máximo AI_MAX_PER_SCAN
     assert 1 <= len(rep.executed) <= 2 and rep.viewed is not None             # o cenário sintético tem sinal: o bot opera
     opened = {p["symbol"] for p in paper.get_account(paper.SHARED_ACCOUNT)["positions"]}
     assert opened == {e["symbol"] for e in rep.executed if e["action"] in ("BUY", "SELL")}
@@ -1163,7 +1163,10 @@ def test_ai_role_explains_or_intervenes(monkeypatch):
     paper.set_wallet_mode("única")
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
     cfg = {**default_settings(PROFILES["day"]), "symbol": "X", "personality": "esp_15m_ema_3x1", "auto_bot": False}
-    assert cfg["ai_intervene"] is False and cfg["ai_persona"] in ai.AI_PERSONAS            # padrão: a IA só explica
+    assert cfg["ai_intervene"] is True and cfg["ai_persona"] in ai.AI_PERSONAS             # padrão: a IA interfere
+    from core.settings import load_settings
+    assert load_settings("day")["ai_intervene"] and load_settings("day")["ai_exit"]         # e não é mais uma escolha do usuário
+    cfg["ai_intervene"] = False                                                              # (aqui, o caminho "só explica")
     df = ind.compute(make_df(400, trend=0.4, seed=21), cfg)
     plan = analyze(df, cfg, PROFILES["day"], Pm.get("esp_15m_ema_3x1"))
     price = float(df.close.iloc[-1])
@@ -1385,14 +1388,14 @@ def test_queue_setting_after_widgets_does_not_raise(monkeypatch):
         render_bot_page("day")
         if st.session_state.get("pedido") and not st.session_state.get("feito"):
             st.session_state["feito"] = True
-            queue_setting("day", interval="1h", auto_bot=False)
+            queue_setting("day", interval="1h", scan_on=False)
 
     at = AppTest.from_function(page, default_timeout=120).run()
     at.session_state["pedido"] = True
     at = at.run()
     assert not at.exception, [e.value for e in at.exception]
     at = at.run()  # a mudança pendente entra no começo da execução seguinte, antes dos widgets
-    assert not at.exception and at.session_state["day__interval"] == "1h" and at.session_state["day__auto_bot"] is False
+    assert not at.exception and at.session_state["day__interval"] == "1h" and at.session_state["day__scan_on"] is False
     from core.settings import load_settings
 
     assert load_settings("day")["interval"] == "1h"
