@@ -1,17 +1,19 @@
 """Bots: ranking diário (dia, semana e mês), calculadora, backtest sob demanda, criação, biblioteca e contextos — tudo numa página."""
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import accounts, bot_performance, fastsim, indicators as ind, personalities as P, regime
+from core import accounts, bot_performance, bots_view, fastsim, indicators as ind, personalities as P, regime
 from core.ai import strategy_from_text
 from core.paper import account_id, get_account, stats
 from core.profiles import PROFILES
 from core.settings import DEFAULT_MODEL, default_settings
 from core.storage import current_user
 from core.strategy import SKILLS
-from core.ui import api_key, cached_klines, cached_symbols, cached_votes, fmt
+from core.ui import api_key, cached_klines, cached_symbols, cached_votes
 
 st.title("🤖 Bots")
 st.caption("Cada bot é uma estratégia (indicadores, entrada, direção e stop/alvo) treinada num mercado e tempo gráfico. O ranking é refeito "
@@ -19,23 +21,11 @@ st.caption("Cada bot é uma estratégia (indicadores, entrada, direção e stop/
            "Resultado passado não garante resultado futuro. No fechamento de cada candle o sistema escolhe sozinho o melhor bot para o contexto.")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
-STYLE = {"day": "⚡ Day trade", "swing": "🌊 Swing", "long": "🏔️ Longo prazo"}
 MARKET_LABEL = {"futures": "Futuros", "spot": "Spot (só compra)"}
 
 
 def mlabel(m: str) -> str:
     return MARKET_LABEL.get(m, m)
-
-
-def rr_label(p: dict) -> str:
-    if p.get("trail_atr"):
-        return "sem alvo (surfa)"
-    sl, tp = float(p.get("sl_atr") or 1), float(p.get("tp_atr") or 1)
-    r = tp / sl
-    if r >= 1:
-        return f"{r:.1f}:1".replace(".0:", ":").replace(".", ",")
-    return f"1:{1 / r:.1f}".replace(".0", "").replace(".", ",")
-
 
 
 live = {r["id"]: r for r in P.ranking()}
@@ -50,49 +40,52 @@ tab_rank, tab_calc, tab_bt, tab_new, tab_lib, tab_ctx = st.tabs(["🏆 Ranking",
 bot_performance.refresh_if_due()   # 1x por dia, em segundo plano (o worker 24/7 também dispara)
 
 
+_UI_CSS = Path(bots_view.__file__).with_name("bots_ui.css").read_text(encoding="utf-8")
+
+
+@st.cache_resource(show_spinner=False)
+def _comp(name: str):
+    return st.components.v2.component(f"tb_{name}", css=_UI_CSS, js=Path(bots_view.__file__).with_name(f"{name}.js").read_text(encoding="utf-8"))
+
+
+def _run_backtest(pid: str) -> None:
+    """Backtest forçado de um bot (botão no ranking ou na aba Backtest)."""
+    bar = st.progress(0.0, text="Baixando candles recentes…")
+    try:
+        got = bot_performance.refresh_bot(pid, getter=lambda s_, i_, n_, m_: cached_klines(s_, i_, n_, m_),
+                                          progress=lambda f, t: bar.progress(min(f, 1.0), text=t))
+    except Exception as exc:  # noqa: BLE001
+        got = None
+        st.error(f"Não foi possível rodar agora: {exc}")
+    bar.empty()
+    st.toast("Backtest salvo no ranking." if got else "Sem candles para este bot agora.", icon="✅" if got else "⚠️")
+
+
+def _action(res, key: str):
+    ev = getattr(res, "action", None)
+    if ev and ev.get("uid") != st.session_state.get(key):
+        st.session_state[key] = ev.get("uid")
+        return ev
+    return None
+
+
+NOTE = (f"Simulado em {', '.join(s_.replace('USDT', '') for s_ in P.PERIOD_SYMBOLS)} (cada moeda com a própria banca; o valor é a média), só com as "
+        "regras do bot, entrada no candle seguinte ao sinal, taxas e 1% de risco por operação. Clique num bot para ver os detalhes.")
+
+
 @st.fragment(run_every=30)
 def _ranking():
     upd, busy = bot_performance.last_update(), bot_performance.running()
-    st.caption(("🔄 Atualizando o ranking de hoje em segundo plano… a tabela muda sozinha quando terminar. " if busy else "")
+    st.caption(("🔄 Atualizando o ranking de hoje em segundo plano… muda sozinho quando terminar. " if busy else "")
                + (f"Atualizado em {upd:%d/%m %H:%M} UTC · próxima atualização automática amanhã." if upd else "Ainda não calculado."))
-    c1, c2, c3 = st.columns([1, 1, 1.2])
-    m = c1.selectbox("Mercado", ["", "futures", "spot"], format_func=lambda x: "Todos" if not x else mlabel(x), key="rk_m")
-    itvs = sorted({r["interval"] for r in bot_performance.rows(m or None)}, key=lambda i: -fastsim.PER_DAY.get(i, 0))
-    i = c2.selectbox("Tempo gráfico", [""] + itvs, format_func=lambda x: x or "Todos", key="rk_i")
-    order = c3.selectbox("Ordenar por", list(bot_performance.LABELS), index=2, format_func=lambda k: f"Retorno no {bot_performance.LABELS[k].lower()}", key="rk_o")
-    rows = bot_performance.rows(m or None, i or None)
-    pct = lambda r, k, f="ret_pct": (r[k] or {}).get(f)  # noqa: E731
-    rows.sort(key=lambda r: (pct(r, order) is None, -(pct(r, order) or 0)))
-    if not rows or all(pct(r, "d30") is None for r in rows):
+    rows = bot_performance.rows()
+    if not rows or all(not r["d30"] for r in rows):
         st.info("O ranking diário ainda não foi calculado. Ele roda sozinho em segundo plano; para um bot específico agora, use a aba 🔁 Backtest.")
         return
-    tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}
-    table = pd.DataFrame([{
-        "#": n + 1, "Bot": f"{tag.get(r['status'], '·')} {r['name']}", "Mercado": "Futuros" if r["market"] == "futures" else "Spot",
-        "Tempo": r["interval"], "Dia": pct(r, "d1"), "Semana": pct(r, "d7"), "Mês": pct(r, "d30"),
-        "Operações no mês": pct(r, "d30", "trades"), "Acerto no mês": pct(r, "d30", "win_pct"), "Pior queda no mês": pct(r, "d30", "dd_pct"),
-        "Moedas positivas (mês)": f"{pct(r, 'd30', 'positive')}/{pct(r, 'd30', 'symbols')}" if r["d30"] else None,
-        "Real (USDT)": r["live_pnl"] if r["live_trades"] else None,
-    } for n, r in enumerate(rows)])
-    pc = lambda h: st.column_config.NumberColumn(format="%+.2f%%", help=h)  # noqa: E731
-    st.dataframe(table, hide_index=True, placeholder="—", height=min(38 + 35 * len(table), 640), column_config={
-        "Dia": pc("Retorno nas últimas 24 h (média das 5 moedas, 1% de risco por operação, com taxas)"), "Semana": pc("Últimos 7 dias"),
-        "Mês": pc("Últimos 30 dias"), "Acerto no mês": st.column_config.NumberColumn(format="%.0f%%"),
-        "Pior queda no mês": st.column_config.NumberColumn(format="−%.1f%%"), "Real (USDT)": st.column_config.NumberColumn(format="%+.2f",
-                                                                                                                       help="Resultado das operações reais do bot na carteira simulada")})
-    st.caption(f"Simulado em {', '.join(s.replace('USDT', '') for s in P.PERIOD_SYMBOLS)} (cada moeda com a própria banca; a coluna é a média), "
-               "só com as regras do bot, entrada no candle seguinte ao sinal e taxas incluídas.")
-
-    st.markdown("##### 📈 Evolução diária")
-    pick = st.selectbox("Bot", [r["id"] for r in rows], format_func=lambda pid: next(r["name"] for r in rows if r["id"] == pid), key="rk_hist")
-    hist = bot_performance.history(pick)
-    if len(hist) < 2:
-        st.caption("A evolução aparece a partir do segundo dia de atualizações (o histórico guarda até 90 dias).")
-    else:
-        df = pd.DataFrame(hist)
-        fig = go.Figure([go.Scatter(x=df["date"], y=df[k], mode="lines+markers", name=bot_performance.LABELS[k]) for k in ("d1", "d7", "d30") if k in df])
-        fig.update_layout(height=260, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10), yaxis_title="Retorno (%)", legend=dict(orientation="h"))
-        st.plotly_chart(fig, config={"displayModeBar": False})
+    res = _comp("bot_rank")(key="bots-rank", data=bots_view.rank_data(rows, bot_performance.history, note=NOTE), on_action_change=lambda: None)
+    if (ev := _action(res, "rk_uid")) and ev.get("kind") == "backtest":
+        _run_backtest(ev["id"])
+        st.rerun(scope="fragment")
 
 
 with tab_rank:
@@ -107,29 +100,13 @@ with tab_bt:
     bt_id = c1.selectbox("Bot", [p["id"] for p in allp], key="bt_bot",
                          format_func=lambda pid: (lambda p, h: f"{p['name']} · {mlabel(h[0])} {h[1]}")(P.get(pid), bot_performance.home(P.get(pid))))
     if c2.button("▶️ Rodar backtest agora", type="primary", width="stretch"):
-        bar = st.progress(0.0, text="Baixando candles recentes…")
-        try:
-            got = bot_performance.refresh_bot(bt_id, getter=lambda s, i, n, m: cached_klines(s, i, n, m),
-                                              progress=lambda f, t: bar.progress(min(f, 1.0), text=t))
-        except Exception as exc:  # noqa: BLE001
-            got = None
-            st.error(f"Não foi possível rodar agora: {exc}")
-        bar.empty()
-        if got:
-            st.toast("Backtest salvo no ranking.", icon="✅")
-        elif got is None:
-            st.warning("Sem candles para este bot agora.")
-    e = bot_performance.load()["results"].get(bt_id)
-    if e:
-        st.markdown(f"**{e['name']}** · {mlabel(e['market'])} {e['interval']} · atualizado em {e['updated'][:16].replace('T', ' ')} UTC")
-        cols = st.columns(3)
-        for col, k in zip(cols, ("d1", "d7", "d30")):
-            w = e[k]
-            col.metric(f"Último {bot_performance.LABELS[k].lower()}", f"{w['ret_pct']:+.2f}%",
-                       f"{w['trades']} operações · acerto {w['win_pct']:.0f}%", delta_color="off")
-        if e.get("per_symbol"):
-            st.dataframe(pd.DataFrame([{"Moeda": s.replace("USDT", ""), "Retorno no mês": v} for s, v in e["per_symbol"].items()]),
-                         hide_index=True, column_config={"Retorno no mês": st.column_config.NumberColumn(format="%+.2f%%")})
+        _run_backtest(bt_id)
+    one = [r for r in bot_performance.rows() if r["id"] == bt_id and r["d30"]]
+    if one:
+        res_bt = _comp("bot_rank")(key="bots-bt", data=bots_view.rank_data(one, bot_performance.history, focus=bt_id), on_action_change=lambda: None)
+        if (ev := _action(res_bt, "bt_uid")) and ev.get("kind") == "backtest":
+            _run_backtest(ev["id"])
+            st.rerun()
     else:
         st.info("Este bot ainda não tem resultado salvo. Clique em Rodar backtest agora.")
 
@@ -223,36 +200,8 @@ with tab_calc:
     res = st.session_state.get("sim_result")
     if res:
         rows = res["rows"]
-        pnl = res["bank"] - res["bank0"]
-        ret = pnl / res["bank0"] * 100
-        monthly = ((1 + ret / 100) ** (30 / res["days"]) - 1) * 100 if res["bank"] > 0 else -100.0
-        wins = [t for t in rows if t["resultado"] > 0]
-        losses = [t for t in rows if t["resultado"] <= 0]
-        st.markdown(f"**{res['bot']}** · {res['itv']} {'futuros' if res['market'] == 'futures' else 'spot'} · "
-                    f"últimos {res['days']} dias · risco {res['risk']:g}% por operação"
-                    f"{' com juros compostos' if res['comp'] else ' (valor fixo)'}")
-        m = st.columns(5)
-        m[0].metric("Banca final", f"{fmt(res['bank'])} USDT", f"{fmt(pnl)} USDT ({ret:+.2f}%)")
-        m[1].metric("≈ por mês", f"{monthly:+.2f}%", help="(1 + retorno do período)^(30 ÷ dias) − 1")
-        m[2].metric("Operações", len(rows), f"{len(wins)} ganhos · {len(losses)} perdas", delta_color="off")
-        m[3].metric("Acerto", f"{len(wins) / len(rows) * 100:.0f}%" if rows else "—")
-        m[4].metric("Pior queda da banca", f"−{res['max_dd']:.1f}%")
-        m = st.columns(4)
-        m[0].metric("Maior ganho", f"{fmt(max((t['resultado'] for t in rows), default=0))} USDT")
-        m[1].metric("Maior perda", f"{fmt(min((t['resultado'] for t in rows), default=0))} USDT")
-        gross_w, gross_l = sum(t["resultado"] for t in wins), -sum(t["resultado"] for t in losses)
-        m[2].metric("Fator de lucro", fmt(gross_w / gross_l) if gross_l else ("∞" if gross_w else "—"))
-        m[3].metric("Resultado por operação", f"{fmt(pnl / len(rows))} USDT" if rows else "—")
+        _comp("bot_calc")(key="bots-calc", data={"r": bots_view.calc_view(res)})
         if res["curve"]:
-            curve = pd.DataFrame([{"time": res["rows"][0]["entrada"], "Banca (USDT)": res["bank0"]}] + res["curve"])
-            color = "#26a69a" if res["bank"] >= res["bank0"] else "#ef5350"
-            fig = go.Figure(go.Scatter(x=curve["time"], y=curve["Banca (USDT)"], mode="lines", line=dict(color=color, width=2),
-                                       hovertemplate="%{x|%d/%m %H:%M}<br>%{y:,.2f} USDT"))
-            fig.add_hline(y=res["bank0"], line=dict(color="#8a8f98", dash="dot", width=1),
-                          annotation_text="banca inicial", annotation_position="bottom right")
-            fig.update_layout(height=280, template="plotly_dark", margin=dict(l=10, r=10, t=20, b=10),
-                              yaxis_title="Banca (USDT)", showlegend=False)
-            st.plotly_chart(fig, config={"displayModeBar": False})
             st.dataframe(pd.DataFrame(res["per_coin"]), hide_index=True, column_config={
                 "Acerto": st.column_config.NumberColumn(format="%.0f%%"),
                 "R médio": st.column_config.NumberColumn(format="%+.2f"),
@@ -442,128 +391,19 @@ with tab_new:
 
 # --------------------------------------------------------------- biblioteca
 with tab_lib:
-    # ------------------------------------------------------------------ filtros
-    c1, c2, c3, c4 = st.columns([1.2, 1.6, 1.2, 1.2])
-    style_f = c1.multiselect("Estilo", list(STYLE), format_func=STYLE.get, placeholder="Todos")
-    skills_f = c2.multiselect("Indicador", sorted({k for p in bots for k in p.get("skills", {})}),
-                              format_func=lambda k: SKILL_NAMES.get(k, k), placeholder="Todos")
-    rr_f = c3.multiselect("Risco:retorno", sorted({rr_label(p) for p in bots}), placeholder="Todos")
-    order = c4.selectbox("Ordenar por", ["% ao mês", "Acerto", "Menor queda", "Operações reais"])
-    only_ok = st.toggle("Mostrar só os aprovados na prova final (moedas que o teste não viu)", value=False)
-
-    view = []
-    for p in bots:
-        rs = p.get("research", {})
-        if style_f and p.get("bot") not in style_f:
-            continue
-        if skills_f and not set(skills_f) & set(p.get("skills", {})):
-            continue
-        if rr_f and rr_label(p) not in rr_f:
-            continue
-        if only_ok and rs.get("status") != "aprovado":
-            continue
-        view.append(p)
-    key = {"% ao mês": lambda p: -(p.get("research", {}).get("monthly_pct") or -999),
-           "Acerto": lambda p: -(p.get("research", {}).get("win_pct") or 0),
-           "Menor queda": lambda p: p.get("research", {}).get("dd_pct") or 999,
-           "Operações reais": lambda p: -(live.get(p["id"], {}).get("live_trades") or 0)}[order]
-    view.sort(key=key)
-
-    ok = sum(1 for p in bots if p.get("research", {}).get("status") == "aprovado")
-    st.caption(f"{len(view)} de {len(bots)} bots · {ok} aprovados na prova final")
-
-    # --------------------------------------------------------------------- cards
-    cols = st.columns(3)
-    for n, p in enumerate(view):
-        rs = p.get("research", {})
-        lv = live.get(p["id"], {})
-        bot = {"long": "swing"}.get(p.get("bot"), p.get("bot")) or ("day" if "futures" in p.get("markets", []) else "swing")  # Long roda na página Spot
-        with cols[n % 3].container(border=True):
-            st.markdown(f"#### {p['name']}")
-            mk = rs.get("market") or ("futures" if "futures" in p.get("markets", ["futures"])[:1] else "spot")
-            market = {"futures": "Futuros", "spot": "Spot"}.get(mk, mk)
-            badges = [STYLE.get(bot, bot), rs.get("interval") or p.get("tested_interval") or p.get("timeframes", ""), market,
-                      f"R:R {rr_label(p)}"]
-            st.markdown(" ".join(f"`{b}`" for b in badges if b))
-            st.caption(f"**{p.get('specialty', '')}**")
-            if p.get("filters", {}).get("contexts"):
-                st.caption("🔒 Opera só em: " + ", ".join(regime.label(c) for c in p["filters"]["contexts"])
-                           + " — fora disso fica de fora (nos outros contextos a simulação foi negativa).")
-            st.markdown(f"💡 {p.get('tip') or p.get('summary', '')}")
-            if rs:
-                m1, m2 = st.columns(2)
-                m1.metric("Ao mês (simulado)", f"{rs['monthly_pct']:+.1f}%",
-                          f"{rs['ret_pct']:+.1f}% em {rs['period_label']}",
-                          help="Estimativa mensal composta a partir do período simulado: "
-                               "(1 + retorno do período)^(30 ÷ dias) − 1, média de 10 moedas, 1% de risco por operação.")
-                m2.metric("Acerto", f"{rs['win_pct']:.0f}%", f"pior queda −{rs['dd_pct']:.0f}%", delta_color="off")
-                status = {"aprovado": "✅ Aprovado na prova final", "ressalva": "🟡 Aprovado com ressalva",
-                          "fraco": "⚠️ Fraco no período"}.get(rs.get("status"), "")
-                st.caption(f"{status} · ~{rs['trades_month']:.0f} operações/mês · {rs['pos_coins']} moedas positivas")
-                if rs.get("prev_ret_pct") is not None:
-                    st.caption(f"{'🔴' if rs['prev_ret_pct'] < 0 else '🟢'} {rs.get('prev_label', 'Nos 40 dias anteriores')}: {rs['prev_ret_pct']:+.1f}% "
-                               f"({rs['prev_pos_coins']} {'moedas' if rs.get('market') in ('futures', 'spot') else 'ativos'} positivos) — teste de outro regime de mercado.")
-                best, filt = rs.get("best_contexts") or [], rs.get("context_filtered")
-                if best and filt:
-                    better = filt["ret_pct"] > rs["ret_pct"] and filt["status"] == "aprovado"
-                    st.caption(f"🎯 **Melhor contexto:** {', '.join(regime.label(c) for c in best)} · só nele(s): "
-                               f"≈ {filt['monthly_pct']:+.1f}%/mês, acerto {filt['win_pct']:.0f}% "
-                               + ("✅ **recomendado ligar o filtro**" if better else "(sem ganho sobre operar sempre)"))
-                elif rs.get("contexts"):
-                    st.caption("🎯 Nenhum contexto com resultado positivo consistente.")
-            if lv.get("live_trades"):
-                st.caption(f"📊 Real: {lv['live_trades']} operações · acerto {lv['live_win_rate']:.0f}% · "
-                           f"{(lv['live_avg_r'] or 0):+.2f}R por operação · {lv['live_pnl']:+.2f} USDT")
-            else:
-                st.caption("📊 Real: ainda sem operações — ative para começar a medir.")
-            weak = rs.get("status") not in ("aprovado", "ressalva") and bool(rs)
-            b1, b2 = st.columns([1.2, 1])
-            b1.caption("⚠️ Fraco no teste: o sistema não o escolhe" if weak else "🤖 Escolhido sozinho quando o contexto combina")
+    res_lib = _comp("bot_library")(key="bots-lib", data=bots_view.library_data(bots, live, lambda p: P.can_edit(p, current_user())),
+                                   on_action_change=lambda: None)
+    if ev := _action(res_lib, "lib_uid"):
+        p = P.get(ev.get("id"))
+        if p and ev.get("kind") == "edit":
             mine = P.can_edit(p, current_user())
-            if b1.button("✏️ Editar" if mine else "📄 Duplicar e editar", key=f"edit_{p['id']}", width="stretch"):
-                st.session_state["persona_template"] = {**p, "duplicate": not mine}
-                st.session_state["bots_msg"] = "Os campos foram preenchidos: abra a aba ✍️ Criar bot."
-                st.rerun()
-            if mine and b1.checkbox("Excluir", key=f"delok_{p['id']}") and b1.button("Confirmar exclusão", key=f"del_{p['id']}"):
-                P.delete_custom(p["id"])
-                st.rerun()
-            with b2.popover("Detalhes", width="stretch"):
-                st.markdown(p.get("description", ""))
-                st.markdown("**Indicadores (peso):** " + ", ".join(
-                    f"{SKILL_NAMES.get(k, k)} ({w:g})" for k, w in sorted(p.get("skills", {}).items(), key=lambda x: -x[1])))
-                f = p.get("filters", {})
-                filt = [P.FILTERS[k] for k, v in f.items() if v and k in P.FILTERS]
-                if f.get("adx_min"):
-                    filt.append(f"ADX ≥ {f['adx_min']}")
-                if f.get("adx_max"):
-                    filt.append(f"ADX ≤ {f['adx_max']}")
-                if f.get("vol_mult"):
-                    filt.append(f"Volume ≥ {f['vol_mult']:g}× a média")
-                st.markdown(f"**Direção:** {P.DIRECTIONS[p.get('direction', 'misto')]} · **Saída:** {P.exit_text(p)} · "
-                            f"**Filtros:** {', '.join(filt) or 'nenhum'}")
-                if rs.get("per_symbol"):
-                    st.markdown(f"**Simulação ({rs['period_label']}, até {rs['tested_at']}):**")
-                    st.dataframe(pd.DataFrame([{"Moeda": k.replace("USDT", ""), "Retorno": v}
-                                               for k, v in rs["per_symbol"].items()]),
-                                 hide_index=True, column_config={"Retorno": st.column_config.NumberColumn(format="%+.1f%%")})
-                    st.caption(f"Moedas da busca: {rs['ret_seen']:+.1f}% · moedas inéditas (prova final): "
-                               f"{rs['ret_new']:+.1f}%.")
-                if rs.get("contexts"):
-                    st.markdown("**Desempenho por contexto do gráfico** (operando só naquele contexto):")
-                    st.dataframe(pd.DataFrame([{
-                        "Contexto": regime.label(k), "% do tempo": rs.get("context_share", {}).get(k),
-                        "Operações": v["n"], "Acerto": v["win_pct"], "R médio": v["avg_r"], "Retorno": v.get("ret_pct")}
-                        for k, v in rs["contexts"].items()]).sort_values("R médio", ascending=False),
-                        hide_index=True, column_config={
-                            "% do tempo": st.column_config.NumberColumn(format="%.0f%%"),
-                            "Acerto": st.column_config.NumberColumn(format="%.0f%%"),
-                            "R médio": st.column_config.NumberColumn(format="%+.2f"),
-                            "Retorno": st.column_config.NumberColumn(format="%+.1f%%")})
-
-    if not view:
-        st.info("Nenhum bot com esses filtros.")
-
-
+            st.session_state["persona_template"] = {**p, "duplicate": not mine}
+            st.session_state["bots_msg"] = "Os campos foram preenchidos: abra a aba ✍️ Criar bot."
+            st.rerun()
+        elif p and ev.get("kind") == "delete" and P.can_edit(p, current_user()):
+            P.delete_custom(p["id"])
+            st.toast(f"“{p['name']}” excluído.", icon="🗑️")
+            st.rerun()
 
 # --------------------------------------------------------------- contextos
 TF_SETS = [("futures", "5m", "day"), ("futures", "15m", "day"), ("futures", "1h", "day"),

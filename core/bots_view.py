@@ -1,0 +1,85 @@
+"""Dados dos componentes da página Bots (ranking, biblioteca e calculadora). Sem Streamlit, para ser testado."""
+from __future__ import annotations
+
+from core import fastsim, personalities as P, regime
+from core.strategy import SKILLS
+
+SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
+
+
+def rr_label(p: dict) -> str:
+    if p.get("trail_atr"):
+        return "sem alvo (surfa)"
+    sl, tp = float(p.get("sl_atr") or 1), float(p.get("tp_atr") or 1)
+    r = tp / sl
+    if r >= 1:
+        return f"{r:.1f}:1".replace(".0:", ":").replace(".", ",")
+    return f"1:{1 / r:.1f}".replace(".0", "").replace(".", ",")
+
+
+def rank_data(rows: list[dict], history, *, note: str = "", busy: str | None = None, focus: str | None = None) -> dict:
+    """Linhas do ranking diário com o histórico (para as mini curvas) e a ordem dos tempos gráficos."""
+    out = []
+    for r in rows:
+        out.append({k: r.get(k) for k in ("id", "name", "market", "interval", "builtin", "status", "d1", "d7", "d30", "per_symbol",
+                                          "live_trades", "live_pnl")}
+                   | {"updated": (r.get("updated") or "")[:16].replace("T", " "), "history": history(r["id"])[-30:]})
+    return {"rows": out, "order": {i: -v for i, v in fastsim.PER_DAY.items()}, "note": note, "busy": busy, "focus": focus}
+
+
+def _filters_text(p: dict) -> str:
+    f = p.get("filters", {})
+    out = [P.FILTERS[k] for k, v in f.items() if v and k in P.FILTERS]
+    if f.get("adx_min"):
+        out.append(f"ADX ≥ {f['adx_min']}")
+    if f.get("adx_max"):
+        out.append(f"ADX ≤ {f['adx_max']}")
+    if f.get("vol_mult"):
+        out.append(f"Volume ≥ {f['vol_mult']:g}× a média")
+    return ", ".join(out)
+
+
+def library_data(bots: list[dict], live: dict, can_edit) -> dict:
+    """Cards da biblioteca (tipos simples)."""
+    out = []
+    for p in bots:
+        rs = p.get("research") or {}
+        lv = live.get(p["id"], {})
+        style = {"long": "long"}.get(p.get("bot"), p.get("bot")) or ("day" if "futures" in (p.get("markets") or []) else "swing")
+        market = rs.get("market") or (p.get("home") or {}).get("market") or ("futures" if "futures" in (p.get("markets") or ["futures"])[:1] else "spot")
+        research = None
+        if rs.get("monthly_pct") is not None:
+            research = {k: rs.get(k) for k in ("monthly_pct", "ret_pct", "period_label", "win_pct", "dd_pct", "status", "trades_month", "pos_coins")}
+        out.append({
+            "id": p["id"], "name": p["name"], "style": style, "interval": rs.get("interval") or (p.get("home") or {}).get("interval") or p.get("tested_interval") or "",
+            "market": market, "rr": rr_label(p), "specialty": p.get("specialty", ""), "tip": p.get("tip") or p.get("summary", ""),
+            "contexts_only": ", ".join(regime.label(c) for c in (p.get("filters") or {}).get("contexts") or []),
+            "research": research, "builtin": bool(p.get("builtin")), "author": p.get("author", ""), "can_edit": bool(can_edit(p)),
+            "live_trades": lv.get("live_trades") or 0, "live_win": lv.get("live_win_rate"), "live_pnl": lv.get("live_pnl"),
+            "description": p.get("description", ""), "direction": P.DIRECTIONS.get(p.get("direction", "misto"), ""), "exit": P.exit_text(p),
+            "skills": ", ".join(f"{SKILL_NAMES.get(k, k)} ({w:g})" for k, w in sorted((p.get("skills") or {}).items(), key=lambda x: -x[1])),
+            "filters": _filters_text(p),
+            "per_symbol": [[k.replace("USDT", ""), v] for k, v in (rs.get("per_symbol") or {}).items()],
+            "contexts": sorted([{"label": regime.label(k), "n": v.get("n"), "win_pct": v.get("win_pct"), "avg_r": v.get("avg_r")}
+                                for k, v in (rs.get("contexts") or {}).items() if v.get("n")], key=lambda c: -(c["avg_r"] or 0)),
+        })
+    return {"bots": out}
+
+
+def calc_view(res: dict) -> dict:
+    """Números da calculadora a partir do resultado da simulação (o mesmo dicionário guardado na sessão)."""
+    import pandas as pd
+
+    rows = res["rows"]
+    pnl = res["bank"] - res["bank0"]
+    ret = pnl / res["bank0"] * 100
+    wins = [t["resultado"] for t in rows if t["resultado"] > 0]
+    losses = [t["resultado"] for t in rows if t["resultado"] <= 0]
+    gw, gl = sum(wins), -sum(losses)
+    curve = ([[int(pd.Timestamp(rows[0]["entrada"]).timestamp() * 1000), res["bank0"]]] if rows else []) + \
+        [[int(pd.Timestamp(c["time"]).timestamp() * 1000), c["Banca (USDT)"]] for c in res["curve"]]
+    return {"bot": res["bot"], "itv": res["itv"], "market": res["market"], "days": res["days"], "risk": res["risk"], "comp": res["comp"],
+            "bank0": res["bank0"], "bank": res["bank"], "pnl": pnl, "ret": ret,
+            "monthly": ((1 + ret / 100) ** (30 / res["days"]) - 1) * 100 if res["bank"] > 0 else -100.0,
+            "n": len(rows), "wins": len(wins), "losses": len(losses), "max_dd": res["max_dd"],
+            "pf": (gw / gl) if gl else ("inf" if gw else None), "best": max(wins, default=0.0), "worst": min(losses, default=0.0), "curve": curve}
