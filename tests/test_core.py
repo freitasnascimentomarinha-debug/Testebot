@@ -1721,7 +1721,9 @@ def test_bots_gallery_renders_with_context_bots(monkeypatch):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
     assert not at.exception, [e.value for e in at.exception]
-    assert any("Suporte e resistência" in str(getattr(m, "value", "")) for m in at.markdown)
+    from core import bots_view
+    lib = bots_view.library_data([Pm.BUILTINS[-1]], {}, lambda p: False)["bots"][0]       # a biblioteca é um componente: confere os dados dos cards
+    assert lib["name"] == good["bot"]["name"] and lib["contexts_only"] and lib["research"]["status"] == good["research"]["status"]
 
 
 def test_archive_klines_monthly_daily_fallback_and_formats(monkeypatch, tmp_path):
@@ -2253,3 +2255,27 @@ def test_bot_performance_daily_ranking_backtest_and_page(monkeypatch):
     for want in ("🏆 Ranking", "🧮 Calculadora", "🔁 Backtest", "✍️ Criar bot", "📚 Biblioteca", "🧭 Contextos"):
         assert want in labels, want
     assert not os.path.exists(os.path.join(root, "views", "personalities.py"))        # páginas unificadas
+
+
+def test_bots_page_components_data():
+    """Ranking, biblioteca e calculadora viram componentes em JavaScript: os dados chegam prontos e em tipos simples."""
+    import json
+    from core import bots_view, personalities as Pm
+
+    rows = [{"id": "a", "name": "Bot A", "market": "futures", "interval": "15m", "builtin": True, "status": "aprovado", "updated": "2026-10-26T10:00:00+00:00",
+             "d1": {"ret_pct": 0.5}, "d7": {"ret_pct": 1.2}, "d30": {"ret_pct": 4.0, "trades": 30, "win_pct": 55.0}, "per_symbol": {"BTCUSDT": 3.0},
+             "live_trades": 0, "live_pnl": None}]
+    rk = bots_view.rank_data(rows, lambda pid: [{"date": f"2026-10-{d:02d}", "d1": 0, "d7": 0, "d30": d / 10} for d in range(1, 40)], focus="a")
+    assert rk["focus"] == "a" and len(rk["rows"][0]["history"]) == 30 and rk["rows"][0]["updated"] == "2026-10-26 10:00"
+    assert rk["order"]["5m"] < rk["order"]["1h"] < rk["order"]["1d"]
+    lib = bots_view.library_data(Pm.list_all(), {}, lambda p: not p.get("builtin"))
+    json.dumps(lib)                                                                          # serializável para o navegador
+    b = next(x for x in lib["bots"] if x["research"])
+    assert b["rr"] and b["skills"] and b["market"] in ("futures", "spot") and b["can_edit"] is False
+    res = {"rows": [{"entrada": "2026-10-01T00:00:00Z", "resultado": 20.0}, {"entrada": "2026-10-02T00:00:00Z", "resultado": -10.0}],
+           "curve": [{"time": "2026-10-01T05:00:00Z", "Banca (USDT)": 1020.0}, {"time": "2026-10-02T05:00:00Z", "Banca (USDT)": 1010.0}],
+           "bank0": 1000.0, "bank": 1010.0, "max_dd": 1.0, "days": 30, "bot": "X", "itv": "1h", "market": "spot", "risk": 1.0, "comp": True}
+    cv = bots_view.calc_view(res)
+    assert cv["pnl"] == 10.0 and cv["wins"] == 1 and cv["losses"] == 1 and cv["pf"] == 2.0 and len(cv["curve"]) == 3 and cv["best"] == 20.0
+    for name in ("bot_rank", "bot_library", "bot_calc"):
+        assert os.path.exists(os.path.join(os.path.dirname(bots_view.__file__), f"{name}.js"))
