@@ -99,3 +99,23 @@ def dashboard_data(cards: list[dict], curve: list[dict], equity: dict, decisions
     return {"mode": mode, "equity": stats_view(equity), "curve": curve_view(curve, equity.get("equity")), "cards": out_cards,
             "decisions": [{**r, "confidence": _f(r.get("confidence"), 0), "price": _f(r.get("price"), 8)} for r in rows[:40]],
             "positions": positions, "events": events[:4]}
+
+
+MODE_DESC = {"simulada": "Ordens simuladas com preços reais, na carteira da plataforma. Sem risco e sem precisar de chave.",
+             "demo": "Ordens na Binance testnet (dinheiro de teste). Precisa da chave de API da testnet.",
+             "real": "Ordens na sua conta real da Binance. Use só depois de testar bem na demo."}
+
+
+def account_data(*, user: str, admin: bool, created: str, storage: str, mode: str, modes: dict, warn, bank: float, bots: list[dict],
+                 ai: dict | None) -> dict:
+    """``warn(mode)``: motivo de a conta ainda não poder ser usada (ou None); ``bots``: [{name, cfg, personality}]."""
+    out_bots = []
+    for b in bots:
+        c = b["cfg"]
+        out_bots.append({"name": b["name"], "symbol": c["symbol"], "interval": c["interval"], "autopilot": bool(c.get("autopilot")),
+                         "risk": f"{c['max_loss_pct']:g}% do saldo" if c.get("risk_mode") == "% do saldo" else f"{c['max_loss_usdt']:g} USDT",
+                         "leverage": f"{c['leverage']:g}×" if c.get("leverage_on") else "sem", "personality": b["personality"],
+                         "scan": f"a cada {c.get('scan_minutes', 15):g} min · {c.get('scan_count', 15)} moedas" if c.get("scan_on", True) else "só a moeda da tela"})
+    return {"user": {"name": user, "admin": admin, "created": (created or "")[:10], "storage": storage}, "mode": mode,
+            "modes": [{"key": k, "label": v, "desc": MODE_DESC.get(k, ""), "warn": (warn(k) or "").replace("**", "") or None} for k, v in modes.items()],
+            "bank": _f(bank, 2), "bots": out_bots, "ai": ai}

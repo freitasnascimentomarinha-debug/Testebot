@@ -1,5 +1,6 @@
 """Administração de contas: autorizar pedidos, bloquear, reativar, excluir e redefinir senhas (só admins)."""
-import pandas as pd
+from pathlib import Path
+
 import streamlit as st
 
 from core import accounts
@@ -24,71 +25,30 @@ def run(action, *args, ok="Feito.", **kw):
 if msg := st.session_state.pop("_admin_msg", None):
     st.info(msg)
 
-rows = accounts.list_accounts()
-pend = [r for r in rows if r["estado"] == accounts.PENDING]
-act = [r for r in rows if r["estado"] == accounts.ACTIVE]
-blk = [r for r in rows if r["estado"] == accounts.BLOCKED]
-c = st.columns(3)
-c[0].metric("Pedidos pendentes", len(pend))
-c[1].metric("Contas ativas", len(act))
-c[2].metric("Bloqueadas", len(blk))
 st.caption("Ninguém entra sem a sua autorização. O admin principal é definido nos Secrets (ADMIN_USER / ADMIN_PASSWORD) e não pode ser "
            "bloqueado nem excluído por aqui. Bloqueio e exclusão passam a valer em até 1 minuto, mesmo para quem está conectado.")
 
-st.subheader(f"⏳ Pedidos aguardando autorização ({len(pend)})")
-if not pend:
-    st.caption("Nenhum pedido pendente.")
-for r in pend:
-    with st.container(border=True):
-        a, b, d = st.columns([3, 1, 1])
-        a.markdown(f"**{r['usuario']}** · pedido em {r['criado'][:16].replace('T', ' ')} UTC")
-        a.caption(f"Quem é: {r['nota'] or '— (não informado)'}")
-        if b.button("✅ Autorizar", key=f"ap_{r['usuario']}", type="primary", width="stretch"):
-            run(accounts.approve, r["usuario"], ok=f"{r['usuario']} autorizado.")
-        if d.button("🚫 Recusar", key=f"rj_{r['usuario']}", width="stretch"):
-            run(accounts.delete, r["usuario"], ok=f"Pedido de {r['usuario']} recusado e apagado.")
+_DIR = Path(__file__).resolve().parent.parent / "core"
 
-st.subheader(f"✅ Contas ativas ({len(act)})")
-for r in act:
-    with st.container(border=True):
-        a, b = st.columns([3, 2])
-        a.markdown(f"**{r['usuario']}** · {r['papel']}{' · principal (Secrets)' if r['principal'] else ''}")
-        a.caption(f"Criada: {r['criado'][:10] or '—'} · último acesso: {r['ultimo_acesso'][:16].replace('T', ' ') or '—'}"
-                  + (f" · {r['nota']}" if r["nota"] else ""))
-        if r["principal"] or r["usuario"] == me:
-            b.caption("Esta é a sua conta." if r["usuario"] == me else "")
-            continue
-        c1, c2, c3 = b.columns(3)
-        if c1.button("⛔ Bloquear", key=f"bl_{r['usuario']}", width="stretch"):
-            run(accounts.block, r["usuario"], ok=f"{r['usuario']} bloqueado.")
-        with c2.popover("🔑 Senha", width="stretch"):
-            pw = st.text_input("Nova senha provisória (mín. 8)", type="password", key=f"pw_{r['usuario']}")
-            if st.button("Definir senha", key=f"pwb_{r['usuario']}"):
-                run(accounts.reset_password, r["usuario"], pw, ok=f"Senha de {r['usuario']} redefinida. Informe a ela(e) por um canal seguro.")
-        with c3.popover("⋯", width="stretch"):
-            is_adm = r["papel"] == "admin"
-            if st.button("Remover admin" if is_adm else "Tornar admin", key=f"ad_{r['usuario']}", width="stretch"):
-                run(accounts.set_admin, r["usuario"], not is_adm, ok=f"{r['usuario']} agora é {'usuário' if is_adm else 'admin'}.")
-            st.divider()
-            wipe = st.checkbox("Apagar também os dados (carteira, extrato, configurações)", value=True, key=f"wp_{r['usuario']}")
-            if st.button("🗑️ Excluir conta", key=f"dl_{r['usuario']}", type="primary", width="stretch"):
-                run(accounts.delete, r["usuario"], wipe, ok=f"Conta {r['usuario']} excluída.")
 
-st.subheader(f"⛔ Contas bloqueadas ({len(blk)})")
-if not blk:
-    st.caption("Nenhuma conta bloqueada.")
-for r in blk:
-    with st.container(border=True):
-        a, b, d = st.columns([3, 1, 1])
-        a.markdown(f"**{r['usuario']}** · bloqueada")
-        if b.button("↩️ Reativar", key=f"ub_{r['usuario']}", width="stretch"):
-            run(accounts.unblock, r["usuario"], ok=f"{r['usuario']} reativado.")
-        with d.popover("🗑️ Excluir", width="stretch"):
-            wipe = st.checkbox("Apagar também os dados", value=True, key=f"wpb_{r['usuario']}")
-            if st.button("Confirmar exclusão", key=f"dlb_{r['usuario']}", type="primary"):
-                run(accounts.delete, r["usuario"], wipe, ok=f"Conta {r['usuario']} excluída.")
+@st.cache_resource(show_spinner=False)
+def _component():
+    return st.components.v2.component("tb_admin", css=(_DIR / "wallet_ui.css").read_text(encoding="utf-8"),
+                                      js=(_DIR / "admin.js").read_text(encoding="utf-8"))
 
-with st.expander("📋 Todas as contas (tabela)"):
-    st.dataframe(pd.DataFrame(rows).rename(columns={"usuario": "Usuário", "estado": "Estado", "papel": "Papel", "principal": "Principal",
-                                                    "criado": "Criada em", "ultimo_acesso": "Último acesso", "nota": "Nome informado"}),
-                 hide_index=True, width="stretch")
+
+ACTIONS = {
+    "approve": lambda u, ev: run(accounts.approve, u, ok=f"{u} autorizado."),
+    "reject": lambda u, ev: run(accounts.delete, u, ok=f"Pedido de {u} recusado e apagado."),
+    "block": lambda u, ev: run(accounts.block, u, ok=f"{u} bloqueado."),
+    "unblock": lambda u, ev: run(accounts.unblock, u, ok=f"{u} reativado."),
+    "admin": lambda u, ev: run(accounts.set_admin, u, not accounts.is_admin(u), ok=f"{u} agora é {'usuário' if accounts.is_admin(u) else 'admin'}."),
+    "password": lambda u, ev: run(accounts.reset_password, u, str(ev.get("password") or ""), ok=f"Senha de {u} redefinida. Informe a pessoa por um canal seguro."),
+    "delete": lambda u, ev: run(accounts.delete, u, bool(ev.get("wipe", True)), ok=f"Conta {u} excluída."),
+}
+res = _component()(key="tb-admin", on_action_change=lambda: None,
+                   data={"rows": accounts.list_accounts(), "me": me, "PENDING": accounts.PENDING, "ACTIVE": accounts.ACTIVE, "BLOCKED": accounts.BLOCKED})
+ev = getattr(res, "action", None)
+if ev and ev.get("uid") != st.session_state.get("_adm_uid") and ev.get("kind") in ACTIONS and ev.get("user"):
+    st.session_state["_adm_uid"] = ev["uid"]
+    ACTIONS[ev["kind"]](str(ev["user"]), ev)   # cada função do core/accounts confere de novo se quem pede é admin
