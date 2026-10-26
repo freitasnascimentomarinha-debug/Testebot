@@ -74,8 +74,7 @@ pages = {
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
                     st.Page("views/events.py", title="Eventos", icon="📅", url_path="eventos"),
                     st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
-                    st.Page("views/bots.py", title="Bots especialistas", icon="🤖", url_path="bots"),
-                    st.Page("views/personalities.py", title="Personalidades", icon="🏆", url_path="personalidades"),
+                    st.Page("views/bots.py", title="Bots", icon="🤖", url_path="bots"),
                     st.Page("views/learning.py", title="Aprendendo", icon="🎓", url_path="aprendendo")],
     "Mercado Cripto": [
         st.Page("views/day_trade.py", title="Futuros", icon="⚡", url_path="futuros"),
