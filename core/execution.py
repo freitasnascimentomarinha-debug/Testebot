@@ -17,8 +17,8 @@ MODE_FILE = "account_mode.json"
 DEFAULT_MODE = "simulada"
 MODES = {
     "simulada": "🧪 Conta demo da plataforma",
-    "demo": "🔶 Conta demo da Exchange (Binance testnet)",
-    "real": "🔴 Conta real da Exchange (Binance)",
+    "demo": "🔶 Conta demo da Exchange (testnet)",
+    "real": "🔴 Conta real da Exchange",
 }
 SHORT = {"demo": "conta demo da Exchange", "real": "conta real da Exchange"}
 EXCHANGE_ORDERS_ENABLED = False
@@ -43,16 +43,19 @@ def key_problem(mode: str, user: str | None = None) -> str | None:
     """Por que a conta da Exchange ainda não pode ser usada (None = chave pronta ou conta da plataforma)."""
     if mode == "simulada":
         return None
+    from core import exchanges
+
     user = user or current_user()
+    name = exchanges.label(exchanges.selected())
     stt = credentials.status(user) if user else None
     if not stt:
-        return "Cadastre a chave da Binance em **Minha conta** para usar a conta da Exchange."
+        return f"Cadastre a chave da {name} em **Minha conta** para usar a conta da Exchange."
     if mode == "demo" and not stt["testnet"]:
         return "A chave cadastrada é da conta real. Para a conta demo da Exchange, cadastre uma chave da conta de testes (testnet)."
     if mode == "real" and stt["testnet"]:
         return "A chave cadastrada é da conta de testes (testnet). Para a conta real, cadastre uma chave da conta real."
     if stt["validated"] is False:
-        return "A chave cadastrada foi recusada pela Binance. Cadastre outra em **Minha conta**."
+        return f"A chave cadastrada foi recusada pela {name}. Cadastre outra em **Minha conta**."
     return None
 
 

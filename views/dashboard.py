@@ -12,7 +12,7 @@ from datetime import datetime
 from core.storage import backend, export_all, import_all, load_json
 from core.ui import cached_ticker
 
-st.title("📊 Plataforma de Bots de Trade")
+st.title("📊 Cripto Robô")
 mode = paper.wallet_config()["mode"]
 st.caption("Bots operando com cotações reais — "
            + ("todos na mesma **carteira única**, junto com as suas ordens manuais." if mode == "única"
@@ -110,5 +110,5 @@ from core import credentials  # noqa: E402
 from core.auth import current_user  # noqa: E402
 
 if accounts.enabled() and current_user() and credentials.configured() and not credentials.status(current_user()):
-    st.info("🔗 Você ainda não conectou a sua conta da Binance. Cadastre a chave de API em **Minha conta** (opcional por enquanto: as ordens "
+    st.info("🔗 Você ainda não conectou a sua corretora. Cadastre a chave de API em **Minha conta** (opcional por enquanto: as ordens "
             "são simuladas).")

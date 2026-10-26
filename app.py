@@ -9,7 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(page_title="TradeBot · Plataforma de Bots", page_icon="📊", layout="wide",
+st.set_page_config(page_title="Cripto Robô · bots de trade de cripto", page_icon="🤖", layout="wide",
                    initial_sidebar_state="auto")
 
 
@@ -65,12 +65,12 @@ st.markdown("""<style>
 [role="tablist"] .react-aria-SelectionIndicator, [role="tablist"] + div[aria-hidden] {display: none;}
 </style>""", unsafe_allow_html=True)
 
-_acct_pages = ([st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] if accounts.enabled() else []) + \
+_acct_pages = [st.Page("views/account.py", title="Minha conta", icon="👤", url_path="conta")] + \
     ([st.Page("views/admin.py", title="Administração", icon="🛡️", url_path="admin")]
      if accounts.enabled() and accounts.is_admin(st.session_state.get("_user")) else [])
 # Ordem do menu: conta e administração primeiro, depois o painel geral e os mercados de cripto (futuros e spot).
 pages = {
-    **({"Conta": _acct_pages} if _acct_pages else {}),
+    **({"Conta": _acct_pages}),
     "Visão geral": [st.Page("views/dashboard.py", title="Painel", icon="📊", default=True),
                     st.Page("views/events.py", title="Eventos", icon="📅", url_path="eventos"),
                     st.Page("views/wallet.py", title="Carteira", icon="💰", url_path="carteira"),
@@ -105,14 +105,7 @@ with st.sidebar:
     if _authed and not _gated:
         from core import exchanges
 
-        _ex = exchanges.selected()
-        _pick_ex = st.selectbox("Corretora dos dados", list(exchanges.EXCHANGES), index=list(exchanges.EXCHANGES).index(_ex), key="data_exchange",
-                                format_func=exchanges.label, help="De onde vêm candles, preços, volume e financiamento (gráficos, bot e varredura). "
-                                "As ordens continuam simuladas. Se a corretora não responder ou não tiver o par, o sistema usa a Binance/OKX.")
-        if _pick_ex != _ex:
-            exchanges.select(_pick_ex)
-            st.cache_data.clear()
-            st.rerun()
+        st.caption(f"Corretora: {exchanges.label(exchanges.selected())} · troque em **Minha conta**")
         st.caption(f"Conta de operação: {execution.MODES[execution.get_mode()]}")
         if (_why := execution.orders_problem()):
             st.caption("⚠️ " + _why)
@@ -131,8 +124,8 @@ with st.sidebar:
 if _gated:
     from core.binance_ui import render_binance
 
-    st.title("🔗 Conecte a sua Binance")
-    st.caption("Para usar a plataforma, cadastre a chave de API da sua conta Binance. Ela fica criptografada na sua conta.")
+    st.title("🔗 Conecte a sua corretora")
+    st.caption("Para usar a plataforma, cadastre a chave de API da sua corretora. Ela fica criptografada na sua conta.")
     render_binance(current_user(), "gate")
     st.stop()
 

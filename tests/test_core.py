@@ -2335,3 +2335,36 @@ def test_admin_page_component_and_actions(monkeypatch):
     at2.session_state["_user"] = "intruso"
     at2 = at2.run()
     assert any("restrito" in e.value for e in at2.error)                       # quem não é admin não vê nada
+
+
+def test_keys_per_exchange_mascot_and_login(monkeypatch):
+    """Chave de API por corretora (com passphrase onde é exigida), escolha da corretora em Minha conta, mascote e tela de login."""
+    from core import credentials, exchanges, mascot, storage, wallet_view
+
+    monkeypatch.setenv("SECRETS_KEY", "chave-mestra-de-teste-com-tamanho-suficiente")
+    storage.set_user("multi")
+    try:
+        with pytest.raises(ValueError):
+            credentials.save("multi", "abcd-1234-efgh-5678", "segredo-bem-comprido-123", False, None, exchange="okx")   # OKX exige passphrase
+        credentials.save("multi", "abcd-1234-efgh-5678", "segredo-bem-comprido-123", False, {"ok": True}, exchange="okx", passphrase="minha frase")
+        credentials.save("multi", "K" * 30, "S" * 30, True, None, exchange="binance")
+        assert credentials.status("multi", "okx")["last4"] == "5678" and credentials.passphrase("multi", "okx") == "minha frase"
+        assert set(credentials.all_status("multi")) == {"okx", "binance"}
+        monkeypatch.setattr(exchanges, "selected", lambda: "okx")
+        assert credentials.status("multi")["last4"] == "5678"                                  # sem corretora: a que está em uso
+        assert credentials.get("multi") == ("abcd-1234-efgh-5678", "segredo-bem-comprido-123", False)
+        cards = wallet_view.exchanges_view("okx", credentials.all_status("multi"))
+        okx = next(c for c in cards if c["key"] == "okx")
+        assert okx["selected"] and okx["key_saved"] == "5678" and next(c for c in cards if c["key"] == "coinbase")["futures"] is False
+        credentials.delete("multi", "okx")
+        assert credentials.status("multi", "okx") is None and credentials.status("multi", "binance")
+        assert credentials.validate_any("okx", "x", "y", passphrase=None)["ok"] in (False, None)   # sem rede/chave inválida: nunca levanta erro
+    finally:
+        storage.set_user(None)
+    svg = mascot.svg(120, uid="t")
+    assert mascot.NAME == "Cripto Robô" and svg.startswith("<svg") and "₿" in svg and "t-eye" in svg and mascot.svg(50, animated=False).count("@keyframes") == 0
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(root, "core", "login.js"), encoding="utf-8").read()
+    assert 'setTriggerValue("login"' in js and 'setTriggerValue("signup"' in js
+    app = open(os.path.join(root, "app.py"), encoding="utf-8").read()
+    assert "Corretora dos dados" not in app and "Cripto Robô" in app                          # a escolha da corretora mudou para Minha conta

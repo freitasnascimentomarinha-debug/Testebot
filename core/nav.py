@@ -68,7 +68,10 @@ def render(pages: dict, current) -> None:
             st.switch_page(page)
 
     path = getattr(current, "url_path", "")
-    res = _component()(key="tb-sidebar", data={"groups": groups(pages, path)}, on_go_change=lambda: None)
+    from core import mascot
+
+    res = _component()(key="tb-sidebar", data={"groups": groups(pages, path), "mascot": mascot.svg(54, uid="crsb"), "name": mascot.NAME,
+                                               "tagline": mascot.TAGLINE}, on_go_change=lambda: None)
     ev = getattr(res, "go", None)
     if ev and ev.get("uid") != st.session_state.get("_nav_uid"):
         st.session_state["_nav_uid"] = ev.get("uid")
