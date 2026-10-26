@@ -1,73 +1,77 @@
 """Painel geral: resumo dos bots de cripto (futuros e spot)."""
-import pandas as pd
+from pathlib import Path
+
 import streamlit as st
 
-from core import paper
+from core import events, events_pt, paper, positions_view, wallet_view
 from core.profiles import PROFILES
 from core.settings import load_settings
 import json
 from datetime import datetime
 
 from core.storage import backend, export_all, import_all, load_json
-from core.ui import cached_ticker, fmt
+from core.ui import cached_ticker
 
 st.title("📊 Plataforma de Bots de Trade")
 mode = paper.wallet_config()["mode"]
 st.caption("Bots operando com cotações reais — "
            + ("todos na mesma **carteira única**, junto com as suas ordens manuais." if mode == "única"
               else "cada um com a sua **banca separada**."))
-st.page_link("views/wallet.py", label="Abrir Carteira (banca, aportes, extrato e histórico completo)", icon="💰")
 
-PAGES = {"day": "day_trade", "swing": "swing_trade"}
-GROUPS = [("Mercado Cripto", ["day", "swing"])]
-curves = []
-cells = []  # (coluna, chave): uma linha de cartões por grupo de mercados
-for title, keys in GROUPS:
-    keys = [k for k in keys if k in PROFILES]
-    st.markdown(f"##### {title}")
-    row = st.columns(len(keys))
-    cells += list(zip(row, keys))
-for col, key in cells:
-    profile = PROFILES[key]
-    cfg = load_settings(key)
-    acct = paper.get_account(paper.account_id(key))
-    prices = {}
-    for sym in {p["symbol"] for p in acct["positions"]} | {cfg["symbol"]}:
-        try:
-            prices[sym] = cached_ticker(sym, profile.market).last
-        except Exception:  # noqa: BLE001
-            pass
-    s = paper.stats(acct, prices, bot=key)
-    with col.container(border=True):
-        st.markdown(f"### {profile.icon} {profile.name}")
-        st.caption(f"{profile.market_label} · {cfg['symbol']} {cfg['interval']} · "
-                   f"{'alavancado ' + str(cfg['leverage']) + '×' if cfg['leverage_on'] else 'sem alavancagem'}")
-        a, b = st.columns(2)
-        a.metric("Banca" + (" (única)" if mode == "única" else ""), fmt(s["equity"]), f"{s['total_pnl_pct']:+.2f}%")
-        b.metric("Hoje", fmt(s["pnl_today"]), f"{s['trades_today']} operações", delta_color="off")
-        a.metric("Posições abertas", s["open_positions"])
-        b.metric("Acerto", f"{s['win_rate']:.0f}%", f"{s['trades']} trades", delta_color="off")
-        st.caption(f"Piloto automático: {'🟢 ligado' if cfg['autopilot'] else '⚪ desligado'} · "
-                   f"Perda máx./trade: {fmt(cfg['max_loss_usdt']) + ' USDT' if cfg['risk_mode'] == 'USDT' else str(cfg['max_loss_pct']) + '%'}")
-        st.page_link(f"views/{PAGES[key]}.py", label="Abrir bot", icon="➡️")
-    curve = pd.DataFrame(acct["equity_curve"])
-    if len(curve) and (mode == "separada" or not curves):
-        curve["time"] = pd.to_datetime(curve["time"])
-        curves.append(curve.set_index("time")["equity"].rename(profile.name if mode == "separada" else "Carteira"))
+_DIR = Path(__file__).resolve().parent.parent / "core"
 
-if curves:
-    st.subheader("Evolução da banca")
-    st.line_chart(pd.concat(curves, axis=1).sort_index().ffill(), height=300)
 
-st.subheader("Últimas decisões dos bots")
-logs = load_json("decisions.json", {}) or {}
-rows = [{"bot": PROFILES[k].name, **e} for k, v in logs.items() if k in PROFILES for e in v]
-if rows:
-    df = pd.DataFrame(rows).sort_values("time", ascending=False).head(30)
-    st.dataframe(df[["time", "bot", "symbol", "interval", "decision", "source", "confidence", "approved", "executed", "reasoning"]],
-                 hide_index=True)
-else:
-    st.caption("Nenhuma análise ainda. Abra um bot e clique em **Analisar mercado e programar ordem**.")
+@st.cache_resource(show_spinner=False)
+def _component():
+    return st.components.v2.component("tb_dashboard", css=(_DIR / "wallet_ui.css").read_text(encoding="utf-8"),
+                                      js=(_DIR / "dashboard.js").read_text(encoding="utf-8"))
+
+
+PAGES = {"day": "futuros", "swing": "spot", "carteira": "carteira", "eventos": "eventos"}   # endereço (url_path) de cada página
+
+
+@st.fragment(run_every=60)
+def _dashboard():
+    cards, positions, seen, accts = [], [], set(), {}
+    for key in ("day", "swing"):
+        profile = PROFILES[key]
+        cfg = load_settings(key)
+        acc_id = paper.account_id(key)
+        acct = accts.setdefault(acc_id, paper.get_account(acc_id))
+        prices = {}
+        for sym in {p["symbol"] for p in acct["positions"]} | {cfg["symbol"]}:
+            try:
+                prices[sym] = cached_ticker(sym, profile.market).last
+            except Exception:  # noqa: BLE001
+                pass
+        cards.append({"key": key, "cfg": cfg, "stats": paper.stats(acct, prices, bot=key)})
+        for p in acct["positions"]:
+            if p["id"] not in seen:
+                seen.add(p["id"])
+                c = positions_view.card_data(p, prices.get(p["symbol"], p["entry"]))
+                positions.append({k: c.get(k) for k in ("symbol", "side", "entry", "price_now", "net", "net_pct", "who")})
+    if mode == "única":
+        acct = next(iter(accts.values()))
+        equity = paper.stats(acct, {p["symbol"]: p["price_now"] for p in positions})
+        curve = acct["equity_curve"]
+    else:   # bancas separadas: soma os números (a curva fica na Carteira, banca por banca)
+        each = [paper.stats(a, {p["symbol"]: p["price_now"] for p in positions}) for a in accts.values()]
+        equity = {k: sum(x[k] for x in each) for k in ("equity", "invested", "total_pnl", "pnl_today", "trades_today", "open_positions", "unrealized_net", "trades")}
+        equity["total_pnl_pct"] = equity["total_pnl"] / equity["invested"] * 100 if equity["invested"] else 0.0
+        equity["win_rate"] = sum(x["win_rate"] * x["trades"] for x in each) / equity["trades"] if equity["trades"] else 0.0
+        curve = []
+    evs = events.ai_context(events_pt.localize(events.peek()))
+    data = wallet_view.dashboard_data(cards, curve, equity, load_json("decisions.json", {}) or {}, positions, evs, mode)
+    res = _component()(key="tb-dashboard", data=data, on_go_change=lambda: None)
+    ev = getattr(res, "go", None)
+    if ev and ev.get("uid") != st.session_state.get("_dash_uid"):
+        st.session_state["_dash_uid"] = ev.get("uid")
+        if ev.get("page") in PAGES:   # o menu lateral (core/nav.py) faz a troca no começo da próxima execução
+            st.session_state["_nav_to"] = PAGES[ev["page"]]
+            st.rerun(scope="app")
+
+
+_dashboard()
 
 with st.expander("Como funciona o fluxo de decisão"):
     st.markdown("""

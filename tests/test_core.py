@@ -2279,3 +2279,35 @@ def test_bots_page_components_data():
     assert cv["pnl"] == 10.0 and cv["wins"] == 1 and cv["losses"] == 1 and cv["pf"] == 2.0 and len(cv["curve"]) == 3 and cv["best"] == 20.0
     for name in ("bot_rank", "bot_library", "bot_calc"):
         assert os.path.exists(os.path.join(os.path.dirname(bots_view.__file__), f"{name}.js"))
+
+
+def test_dashboard_and_wallet_components(monkeypatch):
+    """Painel e Carteira viram componentes em JavaScript: dados serializáveis, resumo diário e comparação, e as páginas abrem sem erro."""
+    import json
+    from streamlit.testing.v1 import AppTest
+    from core import wallet_view
+
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 1000)
+    acct = paper.get_account(paper.SHARED_ACCOUNT)
+    acct["history"] = [{"opened": "2026-10-20T10:00:00+00:00", "closed": "2026-10-20T12:00:00+00:00", "pnl": 12.0, "fees_total": 0.4, "source": "manual",
+                        "bot": "day", "symbol": "BTCUSDT", "side": "BUY", "qty": 0.1, "entry": 100, "exit": 112, "leverage": 1, "reason": "Alvo"},
+                       {"opened": "2026-10-21T10:00:00+00:00", "closed": "2026-10-21T12:00:00+00:00", "pnl": -5.0, "fees_total": 0.4, "source": "ia",
+                        "bot": "swing", "symbol": "ETHUSDT", "side": "SELL", "qty": 1, "entry": 10, "exit": 10.5, "leverage": 3, "reason": "Stop"}]
+    s = paper.stats(acct, {})
+    w = wallet_view.wallet_data(acct, s, brl=5.4, mode="única", label="Carteira única")
+    json.dumps(w)
+    assert [d["acc"] for d in w["daily"]] == [12.0, 7.0] and w["trades"][0]["symbol"] == "ETHUSDT"        # mais recente primeiro
+    assert w["by_origin"]["Você (manual)"]["pnl"] == 12.0 and w["by_bot"][PROFILES["swing"].name]["n"] == 1
+    assert w["curve"][-1][1] == round(s["equity"], 2)
+    assert wallet_view.stats_view({"profit_factor": float("inf")})["profit_factor"] is None and wallet_view.stats_view({"profit_factor": float("inf")})["profit_factor_inf"]
+    d = wallet_view.dashboard_data([{"key": "day", "cfg": default_settings(PROFILES["day"]), "stats": s}], [], s,
+                                   {"day": [{"time": "2026-10-21T10:00:00+00:00", "symbol": "BTCUSDT", "decision": "BUY", "confidence": 70}],
+                                    "outro": [{"time": "x"}]}, [], [], "única")
+    json.dumps(d)
+    assert d["cards"][0]["name"] == PROFILES["day"].name and len(d["decisions"]) == 1 and d["decisions"][0]["bot"] == PROFILES["day"].name
+    _offline_market(monkeypatch)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for page in ("dashboard.py", "wallet.py"):
+        at = AppTest.from_file(os.path.join(root, "views", page), default_timeout=120).run()
+        assert not at.exception, (page, [e.value for e in at.exception])
