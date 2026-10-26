@@ -14,7 +14,7 @@ import argparse
 import logging
 import time
 
-from core import accounts, engine, execution, personalities, scanner, storage
+from core import accounts, bot_performance, engine, execution, personalities, scanner, storage
 from core.data import get_funding_rate, get_klines, get_ticker
 from core.ai import get_api_key
 from core.profiles import PAGE_BOTS, PROFILES
@@ -59,6 +59,9 @@ def main() -> None:
         log.warning("OPENROUTER_API_KEY não definida — usando somente as habilidades de programação.")
     last_seen: dict = {}
     while True:
+        storage.set_user(None)
+        if bot_performance.refresh_if_due():   # ranking diário dos bots (dados compartilhados), em segundo plano
+            log.info("ranking diário dos bots: atualização iniciada")
         # Com contas ligadas, percorre os usuários (cada um com a própria carteira e configuração).
         users = (args.users or accounts.list_users()) if accounts.enabled() else [None]
         for user in users:

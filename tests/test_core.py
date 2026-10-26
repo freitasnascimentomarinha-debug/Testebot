@@ -2212,3 +2212,44 @@ def test_events_for_ai_are_balanced_and_by_importance():
     titles = [c["evento"] for c in ctx]
     assert sum(t.startswith("Fed Decision") for t in titles) == 1 and sum(t.startswith("Brazil Presidential") for t in titles) == 1   # um por assunto
     assert not any("Bitcoin" in t for t in titles) and [c["vence_em_dias"] for c in ctx] == sorted(c["vence_em_dias"] for c in ctx)  # escada fora; por vencimento
+
+
+def test_bot_performance_daily_ranking_backtest_and_page(monkeypatch):
+    """Ranking diário: dia, semana e mês por bot no mercado/tempo gráfico dele, salvo com histórico; backtest forçado de um bot; página única."""
+    from datetime import datetime, timedelta, timezone
+    from streamlit.testing.v1 import AppTest
+    from core import bot_performance as bp, personalities as Pm
+
+    def getter(sym, interval, n, market):
+        raw = make_df(max(n, 300), trend=0.3, seed=len(sym))
+        step = {"5m": "5min", "15m": "15min", "1h": "1h", "4h": "4h", "1d": "1D"}.get(interval, "1h")
+        raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("1h"), periods=len(raw), freq=step)
+        return raw.tail(n).reset_index(drop=True)
+
+    bp.save({}, full=False)
+    monkeypatch.setattr(bp, "load_json", lambda *a, **k: None)                              # começa sem dados
+    assert bp.is_due() and bp.load()["results"] == {}
+    monkeypatch.undo()
+    bot = next(p for p in Pm.BUILTINS if (p.get("research") or {}).get("interval") == "15m")
+    assert bp.home(bot) == (bot["research"]["market"], "15m") and bp.home({"home": {"market": "spot", "interval": "4h"}}) == ("spot", "4h")
+    got = bp.refresh_bot(bot["id"], getter=getter)
+    assert set(bp.WINDOWS) <= set(got) and got["interval"] == "15m" and got["d30"]["symbols"] == len(Pm.PERIOD_SYMBOLS)
+    assert got["d30"]["trades"] >= got["d7"]["trades"] >= got["d1"]["trades"]          # janelas maiores contêm as menores
+    assert bp.is_due()                                                                  # backtest de um bot não conta como a atualização diária
+    hist = bp.history(bot["id"])
+    assert len(hist) == 1 and set(hist[0]) == {"date", "d1", "d7", "d30"}
+    bp.refresh_bot(bot["id"], getter=getter)
+    assert len(bp.history(bot["id"])) == 1                                              # mesmo dia: sobrescreve
+    bp.save({bot["id"]: got}, full=True)
+    assert not bp.is_due() and bp.is_due(datetime.now(timezone.utc) + timedelta(days=1))  # 1x por dia
+    row = next(r for r in bp.rows("futures" if bot["research"]["market"] == "futures" else "spot", "15m") if r["id"] == bot["id"])
+    assert row["d30"]["ret_pct"] == got["d30"]["ret_pct"]
+    assert bp.refresh_if_due() is False                                                 # nos testes nada roda sozinho
+    _offline_market(monkeypatch)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(root, "views", "bots.py"), default_timeout=120).run()
+    assert not at.exception, [e.value for e in at.exception]
+    labels = [t.label for t in at.tabs]
+    for want in ("🏆 Ranking", "🧮 Calculadora", "🔁 Backtest", "✍️ Criar bot", "📚 Biblioteca", "🧭 Contextos"):
+        assert want in labels, want
+    assert not os.path.exists(os.path.join(root, "views", "personalities.py"))        # páginas unificadas

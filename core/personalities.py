@@ -6,7 +6,7 @@ compra, só venda ou misto), filtros, stop/alvo por ATR e um texto descritivo
 que vai para a IA como a "persona" da estratégia.
 
 * **Prontas** — estratégias clássicas, somente leitura (podem ser duplicadas).
-* **Criadas por usuários** — criadas na página Personalidades, com nome e autor. Quem cria escolhe com quem compartilhar:
+* **Criadas por usuários** — criadas na página Bots (aba Criar bot), com nome e autor. Quem cria escolhe com quem compartilhar:
   só consigo (``privado``), com um ou mais usuários (``usuarios``) ou com toda a comunidade (``comunidade``).
 
 O **ranking** combina o desempenho real (operações dos bots na carteira
