@@ -1337,13 +1337,14 @@ def test_style_by_interval_and_account_page_saves_mode(monkeypatch):
         at.session_state["_user"] = "conta_pagina"
         at = at.run()
         assert not at.exception, [e.value for e in at.exception]
-        radio = next(r for r in at.radio if r.key == "acc_mode")
-        radio.set_value("demo").run()
-        at = at.run()
-        save = next(b for b in at.button if "Salvar conta de operação" in b.label)
-        save.click()
-        at = at.run()
-        assert not at.exception and execution.get_mode() == "demo"
+        from core import wallet_view                                         # a escolha da conta virou cartões clicáveis (componente)
+        d = wallet_view.account_data(user="conta_pagina", admin=False, created="2026-01-01T00:00:00", storage="arquivo", mode="simulada",
+                                     modes=execution.MODES, warn=lambda m: None if m == "simulada" else "sem chave", bank=100.0,
+                                     bots=[{"name": "Futuros", "cfg": default_settings(PROFILES["day"]), "personality": "automático"}], ai={"used": 3, "limit": 30})
+        assert [m["key"] for m in d["modes"]] == list(execution.MODES) and d["modes"][1]["warn"] == "sem chave" and d["user"]["created"] == "2026-01-01"
+        assert d["bots"][0]["scan"].startswith("a cada 15 min")
+        execution.set_mode("demo")
+        assert execution.get_mode() == "demo"
     finally:
         execution.set_mode("simulada")
         storage.set_user(None)
@@ -2311,3 +2312,26 @@ def test_dashboard_and_wallet_components(monkeypatch):
     for page in ("dashboard.py", "wallet.py"):
         at = AppTest.from_file(os.path.join(root, "views", page), default_timeout=120).run()
         assert not at.exception, (page, [e.value for e in at.exception])
+
+
+def test_admin_page_component_and_actions(monkeypatch):
+    """Administração em componente: a página abre para admin e cada ação passa pelo core/accounts (que confere a permissão)."""
+    from streamlit.testing.v1 import AppTest
+    from core import accounts
+
+    monkeypatch.setattr(accounts, "is_admin", lambda u: u == "chefe")
+    monkeypatch.setattr(accounts, "list_accounts", lambda: [
+        {"usuario": "novo", "estado": accounts.PENDING, "papel": "usuário", "principal": False, "criado": "2026-10-25T10:00:00", "ultimo_acesso": "", "nota": "Ana"},
+        {"usuario": "chefe", "estado": accounts.ACTIVE, "papel": "admin", "principal": True, "criado": "", "ultimo_acesso": "", "nota": ""}])
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(root, "views", "admin.py"), default_timeout=60)
+    at.session_state["_user"] = "chefe"
+    at = at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    src = open(os.path.join(root, "views", "admin.py"), encoding="utf-8").read()
+    for kind in ("approve", "reject", "block", "unblock", "admin", "password", "delete"):
+        assert f'"{kind}":' in src, kind
+    at2 = AppTest.from_file(os.path.join(root, "views", "admin.py"), default_timeout=60)
+    at2.session_state["_user"] = "intruso"
+    at2 = at2.run()
+    assert any("restrito" in e.value for e in at2.error)                       # quem não é admin não vê nada
