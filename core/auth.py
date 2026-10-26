@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
+from pathlib import Path
 
 import streamlit as st
 
@@ -63,41 +64,95 @@ def is_authenticated() -> bool:
 
 
 def require_login() -> None:
-    """Interrompe a página até o usuário informar a senha correta."""
+    """Interrompe a página até o usuário entrar (tela de login em JavaScript, com o mascote do Cripto Robô)."""
     if is_authenticated():
         return
     if accounts.enabled():
-        _accounts_login()
-        return
-    password = get_secret("APP_PASSWORD")
-
-    _, col, _ = st.columns([1, 1.2, 1])
-    with col:
-        st.markdown("## 🔒 TradeBot")
-        st.caption("Plataforma de bots de trade — acesso restrito.")
-        locked_until = st.session_state.get("auth_locked_until", 0)
-        if time.time() < locked_until:
-            st.error(f"Muitas tentativas. Aguarde {int(locked_until - time.time())} s.")
+        problem = accounts.storage_problem()
+        if problem and problem[1]:
+            st.error(problem[0])
             st.stop()
-        with st.form("login"):
-            typed = st.text_input("Senha", type="password")
-            remember = st.checkbox("Manter conectado neste navegador (link com acesso salvo)", value=True)
-            ok = st.form_submit_button("Entrar", type="primary", width="stretch")
-        if ok:
-            if hmac.compare_digest(typed.encode(), password.encode()):
+        if problem and "_login_msg" not in st.session_state:
+            _say("warn", problem[0])
+    if msg := st.session_state.pop("_msg", None):
+        _say("warn", msg)
+    _login_screen("contas" if accounts.enabled() else "senha")
+    st.stop()
+
+
+_DIR = Path(__file__).resolve().parent
+
+
+@st.cache_resource(show_spinner=False)
+def _login_component():
+    return st.components.v2.component("tb_login", css=(_DIR / "login.css").read_text(encoding="utf-8"),
+                                      js=(_DIR / "login.js").read_text(encoding="utf-8"))
+
+
+def _say(kind: str, text: str) -> None:
+    st.session_state["_login_msg"] = {"kind": kind, "text": str(text).replace("**", "")}
+
+
+def _new(res, name: str) -> dict | None:
+    ev = getattr(res, name, None)
+    if ev and ev.get("uid") != st.session_state.get(f"_login_{name}_uid"):
+        st.session_state[f"_login_{name}_uid"] = ev.get("uid")
+        return ev
+    return None
+
+
+def _failed(text: str) -> None:
+    fails = st.session_state.get("auth_fails", 0) + 1
+    st.session_state["auth_fails"] = fails
+    time.sleep(1.0)  # desestimula tentativa e erro
+    if fails >= MAX_ATTEMPTS:
+        st.session_state["auth_locked_until"] = time.time() + LOCK_SECONDS
+        st.session_state["auth_fails"] = 0
+    _say("err", text)
+
+
+def _login_screen(mode: str) -> None:
+    from core import mascot
+
+    data = {"mode": mode, "name": mascot.NAME, "mascot": mascot.svg(190, uid="crlg"), "message": st.session_state.get("_login_msg"),
+            "signup_open": mode == "contas" and accounts.signup_open(), "needs_code": mode == "contas" and accounts.needs_code(),
+            "last_user": st.session_state.get("_login_user", ""), "tab": st.session_state.get("_login_tab"), "tabNonce": st.session_state.get("_login_nonce")}
+    res = _login_component()(key="tb-login", data=data, on_login_change=lambda: None, on_signup_change=lambda: None)
+    if ev := _new(res, "login"):
+        st.session_state.pop("_login_msg", None)
+        locked = st.session_state.get("auth_locked_until", 0)
+        if time.time() < locked:
+            _say("err", f"Muitas tentativas. Aguarde {int(locked - time.time())} s.")
+        elif mode == "contas":
+            st.session_state["_login_user"] = str(ev.get("user", ""))[:40]
+            try:
+                _start_session(accounts.authenticate(str(ev.get("user", "")), str(ev.get("pw", ""))), bool(ev.get("remember")))
+            except ValueError as exc:
+                _failed(str(exc))
+        else:
+            password = get_secret("APP_PASSWORD") or ""
+            if hmac.compare_digest(str(ev.get("pw", "")).encode(), password.encode()):
                 st.session_state["auth_ok"] = True
                 st.session_state.pop("auth_fails", None)
-                if remember:
+                if ev.get("remember"):
                     st.query_params["s"] = _token(password)
-                st.rerun()
-            fails = st.session_state.get("auth_fails", 0) + 1
-            st.session_state["auth_fails"] = fails
-            time.sleep(1.5)  # desestimula tentativa e erro
-            if fails >= MAX_ATTEMPTS:
-                st.session_state["auth_locked_until"] = time.time() + LOCK_SECONDS
-                st.session_state["auth_fails"] = 0
-            st.error("Senha incorreta.")
-    st.stop()
+            else:
+                _failed("Senha incorreta.")
+        st.rerun()
+    if (ev := _new(res, "signup")) and mode == "contas":
+        st.session_state.pop("_login_msg", None)
+        if ev.get("pw") != ev.get("pw2"):
+            _say("err", "As senhas não conferem.")
+            st.session_state.update(_login_tab="up", _login_nonce=time.time())
+        else:
+            try:
+                created = accounts.register(str(ev.get("user", "")), str(ev.get("pw", "")), ev.get("code") or None, str(ev.get("note", ""))[:80])
+                _say("ok", f"Pedido enviado para {created}. O administrador precisa autorizar a conta; depois disso entre aqui com o usuário e a senha escolhidos.")
+                st.session_state.update(_login_tab="in", _login_nonce=time.time(), _login_user=created)
+            except ValueError as exc:
+                _say("err", str(exc))
+                st.session_state.update(_login_tab="up", _login_nonce=time.time())
+        st.rerun()
 
 
 def _start_session(user: str, remember: bool) -> None:
@@ -106,65 +161,6 @@ def _start_session(user: str, remember: bool) -> None:
     if remember:
         st.query_params["s"] = accounts.make_token(user)
     st.rerun()
-
-
-def _accounts_login() -> None:
-    problem = accounts.storage_problem()
-    _, col, _ = st.columns([1, 1.3, 1])
-    with col:
-        if problem and problem[1]:
-            st.error(problem[0])
-            st.stop()
-        if problem:
-            st.warning(problem[0])
-        st.markdown("## 🔒 TradeBot")
-        st.caption("Plataforma de bots de trade — entre com o seu usuário ou peça uma conta (o administrador precisa autorizar).")
-        locked_until = st.session_state.get("auth_locked_until", 0)
-        if msg := st.session_state.pop("_msg", None):
-            st.warning(msg)
-        t_in, t_new = st.tabs(["Entrar", "Pedir conta"])
-        with t_in:
-            with st.form("login_user"):
-                user = st.text_input("Usuário")
-                pw = st.text_input("Senha", type="password")
-                remember = st.checkbox("Manter conectado neste navegador (link com acesso salvo, vale 14 dias)", value=True)
-                ok = st.form_submit_button("Entrar", type="primary", width="stretch")
-            if ok:
-                if time.time() < locked_until:
-                    st.error(f"Muitas tentativas. Aguarde {int(locked_until - time.time())} s.")
-                else:
-                    try:
-                        _start_session(accounts.authenticate(user, pw), remember)
-                    except ValueError as exc:
-                        fails = st.session_state.get("auth_fails", 0) + 1
-                        st.session_state["auth_fails"] = fails
-                        time.sleep(1.0)
-                        if fails >= 5:
-                            st.session_state["auth_locked_until"] = time.time() + 60
-                            st.session_state["auth_fails"] = 0
-                        st.error(str(exc))
-        with t_new:
-            if not accounts.signup_open():
-                st.info("O cadastro de novas contas está fechado.")
-            else:
-                with st.form("signup_user"):
-                    user = st.text_input("Escolha um usuário", help="3 a 20 caracteres: letras minúsculas, números, ponto, hífen e sublinhado.")
-                    pw = st.text_input("Senha (mínimo 8 caracteres)", type="password")
-                    pw2 = st.text_input("Repita a senha", type="password")
-                    note = st.text_input("Seu nome (para o administrador reconhecer você)", max_chars=80)
-                    code = st.text_input("Código de convite", type="password") if accounts.needs_code() else None
-                    ok = st.form_submit_button("Pedir conta", type="primary", width="stretch")
-                if ok:
-                    if pw != pw2:
-                        st.error("As senhas não conferem.")
-                    else:
-                        try:
-                            created = accounts.register(user, pw, code, note)
-                            st.success(f"Pedido enviado para **{created}**. O administrador precisa autorizar a conta; "
-                                       "depois disso você entra na aba **Entrar** com o usuário e a senha escolhidos.")
-                        except ValueError as exc:
-                            st.error(str(exc))
-    st.stop()
 
 
 def logout() -> None:

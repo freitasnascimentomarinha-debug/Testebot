@@ -102,12 +102,21 @@ def dashboard_data(cards: list[dict], curve: list[dict], equity: dict, decisions
 
 
 MODE_DESC = {"simulada": "Ordens simuladas com preços reais, na carteira da plataforma. Sem risco e sem precisar de chave.",
-             "demo": "Ordens na Binance testnet (dinheiro de teste). Precisa da chave de API da testnet.",
-             "real": "Ordens na sua conta real da Binance. Use só depois de testar bem na demo."}
+             "demo": "Ordens na conta de testes (testnet) da corretora escolhida, com dinheiro de teste. Precisa de uma chave da testnet.",
+             "real": "Ordens na sua conta real da corretora escolhida. Use só depois de testar bem na demo."}
+
+
+def exchanges_view(selected: str, keys: dict | None = None) -> list[dict]:
+    """Cartões das corretoras: em uso, se tem futuros e se já há chave salva (últimos 4 caracteres)."""
+    from core import exchanges
+
+    keys = keys or {}
+    return [{"key": k, "label": v[0], "futures": v[2] is not None, "selected": k == selected, "key_saved": (keys.get(k) or {}).get("last4")}
+            for k, v in exchanges.EXCHANGES.items()]
 
 
 def account_data(*, user: str, admin: bool, created: str, storage: str, mode: str, modes: dict, warn, bank: float, bots: list[dict],
-                 ai: dict | None) -> dict:
+                 ai: dict | None, exchanges: list[dict] | None = None) -> dict:
     """``warn(mode)``: motivo de a conta ainda não poder ser usada (ou None); ``bots``: [{name, cfg, personality}]."""
     out_bots = []
     for b in bots:
@@ -118,4 +127,4 @@ def account_data(*, user: str, admin: bool, created: str, storage: str, mode: st
                          "scan": f"a cada {c.get('scan_minutes', 15):g} min · {c.get('scan_count', 15)} moedas" if c.get("scan_on", True) else "só a moeda da tela"})
     return {"user": {"name": user, "admin": admin, "created": (created or "")[:10], "storage": storage}, "mode": mode,
             "modes": [{"key": k, "label": v, "desc": MODE_DESC.get(k, ""), "warn": (warn(k) or "").replace("**", "") or None} for k, v in modes.items()],
-            "bank": _f(bank, 2), "bots": out_bots, "ai": ai}
+            "bank": _f(bank, 2), "bots": out_bots, "ai": ai, "exchanges": exchanges or []}

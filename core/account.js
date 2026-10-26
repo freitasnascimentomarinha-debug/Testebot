@@ -5,9 +5,20 @@ export default function (component) {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const root = parentElement.querySelector(".wx") || parentElement.appendChild(Object.assign(document.createElement("div"), { className: "wx" }));
   const u = data.user;
+  function onEx(e) {
+    const x = e.target.closest(".mode[data-ex]"); if (!x) return false;
+    if (!x.classList.contains("sel")) setTriggerValue("exchange", { key: x.dataset.ex, uid: Date.now() + "-" + Math.random() });
+    return true;
+  }
+  const exPanel = `<div class="panel"><h3>🏛️ Corretora (Exchange) <span class="mut" style="text-transform:none;letter-spacing:0">dados de mercado, gráficos e a chave de API seguem a corretora escolhida</span></h3>
+      <div class="modes">${data.exchanges.map((x) => `<div class="mode ${x.selected ? "sel" : ""}" data-ex="${esc(x.key)}"><b>${esc(x.label)}</b>
+        <p>${x.futures ? "Spot e futuros perpétuos" : "Só spot (sem futuros aqui)"}</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${x.selected ? `<span class="chip on">em uso</span>` : ""}${x.key_saved ? `<span class="chip on">🔑 chave salva ••••${esc(x.key_saved)}</span>` : ""}</div></div>`).join("")}</div></div>`;
+  if (data.only_exchange) { root.innerHTML = exPanel; root.onclick = onEx; return; }
   root.innerHTML = `<div class="big"><div class="uh"><span class="av" style="background:#42a5f5;width:52px;height:52px;font-size:1.2rem">${esc(u.name.slice(0, 2).toUpperCase())}</span><div>
       <b style="font-size:1.4rem">${esc(u.name)}</b> ${u.admin ? `<span class="chip on">⭐ admin</span>` : ""}
       <div class="sub">${u.created ? "conta criada em " + esc(u.created.split("-").reverse().join("/")) + " · " : ""}dados guardados em: ${esc(u.storage)}</div></div></div></div>
+    ${exPanel}
     <div class="panel"><h3>🏦 Conta de operação <span class="mut" style="text-transform:none;letter-spacing:0">clique para escolher · fica salva na sua conta</span></h3>
       <div class="modes">${data.modes.map((m) => `<div class="mode ${m.key === data.mode ? "sel" : ""}" data-mode="${esc(m.key)}"><b>${esc(m.label)}</b><p>${esc(m.desc)}</p>
         ${m.key === data.mode ? `<span class="chip on" style="align-self:flex-start">em uso</span>` : ""}${m.warn ? `<span class="w">⚠️ ${esc(m.warn)}</span>` : ""}</div>`).join("")}</div></div>
@@ -19,7 +30,8 @@ export default function (component) {
         <span>Ativo</span><b>${esc(b.symbol)}</b><span>Tempo gráfico</span><b>${esc(b.interval)}</b><span>Perda máxima por trade</span><b>${esc(b.risk)}</b>
         <span>Alavancagem</span><b>${esc(b.leverage)}</b><span>Bot do momento</span><b>${esc(b.personality)}</b><span>Varredura</span><b>${esc(b.scan)}</b></div></div>`).join("")}</div></div>`;
   root.onclick = (e) => {
-    const m = e.target.closest(".mode"); if (!m || m.dataset.mode === data.mode) return;
+    if (onEx(e)) return;
+    const m = e.target.closest(".mode[data-mode]"); if (!m || m.dataset.mode === data.mode) return;
     setTriggerValue("mode", { mode: m.dataset.mode, uid: Date.now() + "-" + Math.random() });
   };
 }

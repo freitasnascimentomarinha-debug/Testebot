@@ -6,7 +6,7 @@ export default function (component) {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const root = parentElement.querySelector(".sb") || parentElement.appendChild(Object.assign(document.createElement("div"), { className: "sb" }));
   root.innerHTML = `
-    <div class="brand"><span>📈</span><b>TradeBot</b></div>
+    <div class="brand">${data.mascot || ""}<div><b>${esc(data.name || "Cripto Robô")}</b><small>${esc(data.tagline || "")}</small></div></div>
     ${data.groups.map((g) => `<div class="grp"><small>${esc(g.title)}</small>${g.items.map((i) =>
       `<button class="nav ${i.active ? "on" : ""}" data-go="${esc(i.path)}"><span class="ic">${esc(i.icon)}</span>${esc(i.title)}</button>`).join("")}</div>`).join("")}`;
   root.onclick = (e) => {
