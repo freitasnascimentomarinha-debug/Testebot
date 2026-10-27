@@ -127,8 +127,7 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
         "cenario_calculado": scenario,
         "sentimento_polymarket": sentiment,
         "eventos_externos": events,
-        "modelo_ml": ({"prob_alta_pct": round(ml["p_up"] * 100, 1), "mercado_fora_do_conhecido": ml["outlier"], "auc_validacao": ml.get("auc"),
-                       "modelo": ml.get("modelo"), "escolhido_para_o_contexto": ml.get("contexto") if ml.get("do_contexto") else None}
+        "modelo_ml": ({"prob_alta_pct": round(ml["p_up"] * 100, 1), "mercado_fora_do_conhecido": ml["outlier"], "auc_validacao": ml.get("auc")}
                       if ml else None),
     }
 

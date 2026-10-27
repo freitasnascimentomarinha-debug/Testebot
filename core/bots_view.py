@@ -100,20 +100,3 @@ def calc_view(res: dict) -> dict:
             "monthly": ((1 + ret / 100) ** (30 / res["days"]) - 1) * 100 if res["bank"] > 0 else -100.0,
             "n": len(rows), "wins": len(wins), "losses": len(losses), "max_dd": res["max_dd"],
             "pf": (gw / gl) if gl else ("inf" if gw else None), "best": max(wins, default=0.0), "worst": min(losses, default=0.0), "curve": curve}
-
-
-def tourney_data(results: dict, sel: tuple[str, str] | None = None, busy: list[str] | None = None) -> dict:
-    """Torneio de modelos (core/ml_tournament.py) em tipos simples: um bloco por mercado/tempo gráfico já rodado."""
-    from core import ml, ml_tournament as T
-
-    out = []
-    for key, r in sorted(results.items(), key=lambda kv: (kv[1]["market"], -fastsim.PER_DAY.get(kv[1]["interval"], 0))):
-        rows = [{"combo": x["combo"], "algo": ml.algo_label(x["algo"]), "target": ml.TARGETS.get(x["target"], x["target"]), "auc": x["auc"],
-                 "n": x["n"], "win": x["win"], "avg": x["avg"], "monthly": x["monthly"], "pf": x["pf"], "halves": x.get("halves") or [None, None],
-                 "ctx": {g: x["contexts"].get(g) for g in T.CTX_GROUPS}} for x in r["rows"]]
-        out.append({"key": key, "market": r["market"], "interval": r["interval"], "ran_at": r["ran_at"][:16].replace("T", " "),
-                    "test_days": r["test_days"], "train_days": r["train_days"], "step_days": r["step_days"],
-                    "symbols": [s.replace("USDT", "") for s in r["symbols"]], "champion": r.get("champion"),
-                    "by_ctx": r.get("by_ctx") or {}, "rows": rows})
-    return {"results": out, "sel": "|".join(sel) if sel else None, "busy": busy or [], "thr": T.THR, "min_trades": T.MIN_TRADES,
-            "groups": [[g, lab] for g, (lab, _) in T.CTX_GROUPS.items()]}
