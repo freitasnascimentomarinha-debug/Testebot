@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import advisor, ai, events as events_mod, htf, sentiment as sentiment_mod, indicators as ind, personalities, quota, ranking, risk
+from core import advisor, ai, events as events_mod, htf, sentiment as sentiment_mod, indicators as ind, personalities, portfolio, quota, ranking, risk
 from core import paper
 from core.broker import get_broker
 from core.data import get_funding_rate
@@ -56,6 +56,10 @@ def pick_bots(profile: BotProfile, cfg: dict, df: pd.DataFrame, top: int = 3) ->
     Só entram bots treinados neste mercado e tempo gráfico, sem selo fraco e com vantagem comprovada (R médio positivo) no
     contexto atual. A lista vem vazia quando nenhum tem vantagem — então o melhor é aguardar."""
     sc = advisor.scenario(df, cfg)
+    if portfolio.active(cfg, profile.market):   # carteira comprovada: os bots dela neste tempo gráfico, sem troca por contexto
+        bots = portfolio.by_interval(profile.market).get(cfg["interval"], [])
+        return bots[:top], {"contexto": sc["contexto"], "contexto_nome": sc["contexto_nome"], "candidatos": [p["id"] for p in bots],
+                            "carteira": True}
     vies = advisor.bias(sc)
     ok_ids = {p["id"] for p in personalities.allowed(profile.market, cfg["interval"])}
     cands = advisor.candidates(profile, cfg, sc, vies, cfg.get("personality"), top=10)
@@ -69,6 +73,14 @@ def pick_bot(profile: BotProfile, cfg: dict, df: pd.DataFrame) -> tuple[dict | N
     """O melhor bot para o contexto do gráfico agora (``None`` quando nenhum tem vantagem comprovada)."""
     bots, info = pick_bots(profile, cfg, df, top=1)
     return (bots[0] if bots else None), info
+
+
+def _opened_by(pos: dict, personality: dict) -> bool:
+    """A posição foi aberta por este bot? (a posição guarda o bot como {"id", "name"} ou só o nome)"""
+    who = pos.get("personality")
+    if isinstance(who, dict):
+        return who.get("id") == personality["id"] or who.get("name") == personality["name"]
+    return who in (personality["id"], personality["name"])
 
 
 def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
@@ -88,6 +100,9 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
             best, pinfo = personality, {}
         if best is not None:
             personality = best
+        elif pinfo.get("carteira"):
+            waiting = (f"A carteira comprovada não tem bot no {interval}: ela opera em "
+                       f"{', '.join(sorted(portfolio.by_interval(profile.market)))}.")
         elif pinfo:
             waiting = (f"Nenhum bot tem vantagem comprovada em {pinfo['contexto_nome']} no {interval} segundo o ranking "
                        "semanal: o melhor agora é aguardar.")
@@ -181,7 +196,14 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         decision.decision = "HOLD"
     # Uma posição por ativo: o bot não abre outra na mesma direção nem entra contra a que já tem (sinal contrário encerra a posição)
     mine = [p for p in acct["positions"] if p["symbol"] == symbol and p.get("market", profile.market) == profile.market and p.get("source") != "manual" and p.get("bot", profile.key) == profile.key]
-    if mine and decision.decision in ("BUY", "SELL"):
+    in_portfolio = bool(personality and personality.get("portfolio"))
+    if in_portfolio:   # carteira: cada bot com a própria posição por ativo, que só sai no stop ou no alvo (como na validação)
+        mine = [p for p in mine if _opened_by(p, personality)]
+    if mine and decision.decision in ("BUY", "SELL") and in_portfolio:
+        decision.reasoning = (f"[{personality['name']} já tem posição em {symbol}] Aguardando o stop ou o alvo: os bots da carteira "
+                              "não viram a mão. " + decision.reasoning)
+        decision.decision = "HOLD"
+    elif mine and decision.decision in ("BUY", "SELL"):
         if any(p["side"] == decision.decision for p in mine):
             decision.reasoning = f"[Já posicionado em {symbol}] Aguardando o stop ou o alvo. " + decision.reasoning
             decision.decision = "HOLD"

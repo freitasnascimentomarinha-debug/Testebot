@@ -169,7 +169,7 @@ def refresh_if_stale(market: str, interval: str, getter=None, progress=None) -> 
 def overlay(p: dict, rank: dict | None = None) -> dict:
     """A pesquisa do bot com os números da última atualização semanal por cima (quando houver amostra suficiente)."""
     rs = p.get("research") or {}
-    if not rs:
+    if not rs or p.get("portfolio"):   # carteira comprovada: vale a validação em três períodos, não a janela de 40 dias
         return p
     e = (rank if rank is not None else load()).get(_key(rs.get("market", ""), rs.get("interval", "")))
     res = (e or {}).get("results", {}).get(p["id"])

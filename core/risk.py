@@ -168,12 +168,35 @@ class RiskCheck:
         self.allowed = False
 
 
+LIQ_BUFFER = 1.25   # a liquidação fica pelo menos 25% mais longe que o stop
+
+
+def safe_leverage(symbol: str, entry: float, stop: float, wanted: float) -> float:
+    """Maior alavancagem (até ``wanted``) em que a liquidação, na margem isolada, fica além do stop com folga.
+
+    A posição liquida quando a perda chega à margem menos a manutenção: distância ≈ 1/alavancagem − taxa de manutenção."""
+    dist = abs(entry - stop) / entry
+    if dist <= 0:
+        return wanted
+    try:
+        mmr = lev_rules.brackets(symbol)[0][0].mmr
+    except Exception:  # noqa: BLE001 - sem a tabela da Binance: manutenção típica
+        mmr = 0.005
+    cap = math.floor(1 / (dist * LIQ_BUFFER + mmr))
+    return float(max(1, min(int(wanted), cap)))
+
+
 def check_trade(cfg: dict, account_stats: dict, side: str, entry: float, stop: float | None,
                 take_profit: float | None, market: str, trailing: bool = False) -> RiskCheck:
     """Dimensiona a ordem pela perda máxima por trade e valida só o que é tecnicamente impossível."""
     chk = RiskCheck(allowed=True, reasons=[])
     lev = effective_leverage(cfg)
     s = account_stats
+    if market == "futures" and stop and lev > 1 and cfg.get("auto_leverage", True):
+        safe = safe_leverage(cfg["symbol"], entry, stop, lev)
+        if safe < lev:   # a perda continua sendo a definida pelo stop; só a margem usada aumenta
+            chk.notes.append(f"Alavancagem ajustada de {lev:g}× para {safe:g}× para a liquidação ficar além do stop.")
+            lev = safe
 
     if side == "SELL" and market == "spot" and not cfg.get("leverage_on"):
         chk.add("Venda a descoberto no spot exige a opção de alavancagem/margem ligada.")

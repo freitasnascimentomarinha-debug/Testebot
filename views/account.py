@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from core import accounts, credentials, exchanges, execution, paper, personalities, quota, wallet_view
+from core import accounts, credentials, exchanges, execution, paper, personalities, portfolio, quota, wallet_view
 from core.auth import current_user
 from core.binance_ui import render_keys
 from core.storage import get_secret
@@ -54,7 +54,9 @@ def _warn(mode: str) -> str | None:
 if msg := st.session_state.pop("_acc_msg", None):
     st.success(msg)
 bots = [{"name": PROFILES[k].name, "cfg": (c := load_settings(k)),
-         "personality": "automático (ranking)" if c.get("auto_bot", True) else (personalities.get(c["personality"]) or {}).get("name", c["personality"])}
+         "personality": ("carteira comprovada" if portfolio.active(c, PROFILES[k].market)
+                         else "automático (ranking)" if c.get("auto_bot", True)
+                         else (personalities.get(c["personality"]) or {}).get("name", c["personality"]))}
         for k in PAGE_BOTS]
 lim = quota.limit()
 res = _component()(key="tb-account", on_mode_change=lambda: None, on_exchange_change=lambda: None, data=wallet_view.account_data(
