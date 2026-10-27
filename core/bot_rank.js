@@ -56,7 +56,7 @@ export default function (component) {
         ${single ? "" : `<div class="lh"><span>#</span><span>Bot</span>${Object.entries(W).map(([k, l]) => `<span class="s ${S.sort === k ? "on" : ""}" data-s="${k}">${l} ${S.sort === k ? "▼" : ""}</span>`).join("")}<span>Operações/mês</span><span>Acerto</span><span>Evolução</span><span></span></div>`}
         ${rows.length ? rows.map((r, n) => `<div class="lr ${S.open === r.id ? "open" : ""}" data-open="${esc(r.id)}">
           <span class="pos">${single ? "" : n + 1}</span>
-          <span class="nm"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="tags">${mk(r.market)}<span class="chip">${esc(r.interval)}</span>${statusChip(r.status)}${r.kind ? `<span class="chip ok">${r.kind === "grid" ? "🕸️ grade" : "🪜 DCA"}</span>` : ""}${r.builtin ? "" : `<span class="chip">criado por usuário</span>`}</span></span>
+          <span class="nm"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="tags">${mk(r.market)}<span class="chip">${esc(r.interval)}</span>${statusChip(r.status)}${r.builtin ? "" : `<span class="chip">criado por usuário</span>`}</span></span>
           ${["d1", "d7", "d30"].map((k) => `<span class="${k === "d30" ? "" : "hide-s"}"><span class="pill ${cls(val(r, k))}">${sg(val(r, k))}</span></span>`).join("")}
           <span class="hide-s">${val(r, "d30", "trades") ?? "—"}</span><span class="hide-s">${val(r, "d30", "win_pct") == null ? "—" : nf(val(r, "d30", "win_pct"), 0) + "%"}</span>
           <span class="hide-s">${spark(r.history)}</span><span class="chev">›</span></div>${S.open === r.id ? details(r) : ""}`).join("") : `<p class="empty" style="padding:12px">Nenhum bot com esses filtros.</p>`}

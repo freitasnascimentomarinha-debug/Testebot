@@ -7,14 +7,14 @@ export default function (component) {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const root = parentElement.querySelector(".bx") || parentElement.appendChild(Object.assign(document.createElement("div"), { className: "bx" }));
   const S = root.state || (root.state = { style: "", q: "", ok: false, sort: "month", open: {} });
-  const ST = { "": "Todos", day: "⚡ Day trade", swing: "🌊 Swing", long: "🏔️ Longo prazo", grid: "🕸️ Grade", dca: "🪜 DCA" };
+  const ST = { "": "Todos", day: "⚡ Day trade", swing: "🌊 Swing", long: "🏔️ Longo prazo" };
   const SORT = { month: "% ao mês", win: "Acerto", dd: "Menor queda", live: "Operações reais" };
   const statusChip = (s) => s === "aprovado" ? `<span class="chip ok">✅ aprovado na prova final</span>` : s === "ressalva" ? `<span class="chip mid">🟡 aprovado com ressalva</span>` : s === "fraco" ? `<span class="chip bad">⚠️ fraco no período</span>` : "";
   function card(b) {
     const r = b.research, open = !!S.open[b.id];
     return `<article class="card st-${esc(r ? r.status : "")}">
       <h4>${esc(b.name)}</h4>
-      <div class="tags">${b.kind ? "" : `<span class="chip">${esc(ST[b.style] || b.style || "")}</span>`}${b.interval ? `<span class="chip">${esc(b.interval)}</span>` : ""}<span class="chip ${b.market === "futures" ? "fut" : "spot"}">${b.market === "futures" ? "Futuros" : "Spot"}</span>${b.kind ? `<span class="chip ok">${b.kind === "grid" ? "🕸️ grade" : "🪜 DCA"}</span>` : ""}<span class="chip">${b.kind ? esc(b.rr) : "R:R " + esc(b.rr)}</span>${b.builtin ? "" : `<span class="chip">por ${esc(b.author || "—")}</span>`}</div>
+      <div class="tags"><span class="chip">${esc(ST[b.style] || b.style || "")}</span>${b.interval ? `<span class="chip">${esc(b.interval)}</span>` : ""}<span class="chip ${b.market === "futures" ? "fut" : "spot"}">${b.market === "futures" ? "Futuros" : "Spot"}</span><span class="chip">R:R ${esc(b.rr)}</span>${b.builtin ? "" : `<span class="chip">por ${esc(b.author || "—")}</span>`}</div>
       ${b.specialty ? `<div class="spec">${esc(b.specialty)}</div>` : ""}
       ${b.tip ? `<div class="tip">💡 ${esc(b.tip)}</div>` : ""}
       ${b.contexts_only ? `<div class="tip">🔒 Opera só em: ${esc(b.contexts_only)}</div>` : ""}
@@ -24,7 +24,7 @@ export default function (component) {
         <div class="tags">${statusChip(r.status)}</div>` : `<div class="tip mut">Ainda sem simulação: rode o backtest na aba 🔁 Backtest.</div>`}
       <div class="tip">${b.live_trades ? `📊 Real: ${b.live_trades} operações · acerto ${nf(b.live_win, 0)}% · ${nf(b.live_pnl, 2)} USDT` : "📊 Real: ainda sem operações."}</div>
       <div class="acts"><button class="btn" data-more="${esc(b.id)}">${open ? "Fechar detalhes" : "Detalhes"}</button>
-        ${b.editable === false ? "" : `<button class="btn" data-edit="${esc(b.id)}">${b.can_edit ? "✏️ Editar" : "📄 Duplicar e editar"}</button>`}
+        <button class="btn" data-edit="${esc(b.id)}">${b.can_edit ? "✏️ Editar" : "📄 Duplicar e editar"}</button>
         ${b.can_edit ? `<button class="btn del" data-del="${esc(b.id)}">Excluir</button>` : ""}</div>
       ${open ? `<div class="more">${b.description ? `<div>${esc(b.description)}</div>` : ""}
         <div><b>Indicadores (peso):</b> ${esc(b.skills)}</div><div><b>Direção:</b> ${esc(b.direction)} · <b>Saída:</b> ${esc(b.exit)} · <b>Filtros:</b> ${esc(b.filters || "nenhum")}</div>
@@ -36,7 +36,7 @@ export default function (component) {
     const q = S.q.trim().toLowerCase();
     const key = { month: (b) => -(b.research ? b.research.monthly_pct ?? -999 : -999), win: (b) => -(b.research ? b.research.win_pct || 0 : 0),
       dd: (b) => (b.research ? b.research.dd_pct ?? 999 : 999), live: (b) => -(b.live_trades || 0) }[S.sort];
-    const list = data.bots.filter((b) => (!S.style || b.style === S.style || b.kind === S.style) && (!S.ok || (b.research && b.research.status === "aprovado"))
+    const list = data.bots.filter((b) => (!S.style || b.style === S.style) && (!S.ok || (b.research && b.research.status === "aprovado"))
       && (!q || (b.name + " " + (b.specialty || "") + " " + (b.skills || "")).toLowerCase().includes(q))).sort((a, b) => key(a) - key(b));
     const ok = data.bots.filter((b) => b.research && b.research.status === "aprovado").length;
     root.innerHTML = `<div class="bar"><div class="seg">${Object.entries(ST).map(([k, l]) => `<button data-st="${k}" class="${S.style === k ? "on" : ""}">${l}</button>`).join("")}</div>

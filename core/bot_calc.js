@@ -24,7 +24,7 @@ export default function (component) {
       <div class="bar" style="justify-content:space-between"><span class="foot">${d0}</span><span class="foot">linha tracejada = banca inicial (${nf(r.bank0)} USDT)</span><span class="foot">${d1}</span></div></div>`;
   }
   const neg = r.bank < r.bank0;
-  root.innerHTML = `<p class="foot"><b style="color:#e6e8ee">${esc(r.bot)}</b> · ${esc(r.itv)} ${r.market === "futures" ? "futuros" : "spot"} · últimos ${r.days} dias · ${r.kind ? "banca dividida entre os ativos" : `risco ${nf(r.risk, 2).replace(/,?0+$/, "")}% por operação${r.comp ? " com juros compostos" : " (valor fixo)"}`}</p>
+  root.innerHTML = `<p class="foot"><b style="color:#e6e8ee">${esc(r.bot)}</b> · ${esc(r.itv)} ${r.market === "futures" ? "futuros" : "spot"} · últimos ${r.days} dias · risco ${nf(r.risk, 2).replace(/,?0+$/, "")}% por operação${r.comp ? " com juros compostos" : " (valor fixo)"}</p>
     <div class="ctiles">
       <div class="ctile hero ${neg ? "neg" : ""}"><span class="lbl">Banca final</span><b>${nf(r.bank)} USDT</b><small class="${cls(r.pnl)}">${sg(r.pnl)} USDT (${sg(r.ret)}%)</small></div>
       ${tile("≈ por mês", sg(r.monthly) + "%", "(1 + retorno)^(30 ÷ dias) − 1", cls(r.monthly))}
