@@ -31,13 +31,14 @@ def default_settings(profile: BotProfile) -> dict:
         # Risco por operação
         "risk_mode": "% do saldo",      # "USDT" ou "% do saldo" (banca-padrão pequena: 100 USDT)
         "max_loss_usdt": 2.0,           # perda máxima aceitável por trade
-        "max_loss_pct": 2.0,
+        "max_loss_pct": 1.0,            # 1% da banca por operação (o risco usado na validação da carteira comprovada)
         "atr_sl_mult": profile.atr_sl_mult,
         "atr_tp_mult": profile.atr_tp_mult,
         # Alavancagem
         "leverage_on": profile.leverage_on_by_default,
         "leverage": profile.default_leverage,
         "margin_mode": "Isolada",
+        "auto_leverage": True,          # reduz a alavancagem da ordem quando a liquidação ficaria antes do stop
         "allow_short": futures,
         # Custos simulados
         "fee_pct": 0.05 if futures else 0.10,
@@ -68,6 +69,7 @@ def default_settings(profile: BotProfile) -> dict:
         "ai_intervene": True,        # a IA confirma ou veta a ativação do bot (sempre ligado)
         "ai_persona": "professor",   # tom das explicações (core/ai.py: AI_PERSONAS)
         "auto_bot": True,            # no fechamento do candle usa o bot mais recomendado para o contexto (ranking semanal)
+        "portfolio_mode": True,      # onde há carteira comprovada (core/portfolio.py), usa os bots dela em vez da troca por contexto
         "ai_temperature": 0.2,
         "ai_auto_execute": False,
         "ai_auto_arm": True,         # piloto automático arma os planos condicionais propostos pela IA

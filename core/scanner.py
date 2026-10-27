@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from core import ai_exit, advisor, engine, events, execution, sentiment
+from core import ai_exit, advisor, engine, events, execution, portfolio, sentiment
 from core.storage import get_secret, current_user
 from core.broker import get_broker
 from core.profiles import BotProfile
@@ -126,10 +126,14 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
     symbols = symbols_for(cfg, profile.market, pool, rng, extra=mine)
     execute = execute and execution.orders_enabled()
     found: list[tuple] = []
-    for k, sym in enumerate(symbols, start=1):
-        cfg_s = {**cfg, "symbol": sym}
+    # Carteira comprovada: cada bot dela no próprio tempo gráfico (ex.: 1h e 4h); sem carteira, o tempo gráfico do robô
+    intervals = sorted(portfolio.by_interval(profile.market)) if portfolio.active(cfg, profile.market) else [cfg["interval"]]
+    tasks = [(sym, itv) for itv in intervals for sym in symbols]
+    exit_checked: set = set()
+    for k, (sym, itv) in enumerate(tasks, start=1):
+        cfg_s = {**cfg, "symbol": sym, "interval": itv}
         try:
-            raw = klines(sym, cfg["interval"], WINDOW + WARMUP + 1, profile.market)
+            raw = klines(sym, itv, WINDOW + WARMUP + 1, profile.market)
             price = ticker(sym, profile.market).last
             htf_raw = mtf_raw = None
             if engine.needs_htf(cfg_s):
@@ -141,9 +145,10 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
             report.notes.append(f"{sym}: sem dados ({str(exc)[:60]})")
             continue
         report.scanned += 1
-        if sym == symbols[0]:
+        if sym == symbols[0] and report.viewed is None:
             report.viewed = res
-        if cfg.get("ai_exit") and api_key and sym in mine and res.decision.decision != "CLOSE":
+        if cfg.get("ai_exit") and api_key and sym in mine and sym not in exit_checked and res.decision.decision != "CLOSE":
+            exit_checked.add(sym)   # uma consulta de saída por ativo, mesmo com vários tempos gráficos
             _ai_exit(profile, cfg_s, df, price, api_key, report, execute, res)
         elif res.decision.decision == "CLOSE":
             if execute:
@@ -151,7 +156,7 @@ def run(profile: BotProfile, cfg: dict, api_key: str | None, *, klines, ticker, 
         elif res.decision.decision in ("BUY", "SELL") and res.check and res.check.allowed:
             found.append((abs(res.plan["score"]), sym, cfg_s, df, price, res))  # res.personality = bot que deu o sinal
         if progress:
-            progress(k / len(symbols), sym)
+            progress(k / len(tasks), sym if len(intervals) == 1 else f"{sym} {itv}")
 
     found.sort(key=lambda f: -f[0])
     entries = 0

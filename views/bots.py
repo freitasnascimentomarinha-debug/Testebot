@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import accounts, bot_performance, bots_view, fastsim, indicators as ind, personalities as P, regime
+from core import accounts, bot_performance, bots_view, fastsim, indicators as ind, personalities as P, portfolio, regime
 from core.ai import strategy_from_text
 from core.paper import account_id, get_account, stats
 from core.profiles import PROFILES
@@ -18,7 +18,8 @@ from core.ui import api_key, cached_klines, cached_symbols, cached_votes
 st.title("🤖 Bots")
 st.caption("Cada bot é uma estratégia (indicadores, entrada, direção e stop/alvo) treinada num mercado e tempo gráfico. O ranking é refeito "
            "sozinho uma vez por dia com os candles mais recentes; a calculadora e o backtest mostram quanto cada um teria rendido. "
-           "Resultado passado não garante resultado futuro. No fechamento de cada candle o sistema escolhe sozinho o melhor bot para o contexto.")
+           "Resultado passado não garante resultado futuro. Nos futuros, o robô opera a carteira comprovada (abaixo); onde não há carteira, "
+           "escolhe o bot no fechamento de cada candle.")
 
 SKILL_NAMES = {k: v[0] for k, v in SKILLS.items()}
 MARKET_LABEL = {"futures": "Futuros", "spot": "Spot (só compra)"}
@@ -35,6 +36,41 @@ if msg := st.session_state.pop("bots_msg", None):
 
 tab_rank, tab_calc, tab_bt, tab_new, tab_lib, tab_ctx = st.tabs(["🏆 Ranking", "🧮 Calculadora", "🔁 Backtest", "✍️ Criar bot", "📚 Biblioteca",
                                                                  "🧭 Contextos"])
+
+# ------------------------------------------------------------------ carteira comprovada
+def _portfolio_box() -> None:
+    """Os bots que o robô de futuros usa: validados em períodos que a escolha deles não usou (core/portfolio.py)."""
+    summ = portfolio.summary("futures")
+    pbots = portfolio.for_market("futures")
+    if not summ or not pbots:
+        return
+    with st.container(border=True):
+        st.markdown("#### 🛡️ Carteira comprovada · futuros")
+        st.caption("Os bots que o robô de futuros usa, juntos, cada um no próprio tempo gráfico. Foram escolhidos em dez/2025–mai/2026 e "
+                   "só entraram porque também lucraram em jun–dez/2025 e mai–out/2026, períodos que a escolha não viu, e em moedas que ela "
+                   "não usou. Os bots antigos da biblioteca e a troca de bot por contexto foram reprovados no mesmo teste.")
+        cols = st.columns(4)
+        cols[0].metric(f"Banca de 100 ({summ['risk_pct']:g}% por operação)", f"{summ['final']:,.0f}", f"{summ['final'] - 100:+,.0f}% em 16 meses")
+        cols[1].metric("Meses no lucro", f"{summ['months_up']}/{summ['months']}", f"mês mediano {summ['median_month_pct']:+.1f}%", delta_color="off")
+        cols[2].metric("Pior queda da banca", f"−{summ['dd_pct']:.0f}%", f"pior mês {summ['worst_month_pct']:+.0f}%", delta_color="off")
+        oos = [p for p in summ["periods"] if p["out_of_sample"]]
+        ins = [p for p in summ["periods"] if not p["out_of_sample"]]
+        cols[3].metric("Fora da escolha", " e ".join(f"{p['ret_pct']:+.0f}%" for p in oos),
+                       " · ".join(f"na escolha {p['ret_pct']:+.0f}%" for p in ins), delta_color="off",
+                       help=" · ".join(f"{p['label']}: {p['ret_pct']:+.1f}%" for p in summ["periods"]))
+        rows = []
+        for b in pbots:
+            for v in b["research"]["validation"]:
+                rows.append({"Bot": b["name"], "Período": v["label"] + ("" if v["out_of_sample"] else " (escolha)"),
+                             "Operações": v["trades"], "Acerto": v["win_pct"], "R médio por operação": v["avg_r"],
+                             "Moedas no lucro": v["pos_coins"]})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch",
+                     column_config={"Acerto": st.column_config.NumberColumn(format="%.0f%%"),
+                                    "R médio por operação": st.column_config.NumberColumn(format="%+.3f")})
+        st.caption("Alvo de 2× o risco e acerto perto de 40%: o lucro vem do alvo maior que o stop. Espere sequências de 10 a 15 perdas e "
+                   "meses negativos. A alavancagem de cada ordem é ajustada sozinha para a liquidação ficar além do stop. Com banca pequena, "
+                   "BTC (mínimo de 100 USDT por posição na Binance) e às vezes ETH ficam de fora.")
+
 
 # ------------------------------------------------------------------ ranking diário
 bot_performance.refresh_if_due()   # 1x por dia, em segundo plano (o worker 24/7 também dispara)
@@ -89,6 +125,7 @@ def _ranking():
 
 
 with tab_rank:
+    _portfolio_box()
     _ranking()
 
 # ------------------------------------------------------------------ backtest sob demanda

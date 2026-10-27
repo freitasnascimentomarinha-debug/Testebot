@@ -786,7 +786,7 @@ def test_scanner_scans_many_symbols_one_ai_call_one_position_per_symbol(monkeypa
     paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
     profile = PROFILES["day"]
     cfg = {**default_settings(profile), "symbol": "BTCUSDT", "interval": "15m", "scan_count": 18, "scan_pool": 40, "scan_max_entries": 2,
-           "candles": 400, "ai_intervene": False}
+           "candles": 400, "ai_intervene": False, "portfolio_mode": False}   # varredura genérica (a carteira tem teste próprio)
     asked, fetched = [], []
 
     limits = []
@@ -1224,7 +1224,7 @@ def test_weekly_ranking_refresh_and_overlay(monkeypatch):
     from core import ranking
     from core import personalities as Pm
 
-    pid = Pm.DEFAULT_BY_BOT["day"]
+    pid = "esp_15m_ema_3x1"   # bot comum (os da carteira comprovada não recebem o ranking semanal)
     base = next(b for b in Pm.BUILTINS if b["id"] == pid)
     market, itv = base["research"]["market"], base["research"]["interval"]
     ranking._failed_at.clear()
@@ -1651,7 +1651,8 @@ def test_context_research_builds_compatible_bot_and_reports_cells_without_bot(mo
     assert cr.MARKET_SIDES["spot"] == ("long",) and set(cr.CONTEXTS) == {"lateralidade", "tendencia", "reversao", "rompimento",
                                                                          "suporte_resistencia", "fluxo_ordens"}
     # entra no app como qualquer outro bot (cards, escolha por contexto e relatório)
-    monkeypatch.setattr(Pm, "BUILTINS", Pm.BUILTINS + [{**bot, "research": rs, "builtin": True}])
+    # o bot gerado substitui o de mesmo id que já estiver no core/context_bots.json (como faz a ferramenta de pesquisa)
+    monkeypatch.setattr(Pm, "BUILTINS", [b for b in Pm.BUILTINS if b["id"] != bot["id"]] + [{**bot, "research": rs, "builtin": True}])
     assert Pm.get(bot["id"])["research"]["status"] == rs["status"]
     assert any(p["id"] == bot["id"] for p in Pm.allowed("futures", "15m"))
     assert Pm.best_for_context("tendencia_alta", market="futures", interval="15m", min_trades=1)
@@ -2368,3 +2369,79 @@ def test_keys_per_exchange_mascot_and_login(monkeypatch):
     assert 'setTriggerValue("login"' in js and 'setTriggerValue("signup"' in js
     app = open(os.path.join(root, "app.py"), encoding="utf-8").read()
     assert "Corretora dos dados" not in app and "Cripto Robô" in app                          # a escolha da corretora mudou para Minha conta
+
+
+def test_portfolio_bots_validated_and_used_instead_of_context_switching(monkeypatch):
+    """Carteira comprovada: os bots validados em períodos que a escolha não usou operam juntos, cada um no próprio tempo gráfico."""
+    from core import engine, portfolio, scanner, strategy
+    from core import personalities as Pm
+
+    bots = portfolio.for_market("futures")
+    assert {b["id"] for b in bots} == {"cart_1h_rompimento_consolidacao", "cart_4h_rompimento_tendencia"}
+    for b in bots:
+        rs = b["research"]
+        assert rs["status"] == "aprovado" and b["portfolio"] and len(rs["validation"]) == 3
+        assert [v["out_of_sample"] for v in rs["validation"]] == [True, False, True]
+        assert all(v["avg_r"] > 0 for v in rs["validation"]) and b["tp_atr"] == 2 * b["sl_atr"]   # alvo de 2× o risco
+        assert Pm.is_allowed(b["id"], "futures", rs["interval"])
+    s = portfolio.summary("futures")
+    assert s["final"] > 100 and all(p["ret_pct"] > 0 for p in s["periods"]) and s["risk_pct"] == 1.0
+    assert sorted(portfolio.by_interval("futures")) == ["1h", "4h"] and portfolio.summary("spot") is None
+    day, swing = PROFILES["day"], PROFILES["swing"]
+    cfg = {**default_settings(day), "symbol": "BTCUSDT"}
+    assert cfg["portfolio_mode"] and cfg["max_loss_pct"] == 1.0 and cfg["interval"] == "1h" and Pm.DEFAULT_BY_BOT["day"] == "cart_1h_rompimento_consolidacao"
+    assert portfolio.active(cfg, "futures") and not portfolio.active({**cfg, "portfolio_mode": False}, "futures")
+    assert not portfolio.active(default_settings(swing), "spot")                   # no spot nenhum candidato passou: segue como antes
+
+    # a escolha do bot: os da carteira no tempo gráfico, sem troca por contexto
+    df = ind.compute(make_df(331, trend=0.2, seed=8), cfg).tail(121).reset_index(drop=True)
+    picked, info = engine.pick_bots(day, {**cfg, "interval": "4h"}, df)
+    assert [p["id"] for p in picked] == ["cart_4h_rompimento_tendencia"] and info["carteira"]
+    assert engine.pick_bots(day, {**cfg, "interval": "15m"}, df)[0] == []
+
+    # a varredura passa por cada tempo gráfico da carteira
+    paper.set_wallet_mode("única")
+    paper.reset_account(paper.SHARED_ACCOUNT, 10_000)
+    seen = []
+
+    def klines(sym, interval, limit=500, market="futures"):
+        seen.append(interval)
+        raw = make_df(max(limit, 300), trend=0.2, seed=8)
+        step = {"1h": "1h", "4h": "4h"}.get(interval, "1h")
+        raw["time"] = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("1h"), periods=len(raw), freq=step)
+        return raw.tail(limit).reset_index(drop=True)
+
+    from core.data import Ticker
+    ticker = lambda sym, market="futures": Ticker(sym, float(make_df(400, trend=0.2, seed=8).close.iloc[-1]), 0, 0, 0, 0, "t")  # noqa: E731
+    monkeypatch.setattr(scanner.engine, "get_funding_rate", lambda s: None)
+    rep = scanner.run(day, {**cfg, "scan_on": False, "ai_intervene": False}, None, klines=klines, ticker=ticker, execute=False)
+    assert {"1h", "4h"} <= set(seen) and rep.scanned == 2
+
+    # cada bot da carteira com a própria posição: o de 1h entra mesmo com o de 4h posicionado; o mesmo bot não repete nem vira a mão
+    one_h = Pm.get("cart_1h_rompimento_consolidacao")
+    paper.place_order(paper.SHARED_ACCOUNT, symbol="BTCUSDT", market="futures", side="SELL", qty=0.001, price=100.0, stop_loss=110.0,
+                      take_profit=80.0, leverage=5, fee_pct=0.05, source="bot", bot="day",
+                      personality={"id": "cart_4h_rompimento_tendencia", "name": "🚀 Rompimento a favor da tendência · 4h"})
+    price = float(df.close.iloc[-1])
+    plan = strategy.RulePlan("BUY", 80.0, price, price * 0.97, price * 1.06, price * 0.01, "tendência", note="", context="rompimento_alta")
+    monkeypatch.setattr(engine, "analyze", lambda *a, **k: plan)
+    res = engine.run_analysis(day, cfg, df, price, None, log=False, personality_id=one_h["id"])
+    assert res.decision.decision == "BUY"                                          # posição do outro bot não bloqueia nem é encerrada
+    paper.place_order(paper.SHARED_ACCOUNT, symbol="BTCUSDT", market="futures", side="SELL", qty=0.001, price=100.0, stop_loss=110.0,
+                      take_profit=80.0, leverage=5, fee_pct=0.05, source="bot", bot="day", personality={"id": one_h["id"], "name": one_h["name"]})
+    res = engine.run_analysis(day, cfg, df, price, None, log=False, personality_id=one_h["id"])
+    assert res.decision.decision == "HOLD" and "não viram a mão" in res.decision.reasoning
+
+
+def test_auto_leverage_keeps_liquidation_beyond_the_stop():
+    """A alavancagem da ordem cai sozinha até a liquidação ficar além do stop (com folga); a perda continua a definida pelo stop."""
+    assert risk.safe_leverage("BTCUSDT", 100.0, 95.0, 70) < 70                     # stop de 5%: 70× liquidaria antes do stop
+    assert risk.safe_leverage("BTCUSDT", 100.0, 99.8, 20) == 20                    # stop curto: a alavancagem pedida serve
+    cfg = {**default_settings(PROFILES["day"]), "symbol": "BTCUSDT", "leverage_on": True, "leverage": 70}
+    stats = {"equity": 1000.0, "available": 1000.0}                               # BTC exige posição de 100 USDT na Binance
+    chk = risk.check_trade(cfg, stats, "BUY", 100.0, 95.0, 110.0, "futures")
+    assert chk.allowed and chk.calc.leverage < 70 and any("Alavancagem ajustada" in n for n in chk.notes)
+    assert chk.calc.liquidation is None or chk.calc.liquidation < 95.0            # liquidação abaixo do stop da compra
+    assert abs(chk.calc.risk_usdt - 10.0) < 0.5                                   # 1% de 1000: a perda no stop não muda
+    off = risk.check_trade({**cfg, "auto_leverage": False}, stats, "BUY", 100.0, 95.0, 110.0, "futures")
+    assert not off.allowed                                                         # sem o ajuste: stop além da liquidação é bloqueado

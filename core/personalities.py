@@ -166,6 +166,10 @@ try:
     _RESULTS.update(_CTX.get("research", {}))
 except FileNotFoundError:  # ainda não gerados
     pass
+# Carteira comprovada (core/portfolio.py): bots validados em períodos que a escolha deles não usou
+from core import portfolio as _portfolio  # noqa: E402
+
+BUILTINS += _portfolio.personalities()
 for _p in BUILTINS:
     if _p["id"] in _RESULTS:
         _p["research"] = _RESULTS[_p["id"]]
@@ -174,7 +178,7 @@ for _p in BUILTINS:
     _p["builtin"] = True
 
 # Padrões: especialistas aprovados na prova final (moedas inéditas) da pesquisa de out/2026
-DEFAULT_BY_BOT = {"day": "esp_15m_ema_3x1", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
+DEFAULT_BY_BOT = {"day": "cart_1h_rompimento_consolidacao", "swing": "esp_swing_4h_breakout_3x1", "long": "esp_long_1d_ichimoku_4x1"}
 
 _STATUS_ORDER = {"aprovado": 0, "ressalva": 1}
 

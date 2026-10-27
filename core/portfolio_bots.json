@@ -1,0 +1,155 @@
+{
+ "generated": "2026-10-27T23:32:52+00:00",
+ "research": {
+  "cart_1h_rompimento_consolidacao": {
+   "period_label": "16 meses em 3 períodos",
+   "period_days": 479,
+   "monthly_pct": 0.63,
+   "ret_pct": 10.42,
+   "win_pct": 40.4,
+   "dd_pct": 12.7,
+   "trades_month": 7.1,
+   "pos_coins": "8/10",
+   "per_symbol": {
+    "BTCUSDT": 3.9,
+    "ETHUSDT": 10.78,
+    "SOLUSDT": 12.26,
+    "XRPUSDT": 15.39,
+    "BNBUSDT": 6.27,
+    "DOGEUSDT": -1.36,
+    "ADAUSDT": 35.37,
+    "LINKUSDT": 17.24,
+    "AVAXUSDT": -1.43,
+    "LTCUSDT": 5.81
+   },
+   "status": "aprovado",
+   "market": "futures",
+   "interval": "1h",
+   "contexts": {},
+   "best_contexts": [],
+   "validation": [
+    {
+     "label": "jun–dez/2025",
+     "out_of_sample": true,
+     "trades": 454,
+     "win_pct": 39.6,
+     "avg_r": 0.098,
+     "ret_pct": 4.16,
+     "monthly_pct": 0.69,
+     "pos_coins": "10/10"
+    },
+    {
+     "label": "dez/2025–mai/2026",
+     "out_of_sample": false,
+     "trades": 344,
+     "win_pct": 40.4,
+     "avg_r": 0.079,
+     "ret_pct": 2.48,
+     "monthly_pct": 0.48,
+     "pos_coins": "8/10"
+    },
+    {
+     "label": "mai–out/2026",
+     "out_of_sample": true,
+     "trades": 322,
+     "win_pct": 41.6,
+     "avg_r": 0.106,
+     "ret_pct": 3.4,
+     "monthly_pct": 0.71,
+     "pos_coins": "7/10"
+    }
+   ],
+   "tested_at": "27/10/2026",
+   "portfolio": true
+  },
+  "cart_4h_rompimento_tendencia": {
+   "period_label": "16 meses em 3 períodos",
+   "period_days": 479,
+   "monthly_pct": 0.5,
+   "ret_pct": 8.14,
+   "win_pct": 46.3,
+   "dd_pct": 6.1,
+   "trades_month": 2.3,
+   "pos_coins": "9/10",
+   "per_symbol": {
+    "BTCUSDT": 4.74,
+    "ETHUSDT": 10.15,
+    "SOLUSDT": 16.31,
+    "XRPUSDT": 8.36,
+    "BNBUSDT": 22.76,
+    "DOGEUSDT": 2.89,
+    "ADAUSDT": 3.53,
+    "LINKUSDT": 7.74,
+    "AVAXUSDT": 9.41,
+    "LTCUSDT": -4.51
+   },
+   "status": "aprovado",
+   "market": "futures",
+   "interval": "4h",
+   "contexts": {},
+   "best_contexts": [],
+   "validation": [
+    {
+     "label": "jun–dez/2025",
+     "out_of_sample": true,
+     "trades": 140,
+     "win_pct": 46.4,
+     "avg_r": 0.179,
+     "ret_pct": 2.52,
+     "monthly_pct": 0.42,
+     "pos_coins": "7/10"
+    },
+    {
+     "label": "dez/2025–mai/2026",
+     "out_of_sample": false,
+     "trades": 111,
+     "win_pct": 45.0,
+     "avg_r": 0.22,
+     "ret_pct": 2.42,
+     "monthly_pct": 0.47,
+     "pos_coins": "8/10"
+    },
+    {
+     "label": "mai–out/2026",
+     "out_of_sample": true,
+     "trades": 105,
+     "win_pct": 47.6,
+     "avg_r": 0.283,
+     "ret_pct": 2.95,
+     "monthly_pct": 0.62,
+     "pos_coins": "8/10"
+    }
+   ],
+   "tested_at": "27/10/2026",
+   "portfolio": true
+  }
+ },
+ "portfolio": {
+  "futures": {
+   "final": 380.71,
+   "periods": [
+    {
+     "label": "jun–dez/2025",
+     "out_of_sample": true,
+     "ret_pct": 61.2
+    },
+    {
+     "label": "dez/2025–mai/2026",
+     "out_of_sample": false,
+     "ret_pct": 36.1
+    },
+    {
+     "label": "mai–out/2026",
+     "out_of_sample": true,
+     "ret_pct": 77.5
+    }
+   ],
+   "dd_pct": 39.9,
+   "months": 17,
+   "months_up": 13,
+   "median_month_pct": 8.4,
+   "worst_month_pct": -17.8,
+   "risk_pct": 1.0
+  }
+ }
+}
