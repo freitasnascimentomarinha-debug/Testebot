@@ -14,7 +14,7 @@ import argparse
 import logging
 import time
 
-from core import accounts, bot_performance, engine, execution, personalities, scanner, storage
+from core import accounts, bot_performance, engine, execution, ml_tournament, personalities, scanner, storage
 from core.data import get_funding_rate, get_klines, get_ticker
 from core.ai import get_api_key
 from core.profiles import PAGE_BOTS, PROFILES
@@ -62,6 +62,11 @@ def main() -> None:
         storage.set_user(None)
         if bot_performance.refresh_if_due():   # ranking diário dos bots (dados compartilhados), em segundo plano
             log.info("ranking diário dos bots: atualização iniciada")
+        for bot in args.bots:                  # torneio de modelos de ML 1x por semana no mercado/tempo gráfico de cada bot
+            prof_ = PROFILES[bot]
+            itv_ = load_settings(bot)["interval"]
+            if not ml_tournament.running() and ml_tournament.refresh_if_due(prof_.market, itv_):
+                log.info("torneio de modelos de ML iniciado (%s %s)", prof_.market, itv_)
         # Com contas ligadas, percorre os usuários (cada um com a própria carteira e configuração).
         users = (args.users or accounts.list_users()) if accounts.enabled() else [None]
         for user in users:

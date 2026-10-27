@@ -2468,3 +2468,68 @@ def test_grid_and_dca_bots(monkeypatch):
     json.dumps(lib)
     card = next(b for b in lib["bots"] if b["id"] == grid["id"])
     assert card["editable"] is False and card["can_edit"] is False and card["research"]["ret_pct"] == e["d30"]["ret_pct"]
+
+
+def test_ml_tournament_algos_targets_and_context_champions(monkeypatch):
+    """Torneio de modelos: vários algoritmos e alvos com walk-forward, campeões geral e por contexto, e o modelo ao vivo usando os campeões."""
+    from core import bots_view, ml, ml_tournament as T
+
+    # alvo "barreira": o que o preço toca primeiro (+1,5 ATR ou −1,5 ATR); compra e venda já descontam as taxas
+    n = 60
+    c = np.r_[np.full(10, 100.0), np.linspace(100, 110, 50)]
+    vt = pd.DataFrame({"time": pd.date_range("2026-01-01", periods=n, freq="1h", tz="UTC"), "close": c, "high": c + 0.2, "low": c - 0.2,
+                       "atr": 1.0})
+    out = ml.outcomes(vt, "1h", 0.05, "barreira")
+    assert out["y"].iloc[12] == 1.0 and abs(out["long"].iloc[12] - (1.5 / c[12] - 0.001)) < 1e-9 and out["short"].iloc[12] < 0
+    assert out["exit"].iloc[12] > 12 and out["y"].iloc[-3:].isna().all()                  # sem futuro: sem rótulo
+    assert ml.outcomes(vt, "1h", 0.05, "tendencia")["y"].iloc[-ml.horizon("1h", "tendencia"):].isna().all()
+    assert ml.horizon("1h", "tendencia") == 3 * ml.HORIZON["1h"]
+
+    # cada algoritmo instalado treina, prevê e volta igual do banco
+    rng = np.random.default_rng(3)
+    X = pd.DataFrame(rng.normal(size=(1500, 6)), columns=list("abcdef"))
+    X.iloc[::40, 2] = np.nan
+    y = (X["a"] + rng.normal(scale=0.7, size=1500) > 0).astype(float).to_numpy()
+    assert {"lightgbm", "logistica"} <= set(ml.available_algos())
+    for a in ml.available_algos():
+        m = ml.Model(list(X.columns), a, "barreira").fit(X[:1200], y[:1200])
+        p = m.proba(X[1200:])
+        assert ml.auc(y[1200:], p) > 0.7, a
+        again = ml.Model.load(json.loads(json.dumps(m.dump())))
+        assert again.algo == a and again.target == "barreira" and np.allclose(again.proba(X[:10]), m.proba(X[:10]), atol=1e-6), a
+
+    # torneio com candles sintéticos
+    def getter(sym, interval, n_, market):
+        raw = make_df(max(n_, 300), trend=0.1, seed=len(sym) + 5)
+        raw["time"] = pd.date_range(end=pd.Timestamp("2026-10-20", tz="UTC"), periods=len(raw), freq="1h")
+        return raw.tail(n_).reset_index(drop=True)
+
+    res = T.run("futures", "1h", getter=getter, symbols=["BTCUSDT", "ETHUSDT"], algos=["logistica", "lightgbm"], targets=["direcao", "barreira"],
+                test_days=20, train_days=30, step_days=10)
+    json.dumps(res)
+    assert len(res["rows"]) == 4 and {r["combo"] for r in res["rows"]} == {"logistica|direcao", "logistica|barreira", "lightgbm|direcao", "lightgbm|barreira"}
+    r0 = res["rows"][0]
+    assert set(r0) >= {"auc", "n", "win", "monthly", "pf", "halves", "contexts"} and set(r0["contexts"]) == set(T.CTX_GROUPS)
+    assert T.get("futures", "1h")["ran_at"] == res["ran_at"] and not T.is_due("futures", "1h")
+    if res["champion"]:                                                                   # campeão só com vantagem nas duas metades do teste
+        ch = next(r for r in res["rows"] if r["combo"] == res["champion"])
+        assert ch["n"] >= T.MIN_TRADES and min(ch["halves"]) > 0
+    assert T.group_of("tendencia_alta") == "tendencia" and T.group_of("suporte_teste") == "lateral" and T.group_of("???") == "indefinido"
+    assert T.refresh_if_due("spot", "4h") is False                                        # nos testes nada roda sozinho
+    view = bots_view.tourney_data(T.load(), sel=("futures", "1h"))
+    json.dumps(view)
+    assert view["sel"] == "futures|1h" and view["results"][0]["rows"][0]["algo"]
+
+    # modelo ao vivo: campeão geral + campeão do contexto, e a previsão usa o do contexto atual
+    monkeypatch.setattr(T, "champions", lambda m_, i_: ("logistica|barreira", {"lateral": "lightgbm|direcao", "tendencia": "logistica|barreira"}))
+    model = ml.train_live("futures", "1h", getter=getter, symbols=["BTCUSDT", "ETHUSDT"])
+    assert model.algo == "logistica" and model.target == "barreira" and model.meta["from_tournament"]
+    ml._models.clear()                                                                    # relê do banco
+    main, ctx = ml.get_bundle("futures", "1h")
+    assert main.algo == "logistica" and set(ctx) == {"lateral"} and ctx["lateral"].algo == "lightgbm"
+    from core import ranking
+
+    _, cfg = ranking.votes_for("ETHUSDT", "1h", "futures", 30, getter)
+    cfg = {**cfg, "symbol": "ETHUSDT", "interval": "1h"}
+    pr = ml.predict_live(ind.compute(getter("ETHUSDT", "1h", 300, "futures"), cfg), cfg, "futures", getter=getter)
+    assert pr and 0 <= pr["p_up"] <= 1 and pr["modelo"] and pr["contexto"]

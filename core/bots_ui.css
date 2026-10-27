@@ -53,3 +53,15 @@ table.ctx { width: 100%; border-collapse: collapse; font-size: .74rem; } table.c
 .ctile { background: #141824; border: 1px solid #262b3a; border-radius: 12px; padding: 10px 13px; } .ctile b { display: block; font-size: 1.3rem; font-variant-numeric: tabular-nums; margin-top: 2px; } .ctile small { color: #8a8f98; font-size: .72rem; }
 .ctile.hero { border-left: 4px solid #26a69a; grid-column: span 2; } .ctile.hero.neg { border-left-color: #ef5350; } .ctile.hero b { font-size: 1.6rem; white-space: nowrap; }
 .chart { background: #141824; border: 1px solid #262b3a; border-radius: 12px; padding: 10px 12px; }
+/* torneio de modelos */
+.lh.mt, .lr.mt { grid-template-columns: 34px minmax(200px, 2.4fr) 62px 78px 64px 78px 92px 52px 22px; }
+.mt-ctx { display: flex; flex-direction: column; gap: 6px; }
+.mt-ctx > div { display: grid; grid-template-columns: 140px 1fr auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; border-top: 1px solid #1e2433; padding-top: 5px; }
+.mt-ctx > div > span:first-child { grid-row: span 2; font-weight: 700; font-size: .78rem; } .mt-ctx b { font-size: .84rem; } .mt-ctx small { color: #8a8f98; font-size: .7rem; grid-column: 2; }
+.mt-ctx .pill { grid-row: 1 / span 2; grid-column: 3; font-size: .74rem; }
+.mt-heat { display: grid; gap: 3px; margin-top: 8px; font-size: .74rem; overflow-x: auto; }
+.mt-heat .hh { font-size: .64rem; color: #8a8f98; text-align: center; padding-bottom: 3px; }
+.mt-heat .hn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mt-heat small { display: block; color: #8a8f98; font-weight: 400; font-size: .64rem; overflow: hidden; text-overflow: ellipsis; }
+.mt-heat .hc { text-align: center; border-radius: 6px; padding: 4px 2px; font-weight: 700; font-variant-numeric: tabular-nums; border: 1px solid #1e2433; }
+.mt-heat .hc.best { outline: 2px solid #ffd740; outline-offset: -2px; }
+@media (max-width: 900px) { .lr.mt { grid-template-columns: 30px 1fr 92px 22px; } .lr.mt > span:nth-child(3), .lr.mt > span:nth-child(4), .lr.mt > span:nth-child(5), .lr.mt > span:nth-child(6), .lr.mt > span:nth-child(8) { display: none; } }
