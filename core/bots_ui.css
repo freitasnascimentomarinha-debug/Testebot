@@ -65,3 +65,5 @@ table.ctx { width: 100%; border-collapse: collapse; font-size: .74rem; } table.c
 .mt-heat .hc { text-align: center; border-radius: 6px; padding: 4px 2px; font-weight: 700; font-variant-numeric: tabular-nums; border: 1px solid #1e2433; }
 .mt-heat .hc.best { outline: 2px solid #ffd740; outline-offset: -2px; }
 @media (max-width: 900px) { .lr.mt { grid-template-columns: 30px 1fr 92px 22px; } .lr.mt > span:nth-child(3), .lr.mt > span:nth-child(4), .lr.mt > span:nth-child(5), .lr.mt > span:nth-child(6), .lr.mt > span:nth-child(8) { display: none; } }
+.mt-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .mt-vs > div { display: flex; flex-direction: column; gap: 5px; background: #181d2b; border: 1px solid #232839; border-radius: 10px; padding: 8px 10px; }
+.mt-vs small { color: #8a8f98; font-size: .7rem; } .mt-vs .pill { font-size: .74rem; min-width: 0; }

@@ -7,7 +7,7 @@ export default function (component) {
   const cls = (v) => v == null ? "zero" : v > 0 ? "up" : v < 0 ? "dn" : "zero";
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const root = parentElement.querySelector(".bx") || parentElement.appendChild(Object.assign(document.createElement("div"), { className: "bx" }));
-  const S = root.state || (root.state = { key: null, open: null, sort: "monthly" });
+  const S = root.state || (root.state = { key: null, open: null, sort: "monthly", fam: "" });
   if (data.sel && data.sel !== S.lastSel) { S.key = data.sel; S.lastSel = data.sel; }
   const res = data.results;
   const G = Object.fromEntries(data.groups);
@@ -22,11 +22,14 @@ export default function (component) {
     if (!res.some((r) => r.key === S.key)) S.key = res[0].key;
     const r = res.find((x) => x.key === S.key);
     const champ = r.rows.find((x) => x.combo === r.champion);
-    const best = champ || r.rows[0];
-    const rows = [...r.rows].sort((a, b) => S.sort === "auc" ? (b.auc ?? 0) - (a.auc ?? 0) : S.sort === "win" ? b.win - a.win : 0);
+    const best = champ || r.rows.find((x) => x.family !== "regra") || r.rows[0];
+    const FAM = { "": "Todos", ml: "🧪 Modelos de ML", regra: "📐 Bots de regras" };
+    const famChip = (x) => x.family === "regra" ? `<span class="chip spot">📐 ${esc(x.target)}</span>` : `<span class="chip fut">🧪 ML</span><span class="chip">${esc(x.target)}</span>`;
+    const cp = r.compare;
+    const rows = r.rows.filter((x) => !S.fam || x.family === S.fam).sort((a, b) => S.sort === "auc" ? (b.auc ?? 0) - (a.auc ?? 0) : S.sort === "win" ? b.win - a.win : 0);
     const ctxCh = Object.entries(r.by_ctx);
     const byCombo = Object.fromEntries(r.rows.map((x) => [x.combo, x]));
-    const top = r.rows.slice(0, 10);
+    const top = r.rows.filter((x) => !S.fam || x.family === S.fam).slice(0, 10);
     root.innerHTML = `
       <div class="bar"><div class="seg">${res.map((x) => `<button data-k="${esc(x.key)}" class="${x.key === S.key ? "on" : ""}">${x.market === "futures" ? "Futuros" : "Spot"} ${esc(x.interval)}${data.busy.includes(x.key) ? " ⏳" : ""}</button>`).join("")}</div>
         <span class="foot">Rodado em ${esc(r.ran_at)} UTC · teste de ${nf(r.test_days, 0)} dias · treino de ${nf(r.train_days, 0)} dias · re-treino a cada ${nf(r.step_days, 0)} dias · ${esc(r.symbols.join(", "))}</span></div>
@@ -42,32 +45,42 @@ export default function (component) {
             return `<div><span>${esc(G[g] || g)}</span><b>${esc(x.algo)}</b><small>${esc(x.target)}</small><span class="pill ${cls(cx.avg)}">${sg(cx.avg, 2)}/op · ${cx.n ?? 0}</span></div>`; }).join("")}</div>`
             : `<p class="empty">Nenhum modelo teve resultado positivo em um contexto com operações suficientes.</p>`}
           <p class="foot">Ao vivo, quando o gráfico está num desses contextos, o voto vem do campeão dele.</p></div>
+        ${cp ? `<div class="pod"><span class="lbl">Regras × ML · mesmas velas, mesmo período, banca inteira por operação</span>
+          <div class="mt-vs">${[["regra", "📐 Bots de regras"], ["ml", "🧪 Modelos de ML"]].map(([f, lab]) => { const c = cp[f]; return `<div>
+            <b>${lab}</b><small>${c.n} no placar · ${c.positive} positivos · ${c.both_halves} positivos nas duas metades</small>
+            <div class="row3"><span class="pill ${cls(c.best_monthly)}">melhor ${sg(c.best_monthly)}</span><span class="pill ${cls(c.median)}">mediana ${sg(c.median)}</span></div>
+            <small>Melhor: ${esc(c.best)}${f === "ml" ? " · " + esc(c.best_target) : ""}</small></div>`; }).join("")}</div>
+          <p class="foot">${cp.regra.best_monthly > cp.ml.best_monthly ? "Neste teste as regras foram melhores que os modelos operando sozinhos." : cp.regra.best_monthly < cp.ml.best_monthly ? "Neste teste o melhor modelo superou o melhor bot de regras." : "Empate entre o melhor de cada lado."}
+            ${[["regra", "bot de regras"], ["ml", "modelo"]].map(([f, l]) => cp[f].best_ok ? "" : ` O melhor ${l} não se confirmou na 2ª metade do teste.`).join("")}
+            A mediana diz mais que o melhor: com dezenas de tentativas, o primeiro lugar sempre tem um pouco de sorte.</p></div>` : ""}
       </div>
+      <div class="bar"><div class="seg">${Object.entries(FAM).map(([k, l]) => `<button data-f="${k}" class="${S.fam === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
       <div class="list">
-        <div class="lh mt"><span>#</span><span>Modelo</span><span class="s ${S.sort === "auc" ? "on" : ""}" data-s="auc">AUC</span><span>Operações</span><span class="s ${S.sort === "win" ? "on" : ""}" data-s="win">Acerto</span><span>Média/op.</span><span class="s ${S.sort === "monthly" ? "on" : ""}" data-s="monthly">Ao mês</span><span>PF</span><span></span></div>
+        <div class="lh mt"><span>#</span><span>Modelo ou bot</span><span class="s ${S.sort === "auc" ? "on" : ""}" data-s="auc">AUC</span><span>Operações</span><span class="s ${S.sort === "win" ? "on" : ""}" data-s="win">Acerto</span><span>Média/op.</span><span class="s ${S.sort === "monthly" ? "on" : ""}" data-s="monthly">Ao mês</span><span>PF</span><span></span></div>
         ${rows.map((x, n) => `<div class="lr mt ${S.open === x.combo ? "open" : ""}" data-open="${esc(x.combo)}">
-          <span class="pos">${x.combo === r.champion ? "🏆" : n + 1}</span>
-          <span class="nm"><b>${esc(x.algo)}</b><span class="tags"><span class="chip">${esc(x.target)}</span>${x.n < data.min_trades ? `<span class="chip mid">poucas operações</span>` : ""}${Object.entries(r.by_ctx).filter(([, c]) => c === x.combo).map(([g]) => `<span class="chip ok">${esc(G[g])}</span>`).join("")}</span></span>
+          <span class="pos">${x.combo === r.champion ? "🏆" : r.rows.indexOf(x) + 1}</span>
+          <span class="nm"><b>${esc(x.algo)}</b><span class="tags">${famChip(x)}${x.n < data.min_trades ? `<span class="chip mid">poucas operações</span>` : ""}${Object.entries(r.by_ctx).filter(([, c]) => c === x.combo).map(([g]) => `<span class="chip ok">${esc(G[g])}</span>`).join("")}</span></span>
           <span class="${x.auc != null && x.auc >= 0.53 ? "up" : x.auc != null && x.auc < 0.5 ? "dn" : ""}" style="font-weight:700">${nf(x.auc, 3)}</span>
           <span>${x.n}</span><span>${nf(x.win, 0)}%</span><span class="${cls(x.avg)}">${sg(x.avg, 2)}</span>
           <span><span class="pill ${cls(x.monthly)}">${sg(x.monthly)}</span></span><span>${nf(x.pf, 2)}</span><span class="chev">›</span></div>
           ${S.open === x.combo ? `<div class="det"><div><h5>Por contexto do gráfico</h5><table class="ctx"><tr><th>Contexto</th><th>Op.</th><th>Acerto</th><th>Média/op.</th><th>1ª metade</th><th>2ª metade</th><th>AUC</th></tr>
-            ${data.groups.map(([g, lab]) => { const c = x.ctx[g] || {}; return c.n || c.auc != null ? `<tr><td>${esc(lab)}</td><td>${c.n || 0}</td><td>${c.n ? nf(c.win, 0) + "%" : "—"}</td><td class="${cls(c.avg)}">${c.n ? sg(c.avg) : "—"}</td>${(c.halves || [null, null]).map((h) => `<td class="${cls(h)}">${h == null ? "—" : sg(h)}</td>`).join("")}<td>${nf(c.auc, 3)}</td></tr>` : ""; }).join("")}</table></div>
+            ${data.groups.map(([g, lab]) => { const c = x.ctx[g] || {}; return c.n || c.auc != null ? `<tr><td>${esc(lab)}</td><td>${c.n || 0}</td><td>${c.n ? nf(c.win, 0) + "%" : "—"}</td><td class="${cls(c.avg)}">${c.n ? sg(c.avg) : "—"}</td>${(c.halves || [null, null]).map((h) => `<td class="${cls(h)}">${h == null ? "—" : sg(h)}</td>`).join("")}<td>${x.family === "regra" ? "—" : nf(c.auc, 3)}</td></tr>` : ""; }).join("")}</table></div>
             <div><h5>Metades do teste (soma por moeda)</h5><div class="kv"><span>1ª metade</span><b class="${cls(x.halves[0])}">${sg(x.halves[0])}</b><span>2ª metade</span><b class="${cls(x.halves[1])}">${sg(x.halves[1])}</b></div>
             <p class="foot" style="margin-top:6px">Para ser campeão, o modelo precisa ganhar nas duas metades: o melhor de muitas tentativas costuma ter tido sorte, e a outra metade confirma ou derruba.</p></div></div>` : ""}`).join("")}
       </div>
-      <div class="chart"><span class="lbl">Mapa de calor · resultado médio por operação (top 10 modelos × contexto)</span>
+      <div class="chart"><span class="lbl">Mapa de calor · resultado médio por operação (top 10 ${S.fam === "regra" ? "bots" : S.fam === "ml" ? "modelos" : "modelos e bots"} × contexto)</span>
         <div class="mt-heat" style="grid-template-columns: minmax(170px, 1.6fr) repeat(${data.groups.length}, minmax(64px, 1fr))">
           <span></span>${data.groups.map(([, lab]) => `<span class="hh">${esc(lab)}</span>`).join("")}
-          ${top.map((x) => `<span class="hn" title="${esc(x.algo)} · ${esc(x.target)}">${esc(x.algo)}<small>${esc(x.target)}</small></span>${data.groups.map(([g]) => { const c = x.ctx[g] || {};
+          ${top.map((x) => `<span class="hn" title="${esc(x.algo)} · ${esc(x.target)}">${x.family === "regra" ? "📐 " : ""}${esc(x.algo)}<small>${esc(x.target)}</small></span>${data.groups.map(([g]) => { const c = x.ctx[g] || {};
             return `<span class="hc ${r.by_ctx[g] === x.combo ? "best" : ""}" style="background:${c.n ? heat(c.avg) : "transparent"}">${c.n ? sg(c.avg, 2) + `<small>${c.n} op.</small>` : `<small>—</small>`}</span>`; }).join("")}`).join("")}
         </div></div>
-      <p class="foot">Cada modelo opera sozinho nas velas de teste (fora do treino): compra quando a chance de alta passa de ${nf(data.thr * 100, 0)}%${r.market === "futures" ? `, vende quando fica abaixo de ${nf(100 - data.thr * 100, 0)}%` : ""}, sai pelo prazo ou pela barreira do alvo e paga as taxas. "Ao mês" = soma dos resultados por moeda (banca inteira em cada operação, sem alavancagem) levada a 30 dias. AUC 0,5 = moeda ao ar. Campeão geral exige ${data.min_trades}+ operações e resultado positivo nas duas metades do teste; o de contexto, o mesmo naquele contexto. Resultado passado não garante futuro.</p>`;
+      <p class="foot">Os bots de regras (📐) rodam nas mesmas velas de teste e com o mesmo tamanho de posição, para comparar; só os modelos viram campeões do voto de ML. Cada modelo opera sozinho nas velas de teste (fora do treino): compra quando a chance de alta passa de ${nf(data.thr * 100, 0)}%${r.market === "futures" ? `, vende quando fica abaixo de ${nf(100 - data.thr * 100, 0)}%` : ""}, sai pelo prazo ou pela barreira do alvo e paga as taxas. "Ao mês" = soma dos resultados por moeda (banca inteira em cada operação, sem alavancagem) levada a 30 dias. AUC 0,5 = moeda ao ar. Campeão geral exige ${data.min_trades}+ operações e resultado positivo nas duas metades do teste; o de contexto, o mesmo naquele contexto. Resultado passado não garante futuro.</p>`;
   }
   root.onclick = (e) => {
-    const t = e.target.closest("[data-k],[data-s],[data-open]");
+    const t = e.target.closest("[data-k],[data-s],[data-open],[data-f]");
     if (!t) return;
-    if (t.dataset.k) { S.key = t.dataset.k; S.open = null; }
+    if (t.dataset.f !== undefined) S.fam = t.dataset.f;
+    else if (t.dataset.k) { S.key = t.dataset.k; S.open = null; }
     else if (t.dataset.s) S.sort = t.dataset.s;
     else if (t.dataset.open) S.open = S.open === t.dataset.open ? null : t.dataset.open;
     draw();
