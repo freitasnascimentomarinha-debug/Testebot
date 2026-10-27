@@ -222,7 +222,7 @@ def compute_votes(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 
 def signals(vt: pd.DataFrame, p: dict, cfg: dict) -> np.ndarray:
     """Direção (+1, −1, 0) que ``strategy.analyze`` daria em cada candle fechado."""
-    w = {k: wk for k, wk in (p.get("skills") or {}).items() if wk > 0 and "v_" + k in vt}   # "ml" só existe com o modelo (core/ml.py)
+    w = {k: wk for k, wk in (p.get("skills") or {}).items() if wk > 0}
     tot = sum(w.values()) or 1
     score = sum(np.nan_to_num(vt["v_" + k].to_numpy()) * wk for k, wk in w.items()) / tot * 100
     adx = vt["adx"].to_numpy()
@@ -261,8 +261,6 @@ def signals(vt: pd.DataFrame, p: dict, cfg: dict) -> np.ndarray:
     ctx = cfg.get("context_filter") or f.get("contexts")
     if ctx:
         d = np.where(np.isin(vt["regime"].to_numpy(), list(ctx)), d, 0)
-    if p.get("ml_filter") and "ml_block" in vt:   # filtro do modelo: mercado diferente do que ele conhece → fica de fora
-        d = np.where(vt["ml_block"].to_numpy(dtype=bool), 0, d)
     return d
 
 

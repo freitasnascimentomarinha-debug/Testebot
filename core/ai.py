@@ -74,8 +74,6 @@ Você recebe dados REAIS já calculados. Regras:
 8. "eventos_externos" (quando vier) são eventos macro e políticos com probabilidades do Polymarket (decisão do Fed, eleições, commodities).
    Cite só os que mudam o risco do trade agora (vence em poucos dias, afeta cripto/dólar): em véspera de evento grande, prefira HOLD ou
    alvos mais curtos. Se nada for relevante, ignore.
-9. "modelo_ml" (quando vier) é a previsão de um modelo de machine learning treinado com o histórico recente: chance de alta nas próximas
-   velas e se o mercado está fora do que ele conhece. É mais um indício, fraco (AUC perto de 0,5 = quase moeda ao ar), nunca um gatilho.
 Formato:
 {"decision":"BUY|SELL|HOLD|CLOSE","order_type":"MARKET|LIMIT","entry":number|null,"stop_loss":number|null,"take_profit":number|null,
  "confidence":0-100,"reasoning":"1 a 2 frases simples sobre a decisão",
@@ -91,8 +89,7 @@ def get_api_key(explicit: str | None = None) -> str | None:
 def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict, snapshot: dict,
                   indicators_now: dict, account: dict, positions: list[dict], risk_rules: dict,
                   funding_rate: float | None = None, personality: dict | None = None, scenario: dict | None = None,
-                  candidates: list | None = None, armed_plan: dict | None = None, sentiment: dict | None = None, events: list | None = None,
-                  ml: dict | None = None) -> dict:
+                  candidates: list | None = None, armed_plan: dict | None = None, sentiment: dict | None = None, events: list | None = None) -> dict:
     persona = None
     if personality:
         from core.personalities import DIRECTIONS, FILTERS
@@ -127,8 +124,6 @@ def build_context(*, profile, cfg: dict, symbol: str, interval: str, plan: dict,
         "cenario_calculado": scenario,
         "sentimento_polymarket": sentiment,
         "eventos_externos": events,
-        "modelo_ml": ({"prob_alta_pct": round(ml["p_up"] * 100, 1), "mercado_fora_do_conhecido": ml["outlier"], "auc_validacao": ml.get("auc")}
-                      if ml else None),
     }
 
 

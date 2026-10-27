@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import accounts, bot_performance, bots_view, grid_dca, fastsim, indicators as ind, personalities as P, regime
+from core import accounts, bot_performance, bots_view, fastsim, indicators as ind, personalities as P, regime
 from core.ai import strategy_from_text
 from core.paper import account_id, get_account, stats
 from core.profiles import PROFILES
@@ -29,12 +29,12 @@ def mlabel(m: str) -> str:
 
 
 live = {r["id"]: r for r in P.ranking()}
-bots = [p for p in P.list_all() if p.get("research", {}).get("monthly_pct") is not None or not p.get("builtin")] + grid_dca.all_bots()
+bots = [p for p in P.list_all() if p.get("research", {}).get("monthly_pct") is not None or not p.get("builtin")]
 if msg := st.session_state.pop("bots_msg", None):
     st.info(msg)
 
-tab_rank, tab_calc, tab_bt, tab_ml, tab_new, tab_lib, tab_ctx = st.tabs(["🏆 Ranking", "🧮 Calculadora", "🔁 Backtest", "🧪 Modelo ML",
-                                                                         "✍️ Criar bot", "📚 Biblioteca", "🧭 Contextos"])
+tab_rank, tab_calc, tab_bt, tab_new, tab_lib, tab_ctx = st.tabs(["🏆 Ranking", "🧮 Calculadora", "🔁 Backtest", "✍️ Criar bot", "📚 Biblioteca",
+                                                                 "🧭 Contextos"])
 
 # ------------------------------------------------------------------ ranking diário
 bot_performance.refresh_if_due()   # 1x por dia, em segundo plano (o worker 24/7 também dispara)
@@ -98,7 +98,7 @@ with tab_bt:
     allp = bot_performance.tracked()
     c1, c2 = st.columns([2.4, 1])
     bt_id = c1.selectbox("Bot", [p["id"] for p in allp], key="bt_bot",
-                         format_func=lambda pid: (lambda p, h: f"{p['name']} · {mlabel(h[0])} {h[1]}")(bot_performance.get_bot(pid), bot_performance.home(bot_performance.get_bot(pid))))
+                         format_func=lambda pid: (lambda p, h: f"{p['name']} · {mlabel(h[0])} {h[1]}")(P.get(pid), bot_performance.home(P.get(pid))))
     if c2.button("▶️ Rodar backtest agora", type="primary", width="stretch"):
         _run_backtest(bt_id)
     one = [r for r in bot_performance.rows() if r["id"] == bt_id and r["d30"]]
@@ -110,134 +110,25 @@ with tab_bt:
     else:
         st.info("Este bot ainda não tem resultado salvo. Clique em Rodar backtest agora.")
 
-# ------------------------------------------------------------------ modelo de machine learning (protótipo)
-with tab_ml:
-    st.caption("Protótipo inspirado no FreqAI: um modelo (LightGBM) treinado com o histórico recente de várias moedas e do BTC prevê a chance de "
-               "o preço subir nas próximas velas. Ele pode entrar como **mais um voto** no placar dos bots e como **filtro**: quando o mercado "
-               "está diferente de tudo o que o modelo viu no treino (índice de dissimilaridade alto), o bot fica de fora. Antes de ligar, "
-               "compare no backtest com re-treino abaixo.")
-    from core import ml
-    from core.settings import load_settings, save_settings
-
-    st.markdown("##### Ao vivo")
-    cols = st.columns(2)
-    for col, bk in zip(cols, ("day", "swing")):
-        prof, cfg_b = PROFILES[bk], load_settings(bk)
-        with col.container(border=True):
-            stt = ml.status(prof.market, cfg_b["interval"])
-            st.markdown(f"**{prof.icon} {prof.name}** · {cfg_b['interval']}")
-            if stt:
-                a_ = stt.get("auc_holdout")
-                st.caption(f"Modelo treinado em {stt['trained_at'][:16].replace('T', ' ')} UTC · {stt['rows']:,} velas de {len(stt['symbols'])} moedas "
-                           f"({stt['days']} dias) · {stt['kind']} · AUC fora do treino: {'—' if a_ is None else f'{a_:.3f}'} · re-treina sozinho 1x por dia")
-            else:
-                st.caption("Ainda sem modelo neste tempo gráfico.")
-            c1, c2, c3 = st.columns([1, 1, 1])
-            v_on = c1.toggle("Voto do modelo", value=bool(cfg_b.get("ml_vote")), key=f"ml_v_{bk}")
-            f_on = c2.toggle("Filtro (não opere)", value=bool(cfg_b.get("ml_filter")), key=f"ml_f_{bk}")
-            w_ml = c3.number_input("Peso do voto", 0.1, 3.0, value=float(cfg_b.get("ml_weight") or 1.0), step=0.1, key=f"ml_w_{bk}")
-            if (v_on, f_on, w_ml) != (bool(cfg_b.get("ml_vote")), bool(cfg_b.get("ml_filter")), float(cfg_b.get("ml_weight") or 1.0)):
-                save_settings(bk, {**cfg_b, "ml_vote": v_on, "ml_filter": f_on, "ml_weight": w_ml})
-                for name_ in ("ml_vote", "ml_filter", "ml_weight"):   # a página do bot relê a configuração salva
-                    st.session_state.pop(f"{bk}__{name_}", None)
-                st.toast("Configuração do modelo salva.", icon="🧪")
-            if st.button("🧠 Treinar agora", key=f"ml_t_{bk}"):
-                bar = st.progress(0.0, text="Baixando candles…")
-                try:
-                    m_ = ml.train_live(prof.market, cfg_b["interval"], getter=lambda s_, i_, n_, k_: cached_klines(s_, i_, n_, k_),
-                                       progress=lambda f, t: bar.progress(min(f, 1.0), text=t))
-                    st.toast(f"Modelo treinado ({m_.kind}).", icon="✅")
-                    st.rerun()
-                except Exception as exc:  # noqa: BLE001
-                    bar.empty()
-                    st.error(f"Não foi possível treinar agora: {exc}")
-            if stt and stt.get("importance"):
-                st.caption("O que mais pesa: " + " · ".join(f"{k} {v * 100:.0f}%" for k, v in stt["importance"][:6]))
-
-    st.markdown("##### Backtest com re-treino (walk-forward)")
-    st.caption("O modelo é re-treinado a cada passo só com o passado e prevê o período seguinte, como aconteceria ao vivo. Depois cada bot daquele "
-               "mercado/tempo gráfico é simulado nas mesmas velas: sem o modelo, com o filtro, com o voto e com os dois.")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    wf_m = c1.selectbox("Mercado", ["futures", "spot"], format_func=mlabel, key="wf_m")
-    wf_i = c2.selectbox("Tempo gráfico", ["15m", "1h", "4h"], index=1, key="wf_i")
-    wf_test = c3.selectbox("Período de teste (dias)", [30, 60, 90], index=1, key="wf_t")
-    wf_train = c4.number_input("Janela de treino (dias)", 10, 365, value=ml.TRAIN_DAYS.get(wf_i, 60), key=f"wf_tr_{wf_i}")
-    wf_step = c5.selectbox("Re-treinar a cada (dias)", [3, 7, 14], index=1, key="wf_s")
-    if st.button("▶️ Rodar backtest com re-treino", type="primary"):
-        bar = st.progress(0.0, text="Baixando candles…")
-        frames_ = {}
-        for k_, sym in enumerate(P.PERIOD_SYMBOLS, start=1):
-            try:
-                vt_, cfg_ = cached_votes(sym, wf_i, wf_m, int(wf_train + wf_test + 2))
-                vt_ = vt_.copy()
-                vt_.attrs["cfg"] = cfg_
-                frames_[sym] = vt_
-            except Exception as exc:  # noqa: BLE001
-                st.warning(f"{sym}: sem candles ({str(exc)[:80]})")
-            bar.progress(k_ / len(P.PERIOD_SYMBOLS) * 0.4, text=f"Candles de {sym}")
-        if frames_:
-            cfg0 = next(iter(frames_.values())).attrs["cfg"]
-            out_ = ml.walk_forward(frames_, wf_i, float(cfg0["fee_pct"]), train_days=wf_train, step_days=wf_step, test_days=wf_test,
-                                   btc=frames_.get("BTCUSDT"), progress=lambda f, t: bar.progress(0.4 + 0.5 * f, text=t))
-            for v_ in out_.values():
-                v_.attrs["cfg"] = cfg0
-            bots_ = [p for p in bot_performance.tracked() if bot_performance.home(p) == (wf_m, wf_i) and not p.get("kind")]
-            st.session_state["ml_wf"] = {"eval": ml.evaluate(out_, wf_test), "cmp": ml.compare_bots(out_, bots_, wf_m, wf_test),
-                                         "label": f"{mlabel(wf_m)} {wf_i} · teste de {wf_test} dias · treino de {wf_train} dias · re-treino a cada {wf_step} dias"}
-        bar.empty()
-    wf = st.session_state.get("ml_wf")
-    if wf:
-        ev_ = wf["eval"]
-        st.markdown(f"**{wf['label']}**")
-        if ev_.get("n"):
-            m_ = st.columns(5)
-            m_[0].metric("AUC fora do treino", f"{ev_['auc']:.3f}" if ev_["auc"] is not None else "—",
-                         help="0,5 = moeda ao ar; acima de 0,55 já é uma vantagem útil; acima de 0,6 é raro em cripto.")
-            m_[1].metric("Acerto da direção", f"{ev_['acc'] * 100:.1f}%", f"{ev_['base_up'] * 100:.0f}% das velas subiram", delta_color="off")
-            m_[2].metric("Acerto quando confiante", "—" if ev_["acc_conf"] is None else f"{ev_['acc_conf'] * 100:.1f}%",
-                         f"{ev_['conf_share'] * 100:.0f}% das velas (p < 45% ou > 55%)", delta_color="off")
-            m_[3].metric("Velas bloqueadas pelo filtro", f"{ev_['blocked_share'] * 100:.1f}%")
-            m_[4].metric("Velas avaliadas", f"{ev_['n']:,}")
-        if wf["cmp"]:
-            tbl = []
-            for r in wf["cmp"]:
-                row = {"Bot": r["name"]}
-                for k_, lab in (("base", "Sem modelo"), ("filtro", "Com filtro"), ("voto", "Com voto"), ("ambos", "Voto + filtro")):
-                    row[f"{lab} · retorno"] = r[k_]["ret"]
-                    row[f"{lab} · op."] = r[k_]["n"]
-                tbl.append(row)
-            df_ = pd.DataFrame(tbl)
-            st.dataframe(df_, hide_index=True, column_config={c: st.column_config.NumberColumn(format="%+.2f%%") for c in df_.columns if c.endswith("retorno")})
-            best = {k_: sum(r[k_]["ret"] for r in wf["cmp"]) / len(wf["cmp"]) for k_ in ("base", "filtro", "voto", "ambos")}
-            names = {"base": "sem modelo", "filtro": "com filtro", "voto": "com voto", "ambos": "voto + filtro"}
-            win = max(best, key=best.get)
-            st.caption("Média dos bots: " + " · ".join(f"{names[k_]} {v:+.2f}%" for k_, v in best.items())
-                       + (f". Melhor: **{names[win]}**." if win != "base" else ". O modelo não melhorou a média neste teste: deixe desligado."))
-        else:
-            st.info("Nenhum bot treinado neste mercado e tempo gráfico para comparar.")
-        st.caption("Retorno = média das 5 moedas (cada uma com a própria banca, 1% de risco por operação, com taxas). Resultado passado não garante futuro.")
-
 # ------------------------------------------------------------------ calculadora
 with tab_calc:
     st.caption("Escolha um bot, as moedas, o período e a sua banca: o simulador refaz as operações que o bot teria "
                "feito com os candles reais (só as regras, sem gastar tokens da IA, com taxas) e mostra quanto você teria "
                "ganhado ou perdido.")
-    allp = P.list_all() + grid_dca.all_bots()
+    allp = P.list_all()
     approved_first = sorted(allp, key=lambda p: (p.get("research", {}).get("status") != "aprovado",
                                                  -(p.get("research", {}).get("monthly_pct") or -99)))
 
     def bot_label(pid):
-        p = bot_performance.get_bot(pid)
-        if p.get("kind"):
-            return f"{p['name']} · {p['home']['interval']}"
+        p = P.get(pid)
         rs = p.get("research") or {}
         tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}.get(rs.get("status"), "·")
         return f"{tag} {p['name']}" + (f" · {rs['interval']}" if rs.get("interval") else "")
 
     c1, c2, c3 = st.columns([2.2, 1, 1])
     pid = c1.selectbox("Bot", [p["id"] for p in approved_first], format_func=bot_label, key="sim_bot")
-    persona = bot_performance.get_bot(pid)
-    rs = persona.get("research") or ({"market": persona["home"]["market"], "interval": persona["home"]["interval"]} if persona.get("kind") else {})
+    persona = P.get(pid)
+    rs = persona.get("research") or {}
     # mercado e timeframe começam nos que o bot foi testado (podem ser trocados)
     if st.session_state.get("sim_last_bot") != pid:
         st.session_state["sim_market"] = rs.get("market") or (persona.get("markets") or ["spot"])[0]
@@ -245,8 +136,6 @@ with tab_calc:
         st.session_state["sim_last_bot"] = pid
     market = c2.selectbox("Mercado", list(MARKET_LABEL), key="sim_market", format_func=mlabel)
     itv = c3.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], key="sim_itv")
-    if persona.get("kind"):
-        st.caption("🕸️ " + grid_dca.describe(persona) + " Na grade e no DCA a banca é dividida igualmente entre os ativos; o risco por operação não se aplica.")
     st.caption(f"💡 {persona.get('tip') or persona.get('summary', '')}"
                + (f" · testado em {rs['interval']} ({mlabel(rs['market']).lower()})" if rs else ""))
 
@@ -266,9 +155,9 @@ with tab_calc:
     equity = stats(acct, {})["equity"]
     bank0 = c3.number_input("Banca inicial (USDT)", 10.0, 1e8, value=float(round(equity, 2)), step=100.0, key="sim_bank",
                             help="Começa com o valor atual da sua carteira simulada.")
-    risk_pct = c4.number_input("Risco por operação (%)", 0.1, 10.0, value=1.0, step=0.25, key="sim_risk", disabled=bool(persona.get("kind")),
+    risk_pct = c4.number_input("Risco por operação (%)", 0.1, 10.0, value=1.0, step=0.25, key="sim_risk",
                                help="Quanto da banca é perdido se o stop for atingido.")
-    compound_on = st.toggle("Juros compostos (o risco acompanha a banca)", value=True, key="sim_comp", disabled=bool(persona.get("kind")))
+    compound_on = st.toggle("Juros compostos (o risco acompanha a banca)", value=True, key="sim_comp")
 
     if st.button("▶️ Simular", type="primary", disabled=not coins):
         rows, per_coin = [], []
@@ -279,11 +168,7 @@ with tab_calc:
             except Exception as exc:  # noqa: BLE001 - moeda sem dados nas fontes disponíveis
                 st.warning(f"{sym}: sem candles disponíveis para {itv} ({str(exc)[:120]}…). Moeda ignorada.")
                 continue
-            if persona.get("kind"):   # grade/DCA: simulador próprio, com uma fatia da banca por ativo
-                start_ = vt["time"].iloc[-1] - pd.Timedelta(days=days)
-                trades = grid_dca.simulate(persona, vt, itv, float(cfg["fee_pct"]), start_time=start_, capital=bank0 / len(coins))["trades"]
-            else:
-                trades = fastsim.period_trades(vt, cfg, persona, days=days, market=market)
+            trades = fastsim.period_trades(vt, cfg, persona, days=days, market=market)
             for t in trades:
                 rows.append({**t, "moeda": sym})
             rs_ = [t["r"] for t in trades]
@@ -296,7 +181,7 @@ with tab_calc:
         bank, peak, max_dd, curve = bank0, bank0, 0.0, []
         for t in rows:
             base = bank if compound_on else bank0
-            pnl = t["resultado"] if persona.get("kind") else base * risk_pct / 100 * t["r"]
+            pnl = base * risk_pct / 100 * t["r"]
             bank = max(0.0, bank + pnl)
             peak = max(peak, bank)
             max_dd = max(max_dd, (peak - bank) / peak * 100 if peak else 0)
@@ -310,7 +195,7 @@ with tab_calc:
             pc["Resultado (USDT)"] = coin_pnl.get(pc["Moeda"] + "USDT", 0.0)
         st.session_state["sim_result"] = {"rows": rows, "per_coin": per_coin, "bank0": bank0, "bank": bank,
                                           "max_dd": max_dd, "curve": curve, "days": days, "bot": persona["name"],
-                                          "itv": itv, "market": market, "risk": risk_pct, "comp": compound_on, "kind": persona.get("kind")}
+                                          "itv": itv, "market": market, "risk": risk_pct, "comp": compound_on}
 
     res = st.session_state.get("sim_result")
     if res:
@@ -506,8 +391,7 @@ with tab_new:
 
 # --------------------------------------------------------------- biblioteca
 with tab_lib:
-    res_lib = _comp("bot_library")(key="bots-lib", data=bots_view.library_data(bots, live, lambda p: P.can_edit(p, current_user()),
-                                                                            perf=bot_performance.load()["results"]),
+    res_lib = _comp("bot_library")(key="bots-lib", data=bots_view.library_data(bots, live, lambda p: P.can_edit(p, current_user())),
                                    on_action_change=lambda: None)
     if ev := _action(res_lib, "lib_uid"):
         p = P.get(ev.get("id"))
