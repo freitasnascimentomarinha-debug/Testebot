@@ -29,7 +29,7 @@ from core.storage import load_json, locked_update
 
 FILE = "ml_models.json"
 HORIZON = {"1m": 15, "3m": 10, "5m": 12, "15m": 8, "30m": 6, "1h": 6, "2h": 4, "4h": 4, "6h": 3, "12h": 3, "1d": 3}
-TRAIN_DAYS = {"5m": 60, "15m": 135, "1h": 270, "4h": 720, "1d": 1500}   # 3× o original: no laboratório, mais histórico foi o que mais ajudou
+TRAIN_DAYS = {"5m": 20, "15m": 45, "1h": 90, "4h": 240, "1d": 720}
 DI_QUANTILE = 0.98
 DI_SAMPLE = 2000
 VOTE_GAIN = 4.0          # p = 0,75 → voto +1
@@ -49,29 +49,8 @@ def _btc_feats(btc: pd.DataFrame | None) -> pd.DataFrame | None:
     return out.sort_values("time")
 
 
-EXTRA_SYMBOLS = ("ADAUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT", "TRXUSDT", "LTCUSDT", "BCHUSDT", "NEARUSDT", "ATOMUSDT",
-                 "UNIUSDT", "ETCUSDT", "FILUSDT", "APTUSDT", "ARBUSDT")   # moedas a mais só para treinar (mais exemplos de mercado)
-
-
-def market_frame(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """O mercado como um todo, vela a vela: retorno médio das moedas, quantas estão acima da média longa e a dispersão entre elas."""
-    parts = []
-    for sym, vt in frames.items():
-        c = vt["close"].astype(float)
-        parts.append(pd.DataFrame({"time": vt["time"], "sym": sym, "r1": np.log(c).diff(), "r12": np.log(c).diff(12),
-                                   "above": (c > vt["ema_trend"].astype(float)).astype(float)}))
-    d = pd.concat(parts)
-    g = d.groupby("time")
-    out = pd.DataFrame({"mkt_r1": g["r1"].mean(), "mkt_r12": g["r12"].mean(), "mkt_breadth": g["above"].mean(),
-                        "mkt_disp": g["r12"].std(), "mkt_n": g["sym"].count()})
-    out = out[out["mkt_n"] >= max(2, int(len(frames) * 0.6))].drop(columns="mkt_n")   # só velas com a maioria das moedas
-    out["mkt_r48"] = out["mkt_r1"].rolling(48, min_periods=24).sum()
-    return out.reset_index().sort_values("time")
-
-
-def features(vt: pd.DataFrame, btc: pd.DataFrame | None = None, market: pd.DataFrame | None = None, extra: bool = False) -> pd.DataFrame:
-    """Uma linha por candle (mesmo índice de ``vt``). ``extra`` liga o conjunto ampliado (prazos mais longos, volatilidade,
-    horário e o mercado como um todo, de ``market_frame``)."""
+def features(vt: pd.DataFrame, btc: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Uma linha por candle (mesmo índice de ``vt``)."""
     c = vt["close"].astype(float)
     atr = vt["atr"].astype(float).replace(0, np.nan)
     f = pd.DataFrame(index=vt.index)
@@ -101,25 +80,6 @@ def features(vt: pd.DataFrame, btc: pd.DataFrame | None = None, market: pd.DataF
         for col in b.columns:
             if col != "time":
                 f[col] = m[col].to_numpy()
-    if extra:
-        r1 = lc.diff()
-        f["r48"], f["r96"] = lc.diff(48), lc.diff(96)
-        f["vol24"] = r1.rolling(24).std()
-        f["vol_ratio"] = r1.rolling(12).std() / r1.rolling(96).std().replace(0, np.nan)
-        f["d_hi100"] = (c - vt["high"].rolling(100).max()) / atr
-        f["d_lo100"] = (c - vt["low"].rolling(100).min()) / atr
-        f["vol_z"] = (np.log(vt["volume"].astype(float).clip(lower=1e-9)) - np.log(vt["volume"].astype(float).clip(lower=1e-9)).rolling(96).mean()) \
-            / np.log(vt["volume"].astype(float).clip(lower=1e-9)).rolling(96).std().replace(0, np.nan)
-        hour = vt["time"].dt.hour + vt["time"].dt.minute / 60
-        f["h_sin"], f["h_cos"] = np.sin(2 * np.pi * hour / 24), np.cos(2 * np.pi * hour / 24)
-        f["dow"] = vt["time"].dt.dayofweek / 6
-        if market is not None and len(market):
-            mm = pd.merge_asof(vt[["time"]].reset_index().sort_values("time"), market, on="time", direction="backward").set_index("index").sort_index()
-            for col in market.columns:
-                if col != "time":
-                    f[col] = mm[col].to_numpy()
-            f["rel_r12"] = f["r12"] - f["mkt_r12"]        # força da moeda contra o mercado
-            f["rel_r48"] = f["r48"] - f["mkt_r48"]
     return f.replace([np.inf, -np.inf], np.nan)
 
 

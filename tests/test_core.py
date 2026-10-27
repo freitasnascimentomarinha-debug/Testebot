@@ -2523,28 +2523,6 @@ def test_ml_tournament_algos_targets_and_context_champions(monkeypatch):
     if res["champion"]:                                                                   # campeão só com vantagem nas duas metades do teste
         ch = next(r for r in res["rows"] if r["combo"] == res["champion"])
         assert ch["n"] >= T.MIN_TRADES and min(ch["halves"]) > 0
-    # moedas só para treino e features ampliadas: o teste continua nas mesmas moedas
-    res2 = T.run("futures", "1h", getter=getter, symbols=["BTCUSDT", "ETHUSDT"], algos=["logistica"], targets=["direcao"], test_days=20,
-                 train_days=30, step_days=10, include_bots=False, train_symbols=["SOLUSDT", "ADAUSDT"], extra_features=True, save_result=False)
-    assert res2["symbols"] == ["BTCUSDT", "ETHUSDT"] and set(res2["train_symbols"]) == {"SOLUSDT", "ADAUSDT"} and res2["extra_features"]
-    assert T.get("futures", "1h")["ran_at"] == res["ran_at"]                              # experimento não sobrescreve o torneio salvo
-    from core import ranking
-
-    fr = {s_: ranking.votes_for(s_, "1h", "futures", 30, getter)[0] for s_ in ("BTCUSDT", "ETHUSDT", "SOLUSDT")}
-    mk = ml.market_frame(fr)
-    assert {"mkt_r1", "mkt_r12", "mkt_breadth", "mkt_disp", "mkt_r48"} <= set(mk.columns) and mk["mkt_breadth"].between(0, 1).all()
-    fx = ml.features(fr["ETHUSDT"], fr["BTCUSDT"], mk, extra=True)
-    assert {"r48", "vol_ratio", "h_sin", "rel_r12", "mkt_breadth"} <= set(fx.columns) and len(fx) == len(fr["ETHUSDT"])
-    assert "rel_r12" not in ml.features(fr["ETHUSDT"], fr["BTCUSDT"]).columns          # sem ``extra``: conjunto de sempre
-    # laboratório de treino: variantes no mesmo teste, salvas para a página
-    lab = T.lab_run("spot", "4h", getter=getter, algos=["logistica"], variants=["base", "features"], symbols=["BTCUSDT", "ETHUSDT"],
-                    test_days=30, step_days=15, targets=["direcao"])
-    assert set(lab["variants"]) == {"base", "features"} and T.lab_load()["spot|4h"]["ran_at"] == lab["ran_at"]
-    lv = bots_view.lab_data(T.lab_load(), sel=("spot", "4h"))
-    json.dumps(lv)
-    rows_ = {r["key"]: r for r in lv["results"][0]["rows"]}
-    assert rows_["base"]["d_mon"] is None and rows_["features"]["d_mon"] == round(rows_["features"]["mon_med"] - rows_["base"]["mon_med"], 2)
-    assert set(T.lab_variants("1h")) == {"base", "moedas", "historico", "features", "tudo"}
     assert T.group_of("tendencia_alta") == "tendencia" and T.group_of("suporte_teste") == "lateral" and T.group_of("???") == "indefinido"
     assert T.refresh_if_due("spot", "4h") is False                                        # nos testes nada roda sozinho
     view = bots_view.tourney_data(T.load(), sel=("futures", "1h"))
