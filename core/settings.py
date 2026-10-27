@@ -75,9 +75,6 @@ def default_settings(profile: BotProfile) -> dict:
         "ai_instructions": "",
         # Varredura: o bot procura oportunidades sozinho em vários ativos a cada candle fechado
         "scan_on": True,
-        "ml_vote": False,            # protótipo: o modelo de ML (core/ml.py) entra como mais um voto no placar do bot
-        "ml_weight": 1.0,            # peso do voto do modelo (as habilidades costumam pesar de 0,5 a 2)
-        "ml_filter": False,          # protótipo: com o mercado diferente do que o modelo conhece, o bot fica de fora
         "scan_minutes": 15,          # de quantos em quantos minutos o bot varre o mercado atrás de oportunidades
         "ai_exit": True,             # a IA decide se encerra uma posição aberta do bot (sempre ligado)
         "scan_count": 15,            # quantas moedas analisar a cada varredura (sorteadas entre as de maior volume do mercado)
