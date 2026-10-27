@@ -2424,3 +2424,47 @@ def Pm_get(pid):
     from core import personalities
 
     return personalities.get(pid)
+
+
+def test_grid_and_dca_bots(monkeypatch):
+    """Grade e DCA: simulador próprio, entram no ranking diário, na biblioteca (sem edição) e na calculadora."""
+    import json
+    from core import bot_performance as bp, bots_view, grid_dca, ranking
+
+    # mercado lateral sintético: a grade compra embaixo e vende em cima, o DCA sai no alvo sobre o preço médio
+    n = 900
+    t = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("1h"), periods=n, freq="1h")
+    c = 100 + 4 * np.sin(np.arange(n) / 12)
+    vt = pd.DataFrame({"time": t, "open": c, "high": c * 1.004, "low": c * 0.996, "close": c, "volume": 1.0,
+                       "atr": 1.0, "regime": "lateral"})
+    vt["regime"] = np.where(np.arange(n) % 60 < 6, "reversao_alta", "lateral")
+    grid = grid_dca.get("grid_lateral_1h_spot")
+    dca = grid_dca.get("dca_recuperacao_1h_spot")
+    assert grid["kind"] == "grid" and dca["kind"] == "dca" and grid["builtin"]
+    g = grid_dca.simulate(grid, vt, "1h", 0.1)
+    d = grid_dca.simulate({**dca, "params": {**dca["params"], "sl_pct": 25.0}}, vt, "1h", 0.1)
+    assert g["cycles"] > 0 and g["final"] > g["capital"] and all(x["lado"] == "Grade" for x in g["trades"])
+    assert d["trades"] and d["final"] > d["capital"] and all(x["lado"] == "DCA" for x in d["trades"])
+    for r in (g, d):                                                                       # o resultado das operações fecha com a banca
+        assert abs(r["capital"] + sum(x["resultado"] for x in r["trades"]) - r["final"]) < 1e-6 * r["capital"]
+    devs, sizes = grid_dca.dca_plan(dca["params"])
+    assert len(devs) == len(sizes) == dca["params"]["so_count"] + 1 and abs(sum(sizes) - 1) < 1e-9 and list(devs) == sorted(devs)
+    summ = grid_dca.period_summary(grid, {"BTCUSDT": (vt, {"fee_pct": 0.1})}, "spot", 30, "1h")
+    json.dumps(summ)                                                                       # tipos simples para salvar
+    assert set(summ) >= {"ret_pct", "monthly_pct", "dd_pct", "win_pct", "trades", "positive", "symbols", "per_symbol"}
+
+    # ranking diário e biblioteca
+    ids = {p["id"] for p in bp.tracked()}
+    assert {"grid_lateral_1h_spot", "dca_recuperacao_1h_spot"} <= ids and bp.get_bot("grid_lateral_1h_spot")["kind"] == "grid"
+    monkeypatch.setattr(ranking, "votes_for", lambda sym, interval, market, days, getter=None: (vt, {"fee_pct": 0.1}))
+    res = bp.compute([grid], getter=None)
+    e = res[grid["id"]]
+    assert set(bp.WINDOWS) <= set(e) and e["d30"]["symbols"] >= 1
+    json.dumps(res)
+    rk = bots_view.rank_data([{**e, "id": grid["id"], "name": grid["name"], "market": "spot", "interval": "1h", "builtin": True, "kind": "grid",
+                               "live_trades": 0, "live_pnl": None}], lambda pid: [])
+    assert rk["rows"][0]["kind"] == "grid"
+    lib = bots_view.library_data(grid_dca.all_bots(), {}, lambda p: True, perf=res)
+    json.dumps(lib)
+    card = next(b for b in lib["bots"] if b["id"] == grid["id"])
+    assert card["editable"] is False and card["can_edit"] is False and card["research"]["ret_pct"] == e["d30"]["ret_pct"]

@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import accounts, bot_performance, bots_view, fastsim, indicators as ind, personalities as P, regime
+from core import accounts, bot_performance, bots_view, grid_dca, fastsim, indicators as ind, personalities as P, regime
 from core.ai import strategy_from_text
 from core.paper import account_id, get_account, stats
 from core.profiles import PROFILES
@@ -29,7 +29,7 @@ def mlabel(m: str) -> str:
 
 
 live = {r["id"]: r for r in P.ranking()}
-bots = [p for p in P.list_all() if p.get("research", {}).get("monthly_pct") is not None or not p.get("builtin")]
+bots = [p for p in P.list_all() if p.get("research", {}).get("monthly_pct") is not None or not p.get("builtin")] + grid_dca.all_bots()
 if msg := st.session_state.pop("bots_msg", None):
     st.info(msg)
 
@@ -98,7 +98,7 @@ with tab_bt:
     allp = bot_performance.tracked()
     c1, c2 = st.columns([2.4, 1])
     bt_id = c1.selectbox("Bot", [p["id"] for p in allp], key="bt_bot",
-                         format_func=lambda pid: (lambda p, h: f"{p['name']} · {mlabel(h[0])} {h[1]}")(P.get(pid), bot_performance.home(P.get(pid))))
+                         format_func=lambda pid: (lambda p, h: f"{p['name']} · {mlabel(h[0])} {h[1]}")(bot_performance.get_bot(pid), bot_performance.home(bot_performance.get_bot(pid))))
     if c2.button("▶️ Rodar backtest agora", type="primary", width="stretch"):
         _run_backtest(bt_id)
     one = [r for r in bot_performance.rows() if r["id"] == bt_id and r["d30"]]
@@ -181,7 +181,7 @@ with tab_ml:
                                    btc=frames_.get("BTCUSDT"), progress=lambda f, t: bar.progress(0.4 + 0.5 * f, text=t))
             for v_ in out_.values():
                 v_.attrs["cfg"] = cfg0
-            bots_ = [p for p in bot_performance.tracked() if bot_performance.home(p) == (wf_m, wf_i)]
+            bots_ = [p for p in bot_performance.tracked() if bot_performance.home(p) == (wf_m, wf_i) and not p.get("kind")]
             st.session_state["ml_wf"] = {"eval": ml.evaluate(out_, wf_test), "cmp": ml.compare_bots(out_, bots_, wf_m, wf_test),
                                          "label": f"{mlabel(wf_m)} {wf_i} · teste de {wf_test} dias · treino de {wf_train} dias · re-treino a cada {wf_step} dias"}
         bar.empty()
@@ -222,20 +222,22 @@ with tab_calc:
     st.caption("Escolha um bot, as moedas, o período e a sua banca: o simulador refaz as operações que o bot teria "
                "feito com os candles reais (só as regras, sem gastar tokens da IA, com taxas) e mostra quanto você teria "
                "ganhado ou perdido.")
-    allp = P.list_all()
+    allp = P.list_all() + grid_dca.all_bots()
     approved_first = sorted(allp, key=lambda p: (p.get("research", {}).get("status") != "aprovado",
                                                  -(p.get("research", {}).get("monthly_pct") or -99)))
 
     def bot_label(pid):
-        p = P.get(pid)
+        p = bot_performance.get_bot(pid)
+        if p.get("kind"):
+            return f"{p['name']} · {p['home']['interval']}"
         rs = p.get("research") or {}
         tag = {"aprovado": "✅", "ressalva": "🟡", "fraco": "⚠️"}.get(rs.get("status"), "·")
         return f"{tag} {p['name']}" + (f" · {rs['interval']}" if rs.get("interval") else "")
 
     c1, c2, c3 = st.columns([2.2, 1, 1])
     pid = c1.selectbox("Bot", [p["id"] for p in approved_first], format_func=bot_label, key="sim_bot")
-    persona = P.get(pid)
-    rs = persona.get("research") or {}
+    persona = bot_performance.get_bot(pid)
+    rs = persona.get("research") or ({"market": persona["home"]["market"], "interval": persona["home"]["interval"]} if persona.get("kind") else {})
     # mercado e timeframe começam nos que o bot foi testado (podem ser trocados)
     if st.session_state.get("sim_last_bot") != pid:
         st.session_state["sim_market"] = rs.get("market") or (persona.get("markets") or ["spot"])[0]
@@ -243,6 +245,8 @@ with tab_calc:
         st.session_state["sim_last_bot"] = pid
     market = c2.selectbox("Mercado", list(MARKET_LABEL), key="sim_market", format_func=mlabel)
     itv = c3.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], key="sim_itv")
+    if persona.get("kind"):
+        st.caption("🕸️ " + grid_dca.describe(persona) + " Na grade e no DCA a banca é dividida igualmente entre os ativos; o risco por operação não se aplica.")
     st.caption(f"💡 {persona.get('tip') or persona.get('summary', '')}"
                + (f" · testado em {rs['interval']} ({mlabel(rs['market']).lower()})" if rs else ""))
 
@@ -262,9 +266,9 @@ with tab_calc:
     equity = stats(acct, {})["equity"]
     bank0 = c3.number_input("Banca inicial (USDT)", 10.0, 1e8, value=float(round(equity, 2)), step=100.0, key="sim_bank",
                             help="Começa com o valor atual da sua carteira simulada.")
-    risk_pct = c4.number_input("Risco por operação (%)", 0.1, 10.0, value=1.0, step=0.25, key="sim_risk",
+    risk_pct = c4.number_input("Risco por operação (%)", 0.1, 10.0, value=1.0, step=0.25, key="sim_risk", disabled=bool(persona.get("kind")),
                                help="Quanto da banca é perdido se o stop for atingido.")
-    compound_on = st.toggle("Juros compostos (o risco acompanha a banca)", value=True, key="sim_comp")
+    compound_on = st.toggle("Juros compostos (o risco acompanha a banca)", value=True, key="sim_comp", disabled=bool(persona.get("kind")))
 
     if st.button("▶️ Simular", type="primary", disabled=not coins):
         rows, per_coin = [], []
@@ -275,7 +279,11 @@ with tab_calc:
             except Exception as exc:  # noqa: BLE001 - moeda sem dados nas fontes disponíveis
                 st.warning(f"{sym}: sem candles disponíveis para {itv} ({str(exc)[:120]}…). Moeda ignorada.")
                 continue
-            trades = fastsim.period_trades(vt, cfg, persona, days=days, market=market)
+            if persona.get("kind"):   # grade/DCA: simulador próprio, com uma fatia da banca por ativo
+                start_ = vt["time"].iloc[-1] - pd.Timedelta(days=days)
+                trades = grid_dca.simulate(persona, vt, itv, float(cfg["fee_pct"]), start_time=start_, capital=bank0 / len(coins))["trades"]
+            else:
+                trades = fastsim.period_trades(vt, cfg, persona, days=days, market=market)
             for t in trades:
                 rows.append({**t, "moeda": sym})
             rs_ = [t["r"] for t in trades]
@@ -288,7 +296,7 @@ with tab_calc:
         bank, peak, max_dd, curve = bank0, bank0, 0.0, []
         for t in rows:
             base = bank if compound_on else bank0
-            pnl = base * risk_pct / 100 * t["r"]
+            pnl = t["resultado"] if persona.get("kind") else base * risk_pct / 100 * t["r"]
             bank = max(0.0, bank + pnl)
             peak = max(peak, bank)
             max_dd = max(max_dd, (peak - bank) / peak * 100 if peak else 0)
@@ -302,7 +310,7 @@ with tab_calc:
             pc["Resultado (USDT)"] = coin_pnl.get(pc["Moeda"] + "USDT", 0.0)
         st.session_state["sim_result"] = {"rows": rows, "per_coin": per_coin, "bank0": bank0, "bank": bank,
                                           "max_dd": max_dd, "curve": curve, "days": days, "bot": persona["name"],
-                                          "itv": itv, "market": market, "risk": risk_pct, "comp": compound_on}
+                                          "itv": itv, "market": market, "risk": risk_pct, "comp": compound_on, "kind": persona.get("kind")}
 
     res = st.session_state.get("sim_result")
     if res:
@@ -498,7 +506,8 @@ with tab_new:
 
 # --------------------------------------------------------------- biblioteca
 with tab_lib:
-    res_lib = _comp("bot_library")(key="bots-lib", data=bots_view.library_data(bots, live, lambda p: P.can_edit(p, current_user())),
+    res_lib = _comp("bot_library")(key="bots-lib", data=bots_view.library_data(bots, live, lambda p: P.can_edit(p, current_user()),
+                                                                            perf=bot_performance.load()["results"]),
                                    on_action_change=lambda: None)
     if ev := _action(res_lib, "lib_uid"):
         p = P.get(ev.get("id"))
