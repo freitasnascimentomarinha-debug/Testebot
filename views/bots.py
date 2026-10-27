@@ -112,11 +112,11 @@ with tab_bt:
 
 # ------------------------------------------------------------------ modelo de machine learning (protótipo)
 with tab_ml:
-    st.caption("Inspirado no FreqAI: modelos treinados com o histórico recente de várias moedas e do BTC preveem a chance de o preço subir. "
-               "O **torneio** testa vários algoritmos (LightGBM, XGBoost, CatBoost, florestas, regressão logística…) e alvos em cada mercado e "
-               "tempo gráfico e escolhe o campeão geral e o de cada contexto do gráfico. O modelo entra como **mais um voto** no placar dos bots "
-               "e como **filtro**: quando o mercado está diferente de tudo o que ele viu no treino (índice de dissimilaridade alto), o bot fica de fora.")
-    from core import ml, ml_tournament
+    st.caption("Protótipo inspirado no FreqAI: um modelo (LightGBM) treinado com o histórico recente de várias moedas e do BTC prevê a chance de "
+               "o preço subir nas próximas velas. Ele pode entrar como **mais um voto** no placar dos bots e como **filtro**: quando o mercado "
+               "está diferente de tudo o que o modelo viu no treino (índice de dissimilaridade alto), o bot fica de fora. Antes de ligar, "
+               "compare no backtest com re-treino abaixo.")
+    from core import ml
     from core.settings import load_settings, save_settings
 
     st.markdown("##### Ao vivo")
@@ -128,13 +128,8 @@ with tab_ml:
             st.markdown(f"**{prof.icon} {prof.name}** · {cfg_b['interval']}")
             if stt:
                 a_ = stt.get("auc_holdout")
-                st.caption(f"**{ml_tournament.combo_label(stt.get('combo') or 'lightgbm|direcao')}**"
-                           + (" · 🏆 campeão do torneio" if stt.get("from_tournament") else " · padrão (sem campeão do torneio)")
-                           + f" · treinado em {stt['trained_at'][:16].replace('T', ' ')} UTC · {stt['rows']:,} velas de {len(stt['symbols'])} moedas "
-                           f"({stt['days']} dias) · AUC fora do treino: {'—' if a_ is None else f'{a_:.3f}'} · re-treina sozinho 1x por dia")
-                if stt.get("by_ctx"):
-                    st.caption("Por contexto: " + " · ".join(f"{ml_tournament.CTX_GROUPS[g][0]} → {ml_tournament.combo_label(c)}"
-                                                             for g, c in stt["by_ctx"].items() if g in ml_tournament.CTX_GROUPS))
+                st.caption(f"Modelo treinado em {stt['trained_at'][:16].replace('T', ' ')} UTC · {stt['rows']:,} velas de {len(stt['symbols'])} moedas "
+                           f"({stt['days']} dias) · {stt['kind']} · AUC fora do treino: {'—' if a_ is None else f'{a_:.3f}'} · re-treina sozinho 1x por dia")
             else:
                 st.caption("Ainda sem modelo neste tempo gráfico.")
             c1, c2, c3 = st.columns([1, 1, 1])
@@ -159,55 +154,6 @@ with tab_ml:
             if stt and stt.get("importance"):
                 st.caption("O que mais pesa: " + " · ".join(f"{k} {v * 100:.0f}%" for k, v in stt["importance"][:6]))
 
-    st.markdown("##### 🏆 Torneio de modelos")
-    st.caption("Cada algoritmo é treinado com três alvos diferentes (direção nas próximas velas, direção num prazo maior e qual barreira de "
-               "±1,5 ATR o preço toca primeiro), re-treinado de tempos em tempos só com o passado e testado operando sozinho nas velas seguintes. "
-               "Roda sozinho 1x por semana no mercado e tempo gráfico de cada bot e, ao terminar, re-treina o modelo ao vivo com os campeões. "
-               f"Algoritmos instalados: {', '.join(ml.algo_label(a) for a in ml.available_algos())}.")
-    c1, c2, c3 = st.columns([1, 1, 1.3])
-    tn_m = c1.selectbox("Mercado", ["futures", "spot"], format_func=mlabel, key="tn_m")
-    tn_i = c2.selectbox("Tempo gráfico", list(ml_tournament.INTERVALS), index=1, key="tn_i")
-    c3.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-    tn_busy = ml_tournament.running(tn_m, tn_i)
-    if c3.button("⏳ Rodando…" if tn_busy else "▶️ Rodar torneio agora", type="primary", disabled=tn_busy, width="stretch", key="tn_go"):
-        ml_tournament.start(tn_m, tn_i)
-        st.toast("Torneio iniciado em segundo plano: leva alguns minutos e o resultado aparece aqui sozinho.", icon="🏆")
-        st.rerun()
-
-    @st.fragment(run_every=20)
-    def _tourney():
-        busy_ = [k for k in ml_tournament.running_keys() if not k.startswith("lab|")]
-        if busy_:
-            st.caption("⏳ Torneio rodando em segundo plano: " + ", ".join(f"{mlabel(k.split('|')[0])} {k.split('|')[1]}" for k in busy_)
-                       + ". O placar atualiza sozinho ao terminar.")
-        _comp("ml_tourney")(key="ml-tourney", data=bots_view.tourney_data(ml_tournament.load(), sel=(tn_m, tn_i), busy=busy_))
-
-    _tourney()
-
-    st.markdown("##### 🔬 Laboratório de treino: mais dados deixam os modelos melhores?")
-    st.caption("Treina os modelos de cinco jeitos e testa todos nas mesmas moedas e no mesmo período: como hoje, com mais "
-               f"{len(ml.EXTRA_SYMBOLS)} moedas no treino, com um histórico {ml_tournament.LAB_HISTORY_MULT}× maior, com mais informação por vela "
-               "(prazos mais longos, volatilidade, horário e o mercado como um todo) e com tudo junto. Mostra se cada mudança melhorou o "
-               "resultado fora do treino. Leva de 5 a 30 minutos, em segundo plano.")
-    c1, c2, c3 = st.columns([1, 1, 1.3])
-    lb_m = c1.selectbox("Mercado", ["futures", "spot"], format_func=mlabel, key="lb_m")
-    lb_i = c2.selectbox("Tempo gráfico", list(ml_tournament.INTERVALS), index=1, key="lb_i")
-    c3.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-    lb_busy = f"lab|{lb_m}|{lb_i}" in ml_tournament.running_keys()
-    if c3.button("⏳ Rodando…" if lb_busy else "▶️ Rodar experimento", type="primary", disabled=lb_busy, width="stretch", key="lb_go"):
-        ml_tournament.lab_start(lb_m, lb_i)
-        st.toast("Experimento iniciado em segundo plano: o resultado aparece aqui sozinho ao terminar.", icon="🔬")
-        st.rerun()
-
-    @st.fragment(run_every=30)
-    def _lab():
-        busy_ = [k[4:] for k in ml_tournament.running_keys() if k.startswith("lab|")]
-        if busy_:
-            st.caption("⏳ Experimento rodando: " + ", ".join(f"{mlabel(k.split('|')[0])} {k.split('|')[1]}" for k in busy_) + ".")
-        _comp("ml_lab")(key="ml-lab", data=bots_view.lab_data(ml_tournament.lab_load(), sel=(lb_m, lb_i), busy=busy_))
-
-    _lab()
-
     st.markdown("##### Backtest com re-treino (walk-forward)")
     st.caption("O modelo é re-treinado a cada passo só com o passado e prevê o período seguinte, como aconteceria ao vivo. Depois cada bot daquele "
                "mercado/tempo gráfico é simulado nas mesmas velas: sem o modelo, com o filtro, com o voto e com os dois.")
@@ -215,15 +161,8 @@ with tab_ml:
     wf_m = c1.selectbox("Mercado", ["futures", "spot"], format_func=mlabel, key="wf_m")
     wf_i = c2.selectbox("Tempo gráfico", ["15m", "1h", "4h"], index=1, key="wf_i")
     wf_test = c3.selectbox("Período de teste (dias)", [30, 60, 90], index=1, key="wf_t")
-    wf_train = c4.number_input("Janela de treino (dias)", 10, 1500, value=ml.TRAIN_DAYS.get(wf_i, 60), key=f"wf_tr_{wf_i}")
+    wf_train = c4.number_input("Janela de treino (dias)", 10, 365, value=ml.TRAIN_DAYS.get(wf_i, 60), key=f"wf_tr_{wf_i}")
     wf_step = c5.selectbox("Re-treinar a cada (dias)", [3, 7, 14], index=1, key="wf_s")
-    wf_champ = ml_tournament.champions(wf_m, wf_i)[0] or "lightgbm|direcao"
-    c1, c2, _ = st.columns([1.2, 1.2, 1.6])
-    algos_ = ml.available_algos()
-    wf_algo = c1.selectbox("Algoritmo", algos_, index=algos_.index(wf_champ.split("|")[0]) if wf_champ.split("|")[0] in algos_ else 0,
-                           format_func=ml.algo_label, key=f"wf_a_{wf_m}_{wf_i}", help="Começa no campeão do torneio deste mercado e tempo gráfico.")
-    tg_ = list(ml.TARGETS)
-    wf_target = c2.selectbox("Alvo", tg_, index=tg_.index(wf_champ.split("|")[1]), format_func=ml.TARGETS.get, key=f"wf_g_{wf_m}_{wf_i}")
     if st.button("▶️ Rodar backtest com re-treino", type="primary"):
         bar = st.progress(0.0, text="Baixando candles…")
         frames_ = {}
@@ -239,13 +178,12 @@ with tab_ml:
         if frames_:
             cfg0 = next(iter(frames_.values())).attrs["cfg"]
             out_ = ml.walk_forward(frames_, wf_i, float(cfg0["fee_pct"]), train_days=wf_train, step_days=wf_step, test_days=wf_test,
-                                   btc=frames_.get("BTCUSDT"), progress=lambda f, t: bar.progress(0.4 + 0.5 * f, text=t),
-                                   algo=wf_algo, target=wf_target)
+                                   btc=frames_.get("BTCUSDT"), progress=lambda f, t: bar.progress(0.4 + 0.5 * f, text=t))
             for v_ in out_.values():
                 v_.attrs["cfg"] = cfg0
             bots_ = [p for p in bot_performance.tracked() if bot_performance.home(p) == (wf_m, wf_i) and not p.get("kind")]
             st.session_state["ml_wf"] = {"eval": ml.evaluate(out_, wf_test), "cmp": ml.compare_bots(out_, bots_, wf_m, wf_test),
-                                         "label": f"{ml.algo_label(wf_algo)} · {ml.TARGETS[wf_target]} · {mlabel(wf_m)} {wf_i} · teste de {wf_test} dias · treino de {wf_train} dias · re-treino a cada {wf_step} dias"}
+                                         "label": f"{mlabel(wf_m)} {wf_i} · teste de {wf_test} dias · treino de {wf_train} dias · re-treino a cada {wf_step} dias"}
         bar.empty()
     wf = st.session_state.get("ml_wf")
     if wf:
