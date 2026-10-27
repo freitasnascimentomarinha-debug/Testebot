@@ -142,8 +142,12 @@ def _rule_trades(p: dict, vt: pd.DataFrame, cfg: dict, market: str, interval: st
 
 # ------------------------------------------------------------------------------ torneio
 def run(market: str, interval: str, getter=None, symbols=None, algos=None, targets=None, progress=None,
-        test_days: float | None = None, train_days: float | None = None, step_days: float | None = None, include_bots: bool = True) -> dict:
-    """Roda o torneio num mercado/tempo gráfico, salva no banco e devolve o resultado."""
+        test_days: float | None = None, train_days: float | None = None, step_days: float | None = None, include_bots: bool = True,
+        train_symbols=None, extra_features: bool = False, save_result: bool = True) -> dict:
+    """Roda o torneio num mercado/tempo gráfico, salva no banco e devolve o resultado.
+
+    ``train_symbols``: moedas a mais usadas só no treino (o teste continua nas ``symbols``). ``extra_features``: conjunto ampliado
+    de features (``ml.features(..., extra=True)``)."""
     from core import personalities as P, ranking
 
     if getter is None:
@@ -154,26 +158,31 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
     train_days = float(train_days or ml.TRAIN_DAYS.get(interval, 60))
     step_days = float(step_days or STEP_DAYS.get(interval, 14))
     symbols = list(symbols or P.PERIOD_SYMBOLS)
+    extra_syms = [s for s in (train_symbols or []) if s not in symbols]
     frames, cfg = {}, None
-    for k, sym in enumerate(symbols, start=1):
+    every = symbols + extra_syms
+    for k, sym in enumerate(every, start=1):
         try:
-            vt, cfg = ranking.votes_for(sym, interval, market, train_days + test_days + 2, getter)
+            vt, cfg_ = ranking.votes_for(sym, interval, market, train_days + test_days + 2, getter)
             frames[sym] = vt.reset_index(drop=True)
+            cfg = cfg if sym in extra_syms and cfg else cfg_
         except Exception:  # noqa: BLE001 - moeda sem candles agora: segue com as outras
             pass
         if progress:
-            progress(k / len(symbols) * 0.15, f"Candles de {sym}")
-    if not frames:
+            progress(k / len(every) * 0.15, f"Candles de {sym}")
+    test_syms = [s for s in symbols if s in frames]
+    if not test_syms:
         raise RuntimeError("Sem candles para o torneio agora.")
     fee = float(cfg["fee_pct"])
     btc = frames.get("BTCUSDT")
-    feats = {s: ml.features(vt, None if s == "BTCUSDT" else btc) for s, vt in frames.items()}
+    mkt = ml.market_frame(frames) if extra_features else None
+    feats = {s: ml.features(vt, None if s == "BTCUSDT" else btc, mkt, extra=extra_features) for s, vt in frames.items()}
     cols = sorted(set().union(*(f.columns for f in feats.values())))
     feats = {s: f.reindex(columns=cols) for s, f in feats.items()}
     outs = {(s, t): ml.outcomes(vt, interval, fee, t) for s, vt in frames.items() for t in targets}
-    preds = {(a, t): {s: np.full(len(vt), np.nan) for s, vt in frames.items()} for a in algos for t in targets}
+    preds = {(a, t): {s: np.full(len(frames[s]), np.nan) for s in test_syms} for a in algos for t in targets}
 
-    end = max(vt["time"].iloc[-1] for vt in frames.values())
+    end = max(frames[s]["time"].iloc[-1] for s in test_syms)
     start = end - pd.Timedelta(days=test_days)
     cuts = list(pd.date_range(start, end, freq=pd.Timedelta(days=step_days)))
     bar_sec = pd.Timedelta(seconds=ml.fastsim_sec(interval))
@@ -193,7 +202,8 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
                 done += 1
                 if len(y) >= 300 and y.min() != y.max():
                     model = ml.Model(cols, a, tg).fit(Xtr, y, di=False)
-                    for s, vt in frames.items():
+                    for s in test_syms:
+                        vt = frames[s]
                         m = ((vt["time"] >= t0) & (vt["time"] < t1)).to_numpy()
                         if m.any():
                             preds[(a, tg)][s][m] = model.proba(feats[s][m])
@@ -203,7 +213,8 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
     rows = []
     for (a, tg), by_sym in preds.items():
         ys_, ps_, all_tr, ctx_y, ctx_p = [], [], [], {}, {}
-        for s, vt in frames.items():
+        for s in test_syms:
+            vt = frames[s]
             p, out = by_sym[s], outs[(s, tg)]
             first = int(vt["time"].searchsorted(start))
             m = np.isfinite(p) & out["y"].notna().to_numpy()
@@ -217,7 +228,7 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
             mid = int(vt["time"].searchsorted(start + pd.Timedelta(days=test_days / 2)))
             all_tr += [(1 if i < mid else 2, r, g) for i, r, g in trades(p, out, regimes, first, market == "futures")]
         y_all, p_all = np.concatenate(ys_), np.concatenate(ps_)
-        sm = _summary(all_tr, len(frames), test_days)
+        sm = _summary(all_tr, len(test_syms), test_days)
         for g in CTX_GROUPS:
             if len(ctx_y.get(g, [])) >= 50:
                 au = ml.auc(np.array(ctx_y[g]), np.array(ctx_p[g]))
@@ -229,14 +240,15 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
     mid_t = start + pd.Timedelta(days=test_days / 2)
     for p in (rule_bots(market, interval) if include_bots else []):
         tr = []
-        for s_, vt in frames.items():
+        for s_ in test_syms:
+            vt = frames[s_]
             try:
                 tr += _rule_trades(p, vt, cfg, market, interval, start, mid_t)
             except Exception:  # noqa: BLE001 - um bot com problema não derruba o torneio
                 continue
         rows.append({"combo": f"bot:{p['id']}", "family": "regra", "algo": p["name"],
                      "target": {"grid": "Grade", "dca": "DCA"}.get(p.get("kind"), "Bot de regras"), "auc": None, "obs": 0,
-                     **_summary(tr, len(frames), test_days)})
+                     **_summary(tr, len(test_syms), test_days)})
     rows.sort(key=lambda r: (r["n"] >= MIN_TRADES, r["monthly"], r["auc"] or 0), reverse=True)
     ml_rows = [r for r in rows if r["family"] == "ml"]
     champ = next((r["combo"] for r in ml_rows if r["n"] >= MIN_TRADES and r["monthly"] > 0 and min(r["halves"]) > 0), None)
@@ -247,9 +259,11 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
         if cands:
             by_ctx[g] = max(cands, key=lambda r: (r["contexts"][g]["avg"], r["contexts"][g]["n"]))["combo"]
     result = {"ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "market": market, "interval": interval,
-              "test_days": test_days, "train_days": train_days, "step_days": step_days, "symbols": list(frames), "thr": THR,
+              "test_days": test_days, "train_days": train_days, "step_days": step_days, "symbols": test_syms, "thr": THR,
+              "train_symbols": [s for s in frames if s not in test_syms], "extra_features": extra_features,
               "algos": algos, "targets": targets, "rows": rows, "champion": champ, "by_ctx": by_ctx}
-    save(market, interval, result)
+    if save_result:
+        save(market, interval, result)
     if progress:
         progress(1.0, "Torneio concluído")
     return result
@@ -323,3 +337,91 @@ def refresh_if_due(market: str, interval: str) -> bool:
         return False
     return start(market, interval)
 
+
+
+# ------------------------------------------------------------------------------ laboratório: mais dados de treino ajudam?
+LAB_FILE = "ml_lab.json"
+LAB_ALGOS = ("lightgbm", "xgboost", "catboost", "extra", "logistica")
+LAB_HISTORY_MULT = 2
+
+
+def lab_variants(interval: str) -> dict[str, dict]:
+    """Variantes de treino comparadas no mesmo teste (mesmas moedas, mesmo período)."""
+    long_days = ml.TRAIN_DAYS.get(interval, 60) * LAB_HISTORY_MULT
+    return {
+        "base": {"label": "Como hoje", "kw": {}},
+        "moedas": {"label": f"+{len(ml.EXTRA_SYMBOLS)} moedas no treino", "kw": {"train_symbols": list(ml.EXTRA_SYMBOLS)}},
+        "historico": {"label": f"Histórico {LAB_HISTORY_MULT}× maior ({long_days:g} dias)", "kw": {"train_days": long_days}},
+        "features": {"label": "Mais informação por vela", "kw": {"extra_features": True}},
+        "tudo": {"label": "Tudo junto", "kw": {"train_symbols": list(ml.EXTRA_SYMBOLS), "train_days": long_days, "extra_features": True}},
+    }
+
+
+def _lab_row(r: dict) -> dict:
+    import statistics
+
+    rows = r["rows"]
+    aucs = [x["auc"] for x in rows if x["auc"] is not None]
+    mon = [x["monthly"] for x in rows]
+    best = max(rows, key=lambda x: x["monthly"])
+    return {"auc_med": round(statistics.median(aucs), 3) if aucs else None, "auc_max": max(aucs) if aucs else None,
+            "mon_med": round(statistics.median(mon), 2), "positive": sum(m > 0 for m in mon), "total": len(rows),
+            "confirmed": sum(1 for x in rows if x["n"] >= MIN_TRADES and x["monthly"] > 0 and min(x["halves"]) > 0),
+            "best": combo_label(best["combo"]), "best_monthly": best["monthly"], "champion": r["champion"],
+            "train_days": r["train_days"], "coins": len(r["symbols"]) + len(r["train_symbols"])}
+
+
+def lab_run(market: str, interval: str, getter=None, progress=None, algos=None, variants=None, **run_kw) -> dict:
+    """Roda as variantes de treino no mesmo teste e salva a comparação (``ml_lab.json``)."""
+    if getter is None:
+        from core.data import get_klines
+
+        cache: dict = {}
+
+        def getter(sym, itv, n, mk):     # baixa cada série uma vez (as variantes pedem períodos diferentes)
+            k = (sym, itv, mk)
+            if k not in cache or len(cache[k]) < n:
+                cache[k] = get_klines(sym, itv, n, mk)
+            return cache[k].tail(n).reset_index(drop=True)
+    vs = lab_variants(interval)
+    keys = [k for k in vs if not variants or k in variants]
+    out = {}
+    for n_k, k in enumerate(keys):
+        def _p(f, t, n_k=n_k, k=k):
+            if progress:
+                progress((n_k + f) / len(keys), f"{vs[k]['label']} · {t}")
+        r = run(market, interval, getter=getter, algos=list(algos or [a for a in LAB_ALGOS if a in ml.available_algos()]), include_bots=False,
+                save_result=False, progress=_p, **{**vs[k]["kw"], **run_kw})
+        out[k] = {"label": vs[k]["label"], **_lab_row(r)}
+    result = {"ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "market": market, "interval": interval,
+              "test_days": float(run_kw.get("test_days") or TEST_DAYS.get(interval, 60)), "variants": out}
+
+    def _apply(data):
+        data[_key(market, interval)] = result
+
+    locked_update(LAB_FILE, {}, _apply)
+    return result
+
+
+def lab_load() -> dict:
+    return load_json(LAB_FILE, {}) or {}
+
+
+def lab_start(market: str, interval: str) -> bool:
+    k = "lab|" + _key(market, interval)
+    with _lock:
+        if k in _running:
+            return False
+        _running.add(k)
+
+    def _run():
+        try:
+            lab_run(market, interval)
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            with _lock:
+                _running.discard(k)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True

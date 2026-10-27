@@ -176,13 +176,37 @@ with tab_ml:
 
     @st.fragment(run_every=20)
     def _tourney():
-        busy_ = ml_tournament.running_keys()
+        busy_ = [k for k in ml_tournament.running_keys() if not k.startswith("lab|")]
         if busy_:
             st.caption("⏳ Torneio rodando em segundo plano: " + ", ".join(f"{mlabel(k.split('|')[0])} {k.split('|')[1]}" for k in busy_)
                        + ". O placar atualiza sozinho ao terminar.")
         _comp("ml_tourney")(key="ml-tourney", data=bots_view.tourney_data(ml_tournament.load(), sel=(tn_m, tn_i), busy=busy_))
 
     _tourney()
+
+    st.markdown("##### 🔬 Laboratório de treino: mais dados deixam os modelos melhores?")
+    st.caption("Treina os modelos de cinco jeitos e testa todos nas mesmas moedas e no mesmo período: como hoje, com mais "
+               f"{len(ml.EXTRA_SYMBOLS)} moedas no treino, com um histórico {ml_tournament.LAB_HISTORY_MULT}× maior, com mais informação por vela "
+               "(prazos mais longos, volatilidade, horário e o mercado como um todo) e com tudo junto. Mostra se cada mudança melhorou o "
+               "resultado fora do treino. Leva de 5 a 30 minutos, em segundo plano.")
+    c1, c2, c3 = st.columns([1, 1, 1.3])
+    lb_m = c1.selectbox("Mercado", ["futures", "spot"], format_func=mlabel, key="lb_m")
+    lb_i = c2.selectbox("Tempo gráfico", list(ml_tournament.INTERVALS), index=1, key="lb_i")
+    c3.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    lb_busy = f"lab|{lb_m}|{lb_i}" in ml_tournament.running_keys()
+    if c3.button("⏳ Rodando…" if lb_busy else "▶️ Rodar experimento", type="primary", disabled=lb_busy, width="stretch", key="lb_go"):
+        ml_tournament.lab_start(lb_m, lb_i)
+        st.toast("Experimento iniciado em segundo plano: o resultado aparece aqui sozinho ao terminar.", icon="🔬")
+        st.rerun()
+
+    @st.fragment(run_every=30)
+    def _lab():
+        busy_ = [k[4:] for k in ml_tournament.running_keys() if k.startswith("lab|")]
+        if busy_:
+            st.caption("⏳ Experimento rodando: " + ", ".join(f"{mlabel(k.split('|')[0])} {k.split('|')[1]}" for k in busy_) + ".")
+        _comp("ml_lab")(key="ml-lab", data=bots_view.lab_data(ml_tournament.lab_load(), sel=(lb_m, lb_i), busy=busy_))
+
+    _lab()
 
     st.markdown("##### Backtest com re-treino (walk-forward)")
     st.caption("O modelo é re-treinado a cada passo só com o passado e prevê o período seguinte, como aconteceria ao vivo. Depois cada bot daquele "
@@ -191,7 +215,7 @@ with tab_ml:
     wf_m = c1.selectbox("Mercado", ["futures", "spot"], format_func=mlabel, key="wf_m")
     wf_i = c2.selectbox("Tempo gráfico", ["15m", "1h", "4h"], index=1, key="wf_i")
     wf_test = c3.selectbox("Período de teste (dias)", [30, 60, 90], index=1, key="wf_t")
-    wf_train = c4.number_input("Janela de treino (dias)", 10, 365, value=ml.TRAIN_DAYS.get(wf_i, 60), key=f"wf_tr_{wf_i}")
+    wf_train = c4.number_input("Janela de treino (dias)", 10, 1500, value=ml.TRAIN_DAYS.get(wf_i, 60), key=f"wf_tr_{wf_i}")
     wf_step = c5.selectbox("Re-treinar a cada (dias)", [3, 7, 14], index=1, key="wf_s")
     wf_champ = ml_tournament.champions(wf_m, wf_i)[0] or "lightgbm|direcao"
     c1, c2, _ = st.columns([1.2, 1.2, 1.6])
