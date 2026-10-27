@@ -135,3 +135,22 @@ def tourney_data(results: dict, sel: tuple[str, str] | None = None, busy: list[s
                     "by_ctx": r.get("by_ctx") or {}, "rows": rows, "compare": _compare(rows)})
     return {"results": out, "sel": "|".join(sel) if sel else None, "busy": busy or [], "thr": T.THR, "min_trades": T.MIN_TRADES,
             "groups": [[g, lab] for g, (lab, _) in T.CTX_GROUPS.items()]}
+
+
+def lab_data(results: dict, sel: tuple[str, str] | None = None, busy: list[str] | None = None) -> dict:
+    """Laboratório de treino (``ml_tournament.lab_run``): cada variante comparada com a base, no mesmo teste."""
+    out = []
+    for key, r in sorted(results.items(), key=lambda kv: (kv[1]["market"], -fastsim.PER_DAY.get(kv[1]["interval"], 0))):
+        vs = r["variants"]
+        base = vs.get("base") or {}
+        rows = []
+        for k, v in vs.items():
+            d_mon = None if k == "base" or not base else round(v["mon_med"] - base["mon_med"], 2)
+            d_auc = None if k == "base" or not base or v["auc_med"] is None or base.get("auc_med") is None else round(v["auc_med"] - base["auc_med"], 3)
+            better = None if d_mon is None else (d_mon > 0 and v["confirmed"] >= base.get("confirmed", 0))
+            rows.append({"key": k, **v, "d_mon": d_mon, "d_auc": d_auc, "better": better})
+        out.append({"key": key, "market": r["market"], "interval": r["interval"], "ran_at": r["ran_at"][:16].replace("T", " "),
+                    "test_days": r["test_days"], "rows": rows})
+    from core import ml_tournament as T
+
+    return {"results": out, "sel": "|".join(sel) if sel else None, "busy": busy or [], "min_trades": T.MIN_TRADES}
