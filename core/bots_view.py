@@ -102,36 +102,18 @@ def calc_view(res: dict) -> dict:
             "pf": (gw / gl) if gl else ("inf" if gw else None), "best": max(wins, default=0.0), "worst": min(losses, default=0.0), "curve": curve}
 
 
-def _compare(rows: list[dict]) -> dict | None:
-    """Regras × ML no mesmo teste: melhor, mediana e quantos ficaram positivos em cada família."""
-    import statistics
-
-    out = {}
-    for fam in ("ml", "regra"):
-        xs = [r for r in rows if r["family"] == fam and r["n"]]
-        if not xs:
-            return None
-        best = max(xs, key=lambda r: r["monthly"])
-        out[fam] = {"best_ok": best["halves"][0] is not None and min(best["halves"]) > 0, "best": best["algo"], "best_target": best["target"], "best_monthly": best["monthly"], "n": len(xs),
-                    "median": round(statistics.median(r["monthly"] for r in xs), 2), "positive": sum(r["monthly"] > 0 for r in xs),
-                    "both_halves": sum(min(r["halves"]) > 0 for r in xs if r["halves"][0] is not None)}
-    return out
-
-
 def tourney_data(results: dict, sel: tuple[str, str] | None = None, busy: list[str] | None = None) -> dict:
     """Torneio de modelos (core/ml_tournament.py) em tipos simples: um bloco por mercado/tempo gráfico já rodado."""
     from core import ml, ml_tournament as T
 
     out = []
     for key, r in sorted(results.items(), key=lambda kv: (kv[1]["market"], -fastsim.PER_DAY.get(kv[1]["interval"], 0))):
-        rows = [{"combo": x["combo"], "family": x.get("family", "ml"),
-                 "algo": ml.algo_label(x["algo"]) if x.get("family", "ml") == "ml" else x["algo"],
-                 "target": ml.TARGETS.get(x["target"], x["target"]), "auc": x["auc"],
+        rows = [{"combo": x["combo"], "algo": ml.algo_label(x["algo"]), "target": ml.TARGETS.get(x["target"], x["target"]), "auc": x["auc"],
                  "n": x["n"], "win": x["win"], "avg": x["avg"], "monthly": x["monthly"], "pf": x["pf"], "halves": x.get("halves") or [None, None],
                  "ctx": {g: x["contexts"].get(g) for g in T.CTX_GROUPS}} for x in r["rows"]]
         out.append({"key": key, "market": r["market"], "interval": r["interval"], "ran_at": r["ran_at"][:16].replace("T", " "),
                     "test_days": r["test_days"], "train_days": r["train_days"], "step_days": r["step_days"],
                     "symbols": [s.replace("USDT", "") for s in r["symbols"]], "champion": r.get("champion"),
-                    "by_ctx": r.get("by_ctx") or {}, "rows": rows, "compare": _compare(rows)})
+                    "by_ctx": r.get("by_ctx") or {}, "rows": rows})
     return {"results": out, "sel": "|".join(sel) if sel else None, "busy": busy or [], "thr": T.THR, "min_trades": T.MIN_TRADES,
             "groups": [[g, lab] for g, (lab, _) in T.CTX_GROUPS.items()]}

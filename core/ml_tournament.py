@@ -9,9 +9,6 @@ sai como o alvo manda (fim do prazo ou a barreira tocada) e paga as taxas. O res
   positivo nas duas metades do teste (escolher o melhor entre dezenas de combinações premia a sorte; a confirmação na
   outra metade filtra boa parte dela).
 
-Os bots de regras (e de grade/DCA) do mesmo mercado/tempo gráfico entram no placar nas mesmas velas e com o mesmo tamanho de
-posição, para comparar regras escritas à mão com modelos aprendidos — mas só modelos viram campeões.
-
 O modelo ao vivo (``core/ml.py``) usa o campeão geral e troca para o campeão do contexto quando o gráfico está nele. O torneio roda
 sozinho 1x por semana (em segundo plano) e pode ser forçado na aba 🧪 Modelo ML.
 """
@@ -100,49 +97,9 @@ def _stats(rs: list[float], n_sym: int, test_days: float) -> dict:
             "monthly": round(ret * 30 / test_days, 2), "pf": round(float(gain / loss), 2) if loss > 0 else None}
 
 
-def _summary(tr: list[tuple[int, float, str]], n_sym: int, test_days: float) -> dict:
-    """Operações (metade do teste 1/2, resultado em %, grupo de contexto) → números do placar, no geral e por contexto."""
-    st = _stats([r for _, r, _ in tr], n_sym, test_days)
-    ctx = {}
-    for g in CTX_GROUPS:
-        rs = [(k, r) for k, r, gg in tr if gg == g]
-        c = _stats([r for _, r in rs], n_sym, test_days)
-        h = [[r for k, r in rs if k == kk] for kk in (1, 2)]
-        ctx[g] = {"n": c["n"], "avg": c["avg"], "win": c["win"], "ret": c["ret"], "auc": None,
-                  "halves": [round(float(np.mean(x)), 3) if len(x) >= 5 else None for x in h]}
-    return {**st, "halves": [round(float(sum(r for k, r, _ in tr if k == kk)) / max(n_sym, 1), 2) for kk in (1, 2)], "contexts": ctx}
-
-
-def rule_bots(market: str, interval: str) -> list[dict]:
-    """Bots de regras (prontos e criados pelos usuários) e de grade/DCA deste mercado/tempo gráfico: entram no torneio para comparação."""
-    from core import bot_performance
-
-    return [p for p in bot_performance.tracked() if bot_performance.home(p) == (market, interval)]
-
-
-def _rule_trades(p: dict, vt: pd.DataFrame, cfg: dict, market: str, interval: str, start, mid) -> list[tuple[int, float, str]]:
-    """Operações de um bot de regras nas velas de teste, com a banca inteira em cada operação (igual aos modelos)."""
-    from core import grid_dca
-
-    if p.get("kind"):
-        raw = grid_dca.simulate(p, vt, interval, float(cfg["fee_pct"]), start_time=start)["trades"]
-        pct = [float(t["r"]) for t in raw]           # grade/DCA: % da banca da sessão
-    else:
-        days = (vt["time"].iloc[-1] - start) / pd.Timedelta(days=1)
-        raw = fastsim.period_trades(vt, cfg, p, days=days, market=market)
-        fee = float(cfg["fee_pct"]) / 100
-        pct = [((1 if t["lado"] == "Compra" else -1) * (t["preco_saida"] - t["preco_entrada"]) - fee * (t["preco_entrada"] + t["preco_saida"]))
-               / t["preco_entrada"] * 100 for t in raw]
-    out = []
-    for t, r in zip(raw, pct):
-        i = max(0, int(vt["time"].searchsorted(t["entrada"])) - 1)     # vela do sinal
-        out.append((1 if t["entrada"] < mid else 2, r, group_of(vt["regime"].iloc[i])))
-    return out
-
-
 # ------------------------------------------------------------------------------ torneio
 def run(market: str, interval: str, getter=None, symbols=None, algos=None, targets=None, progress=None,
-        test_days: float | None = None, train_days: float | None = None, step_days: float | None = None, include_bots: bool = True) -> dict:
+        test_days: float | None = None, train_days: float | None = None, step_days: float | None = None) -> dict:
     """Roda o torneio num mercado/tempo gráfico, salva no banco e devolve o resultado."""
     from core import personalities as P, ranking
 
@@ -202,7 +159,8 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
 
     rows = []
     for (a, tg), by_sym in preds.items():
-        ys_, ps_, all_tr, ctx_y, ctx_p = [], [], [], {}, {}
+        ys_, ps_, all_rs, ctx_rs, ctx_y, ctx_p = [], [], [], {}, {}, {}
+        half = {1: [], 2: []}, {1: {}, 2: {}}       # (geral, por contexto) em cada metade do teste
         for s, vt in frames.items():
             p, out = by_sym[s], outs[(s, tg)]
             first = int(vt["time"].searchsorted(start))
@@ -215,34 +173,29 @@ def run(market: str, interval: str, getter=None, symbols=None, algos=None, targe
                 ctx_y.setdefault(g, []).append(yy)
                 ctx_p.setdefault(g, []).append(pp)
             mid = int(vt["time"].searchsorted(start + pd.Timedelta(days=test_days / 2)))
-            all_tr += [(1 if i < mid else 2, r, g) for i, r, g in trades(p, out, regimes, first, market == "futures")]
+            for i, r, g in trades(p, out, regimes, first, market == "futures"):
+                all_rs.append(r)
+                ctx_rs.setdefault(g, []).append(r)
+                k = 1 if i < mid else 2
+                half[0][k].append(r)
+                half[1][k].setdefault(g, []).append(r)
         y_all, p_all = np.concatenate(ys_), np.concatenate(ps_)
-        sm = _summary(all_tr, len(frames), test_days)
+        st = _stats(all_rs, len(frames), test_days)
+        ctx = {}
         for g in CTX_GROUPS:
-            if len(ctx_y.get(g, [])) >= 50:
-                au = ml.auc(np.array(ctx_y[g]), np.array(ctx_p[g]))
-                sm["contexts"][g]["auc"] = None if au is None else round(au, 3)
+            c = _stats(ctx_rs.get(g, []), len(frames), test_days)
+            au = ml.auc(np.array(ctx_y.get(g, [])), np.array(ctx_p.get(g, []))) if len(ctx_y.get(g, [])) >= 50 else None
+            h = [half[1][k].get(g, []) for k in (1, 2)]
+            ctx[g] = {"n": c["n"], "avg": c["avg"], "win": c["win"], "ret": c["ret"], "auc": None if au is None else round(au, 3),
+                      "halves": [round(float(np.mean(x)), 3) if len(x) >= 5 else None for x in h]}
         au = ml.auc(y_all, p_all) if len(y_all) else None
-        rows.append({"combo": combo(a, tg), "family": "ml", "algo": a, "target": tg, "auc": None if au is None else round(au, 3),
-                     "obs": int(len(y_all)), **sm})
-    # bots de regras nas mesmas velas, mesmo período e mesmo tamanho de posição (só comparação: não viram campeões do modelo)
-    mid_t = start + pd.Timedelta(days=test_days / 2)
-    for p in (rule_bots(market, interval) if include_bots else []):
-        tr = []
-        for s_, vt in frames.items():
-            try:
-                tr += _rule_trades(p, vt, cfg, market, interval, start, mid_t)
-            except Exception:  # noqa: BLE001 - um bot com problema não derruba o torneio
-                continue
-        rows.append({"combo": f"bot:{p['id']}", "family": "regra", "algo": p["name"],
-                     "target": {"grid": "Grade", "dca": "DCA"}.get(p.get("kind"), "Bot de regras"), "auc": None, "obs": 0,
-                     **_summary(tr, len(frames), test_days)})
+        rows.append({"combo": combo(a, tg), "algo": a, "target": tg, "auc": None if au is None else round(au, 3), "obs": int(len(y_all)),
+                     **st, "halves": [round(float(np.sum(half[0][k])) / len(frames), 2) for k in (1, 2)], "contexts": ctx})
     rows.sort(key=lambda r: (r["n"] >= MIN_TRADES, r["monthly"], r["auc"] or 0), reverse=True)
-    ml_rows = [r for r in rows if r["family"] == "ml"]
-    champ = next((r["combo"] for r in ml_rows if r["n"] >= MIN_TRADES and r["monthly"] > 0 and min(r["halves"]) > 0), None)
+    champ = next((r["combo"] for r in rows if r["n"] >= MIN_TRADES and r["monthly"] > 0 and min(r["halves"]) > 0), None)
     by_ctx = {}
     for g in CTX_GROUPS:
-        cands = [r for r in ml_rows if r["contexts"][g]["n"] >= MIN_CTX_TRADES and r["contexts"][g]["avg"] > 0
+        cands = [r for r in rows if r["contexts"][g]["n"] >= MIN_CTX_TRADES and r["contexts"][g]["avg"] > 0
                  and all(h is not None and h > 0 for h in r["contexts"][g]["halves"])]
         if cands:
             by_ctx[g] = max(cands, key=lambda r: (r["contexts"][g]["avg"], r["contexts"][g]["n"]))["combo"]

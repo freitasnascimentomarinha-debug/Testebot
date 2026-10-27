@@ -2504,19 +2504,10 @@ def test_ml_tournament_algos_targets_and_context_champions(monkeypatch):
         raw["time"] = pd.date_range(end=pd.Timestamp("2026-10-20", tz="UTC"), periods=len(raw), freq="1h")
         return raw.tail(n_).reset_index(drop=True)
 
-    from core import grid_dca
-
-    bots = [b for b in T.rule_bots("futures", "1h") if not b.get("kind")][:1] + [grid_dca.get("grid_lateral_1h_fut")]
-    assert all(b["id"] in {x["id"] for x in T.rule_bots("futures", "1h")} for b in bots)
-    monkeypatch.setattr(T, "rule_bots", lambda m_, i_: bots)                          # um bot de regras e uma grade, para o teste ser rápido
     res = T.run("futures", "1h", getter=getter, symbols=["BTCUSDT", "ETHUSDT"], algos=["logistica", "lightgbm"], targets=["direcao", "barreira"],
                 test_days=20, train_days=30, step_days=10)
     json.dumps(res)
-    ml_rows = [r for r in res["rows"] if r["family"] == "ml"]
-    rule_rows = [r for r in res["rows"] if r["family"] == "regra"]
-    assert {r["combo"] for r in ml_rows} == {"logistica|direcao", "logistica|barreira", "lightgbm|direcao", "lightgbm|barreira"}
-    assert {r["combo"] for r in rule_rows} == {f"bot:{b['id']}" for b in bots} and rule_rows[0]["auc"] is None   # regras no mesmo placar
-    assert not (res["champion"] or "").startswith("bot:") and not any(c.startswith("bot:") for c in res["by_ctx"].values())
+    assert len(res["rows"]) == 4 and {r["combo"] for r in res["rows"]} == {"logistica|direcao", "logistica|barreira", "lightgbm|direcao", "lightgbm|barreira"}
     r0 = res["rows"][0]
     assert set(r0) >= {"auc", "n", "win", "monthly", "pf", "halves", "contexts"} and set(r0["contexts"]) == set(T.CTX_GROUPS)
     assert T.get("futures", "1h")["ran_at"] == res["ran_at"] and not T.is_due("futures", "1h")
@@ -2528,8 +2519,6 @@ def test_ml_tournament_algos_targets_and_context_champions(monkeypatch):
     view = bots_view.tourney_data(T.load(), sel=("futures", "1h"))
     json.dumps(view)
     assert view["sel"] == "futures|1h" and view["results"][0]["rows"][0]["algo"]
-    cmp_ = view["results"][0]["compare"]
-    assert cmp_ is None or (set(cmp_) == {"ml", "regra"} and cmp_["regra"]["n"] <= 2)
 
     # modelo ao vivo: campeão geral + campeão do contexto, e a previsão usa o do contexto atual
     monkeypatch.setattr(T, "champions", lambda m_, i_: ("logistica|barreira", {"lateral": "lightgbm|direcao", "tendencia": "logistica|barreira"}))
