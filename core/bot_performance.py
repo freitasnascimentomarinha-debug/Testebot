@@ -37,8 +37,16 @@ def home(p: dict) -> tuple[str, str]:
 
 
 def tracked() -> list[dict]:
-    """Bots do ranking: os prontos e os criados pelos usuários que a pessoa pode ver."""
-    return [p for p in P.list_all() if p.get("skills")]
+    """Bots do ranking: os de sinal (prontos e criados pelos usuários que a pessoa pode ver) e os de grade/DCA."""
+    from core import grid_dca
+
+    return [p for p in P.list_all() if p.get("skills")] + grid_dca.all_bots()
+
+
+def get_bot(pid: str | None) -> dict | None:
+    from core import grid_dca
+
+    return P.get(pid) or grid_dca.get(pid)
 
 
 def load() -> dict:
@@ -81,7 +89,12 @@ def compute(bots: list[dict], getter=None, progress=None) -> dict:
                 continue
             entry = {"market": market, "interval": interval, "name": p["name"], "updated": stamp, "symbols": list(votes)}
             for key, days in WINDOWS.items():
-                r = ranking.simulate_bot(votes, p, market, days)
+                if p.get("kind"):   # grade/DCA: simulador próprio (core/grid_dca.py)
+                    from core import grid_dca
+
+                    r = grid_dca.period_summary(p, votes, market, days, interval)
+                else:
+                    r = ranking.simulate_bot(votes, p, market, days)
                 entry[key] = {"ret_pct": float(r["ret_pct"]), "trades": int(r["trades"]), "win_pct": float(r["win_pct"]),
                               "dd_pct": float(r["dd_pct"]), "positive": int(r["positive"]), "symbols": int(r["symbols"])}
                 if key == "d30":
@@ -119,7 +132,7 @@ def refresh_all(getter=None, progress=None) -> dict:
 
 def refresh_bot(pid: str, getter=None, progress=None) -> dict | None:
     """Backtest forçado de um bot: recalcula agora e salva (não muda a data da atualização diária geral)."""
-    p = P.get(pid)
+    p = get_bot(pid)
     if not p:
         return None
     res = compute([p], getter, progress)
@@ -179,7 +192,7 @@ def rows(market: str | None = None, interval: str | None = None) -> list[dict]:
         if (market and m != market) or (interval and i != interval):
             continue
         lv = live.get(p["id"], {})
-        out.append({"id": p["id"], "name": p["name"], "market": m, "interval": i, "builtin": bool(p.get("builtin")),
+        out.append({"id": p["id"], "name": p["name"], "market": m, "interval": i, "builtin": bool(p.get("builtin")), "kind": p.get("kind"),
                     "status": (p.get("research") or {}).get("status"), "updated": (e or {}).get("updated"),
                     **{k: (e or {}).get(k) for k in WINDOWS}, "per_symbol": (e or {}).get("per_symbol"),
                     "live_trades": lv.get("live_trades") or 0, "live_pnl": lv.get("live_pnl")})

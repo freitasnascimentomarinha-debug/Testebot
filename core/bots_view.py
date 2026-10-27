@@ -21,7 +21,7 @@ def rank_data(rows: list[dict], history, *, note: str = "", busy: str | None = N
     """Linhas do ranking diário com o histórico (para as mini curvas) e a ordem dos tempos gráficos."""
     out = []
     for r in rows:
-        out.append({k: r.get(k) for k in ("id", "name", "market", "interval", "builtin", "status", "d1", "d7", "d30", "per_symbol",
+        out.append({k: r.get(k) for k in ("id", "name", "market", "interval", "builtin", "kind", "status", "d1", "d7", "d30", "per_symbol",
                                           "live_trades", "live_pnl")}
                    | {"updated": (r.get("updated") or "")[:16].replace("T", " "), "history": history(r["id"])[-30:]})
     return {"rows": out, "order": {i: -v for i, v in fastsim.PER_DAY.items()}, "note": note, "busy": busy, "focus": focus}
@@ -39,10 +39,27 @@ def _filters_text(p: dict) -> str:
     return ", ".join(out)
 
 
-def library_data(bots: list[dict], live: dict, can_edit) -> dict:
-    """Cards da biblioteca (tipos simples)."""
+def library_data(bots: list[dict], live: dict, can_edit, perf: dict | None = None) -> dict:
+    """Cards da biblioteca (tipos simples). Grade/DCA usam o último mês do ranking diário (``perf``) no lugar da pesquisa."""
+    from core import grid_dca
+
     out = []
     for p in bots:
+        if p.get("kind"):
+            e = (perf or {}).get(p["id"]) or {}
+            w = e.get("d30") or {}
+            research = ({"monthly_pct": w.get("ret_pct"), "ret_pct": w.get("ret_pct"), "period_label": "últimos 30 dias", "win_pct": w.get("win_pct"),
+                         "dd_pct": w.get("dd_pct"), "status": None, "trades_month": w.get("trades"), "pos_coins": w.get("positive")} if w else None)
+            q = p["params"]
+            out.append({"id": p["id"], "name": p["name"], "style": p.get("bot"), "interval": p["home"]["interval"], "market": p["home"]["market"],
+                        "rr": f"{q['levels']} degraus" if p["kind"] == "grid" else f"alvo {q['tp_pct']:g}%", "specialty": p.get("specialty", ""), "tip": p.get("tip", ""),
+                        "contexts_only": ", ".join(regime.label(c) for c in q.get("contexts") or []), "research": research, "builtin": True,
+                        "author": "", "can_edit": False, "editable": False, "kind": p["kind"],
+                        "live_trades": 0, "live_win": None, "live_pnl": None, "description": grid_dca.describe(p), "direction": "Só compra",
+                        "exit": "venda em cada degrau / stop da grade" if p["kind"] == "grid" else "alvo sobre o preço médio / stop / prazo",
+                        "skills": "—", "filters": ", ".join(f"{grid_dca.PARAM_LABELS.get(k, k)}: {v}" for k, v in q.items() if k != "contexts"),
+                        "per_symbol": [[k.replace("USDT", ""), v] for k, v in (e.get("per_symbol") or {}).items()], "contexts": []})
+            continue
         rs = p.get("research") or {}
         lv = live.get(p["id"], {})
         style = {"long": "long"}.get(p.get("bot"), p.get("bot")) or ("day" if "futures" in (p.get("markets") or []) else "swing")
@@ -78,7 +95,7 @@ def calc_view(res: dict) -> dict:
     gw, gl = sum(wins), -sum(losses)
     curve = ([[int(pd.Timestamp(rows[0]["entrada"]).timestamp() * 1000), res["bank0"]]] if rows else []) + \
         [[int(pd.Timestamp(c["time"]).timestamp() * 1000), c["Banca (USDT)"]] for c in res["curve"]]
-    return {"bot": res["bot"], "itv": res["itv"], "market": res["market"], "days": res["days"], "risk": res["risk"], "comp": res["comp"],
+    return {"bot": res["bot"], "itv": res["itv"], "market": res["market"], "days": res["days"], "risk": res["risk"], "comp": res["comp"], "kind": res.get("kind"),
             "bank0": res["bank0"], "bank": res["bank"], "pnl": pnl, "ret": ret,
             "monthly": ((1 + ret / 100) ** (30 / res["days"]) - 1) * 100 if res["bank"] > 0 else -100.0,
             "n": len(rows), "wins": len(wins), "losses": len(losses), "max_dd": res["max_dd"],
