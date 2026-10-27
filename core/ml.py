@@ -2,8 +2,10 @@
 
 * **Features**: os votos das habilidades (``v_*`` de ``core/fastsim.py``), retornos, volatilidade, RSI, ADX, MACD, posição nas
   Bandas, distância às médias, volume relativo e o comportamento recente do BTC (o mercado segue o BTC).
-* **Alvo**: o preço sobe ou cai além do custo das taxas nas próximas ``H`` velas (velas neutras ficam fora do treino).
-* **Modelo**: LightGBM (ou, se não estiver instalado, uma regressão logística em numpy). Treinado com várias moedas juntas.
+* **Alvos** (``TARGETS``): direção nas próximas ``H`` velas, direção num horizonte 3× maior e "barreira" (o que o preço toca primeiro:
+  +1,5 ATR ou −1,5 ATR). Velas neutras ficam fora do treino.
+* **Algoritmos** (``ALGOS``): LightGBM, XGBoost, CatBoost, gradient boosting, florestas e regressão logística do scikit-learn — os que
+  estiverem instalados. O torneio (``core/ml_tournament.py``) escolhe o campeão de cada mercado/tempo gráfico e de cada contexto.
 * **Índice de dissimilaridade (DI)**: distância do candle atual ao vizinho mais próximo dos dados de treino, comparada com a
   distância típica entre os próprios dados de treino. Acima do limite, o mercado está diferente de tudo o que o modelo viu:
   a previsão não vale e, com o filtro ligado, o bot fica de fora.
@@ -12,8 +14,11 @@
 """
 from __future__ import annotations
 
+import base64
+import pickle
 import threading
 import time
+import zlib
 from datetime import datetime, timezone
 
 import numpy as np
@@ -78,19 +83,122 @@ def features(vt: pd.DataFrame, btc: pd.DataFrame | None = None) -> pd.DataFrame:
     return f.replace([np.inf, -np.inf], np.nan)
 
 
-def labels(vt: pd.DataFrame, interval: str, fee_pct: float) -> pd.Series:
-    """1 = subiu além do custo nas próximas H velas · 0 = caiu além do custo · NaN = neutro ou sem futuro ainda."""
+TARGETS = {
+    "direcao": "Direção nas próximas velas",
+    "tendencia": "Direção num prazo 3× maior",
+    "barreira": "Toca +1,5 ATR antes de −1,5 ATR",
+}
+BARRIER_ATR = 1.5
+
+
+def horizon(interval: str, target: str = "direcao") -> int:
     h = HORIZON.get(interval, 6)
-    c = vt["close"].astype(float)
-    fwd = c.shift(-h) / c - 1
-    cost = 2 * fee_pct / 100 * 1.5
-    return pd.Series(np.where(fwd > cost, 1.0, np.where(fwd < -cost, 0.0, np.nan)), index=vt.index).where(fwd.notna())
+    return h if target == "direcao" else 3 * h
+
+
+def outcomes(vt: pd.DataFrame, interval: str, fee_pct: float, target: str = "direcao") -> pd.DataFrame:
+    """Para uma entrada no fechamento de cada vela: rótulo do alvo (``y``), resultado de uma compra e de uma venda (fração, já
+    com as taxas) e o índice da vela de saída. Sem futuro suficiente: ``y`` e resultados NaN."""
+    c = vt["close"].to_numpy(dtype=float)
+    n, h = len(c), horizon(interval, target)
+    fee = 2 * fee_pct / 100
+    idx = np.arange(n)
+    ex = np.minimum(idx + h, n - 1)
+    if target == "barreira":
+        hi, lo = vt["high"].to_numpy(dtype=float), vt["low"].to_numpy(dtype=float)
+        k = BARRIER_ATR * vt["atr"].to_numpy(dtype=float)
+        hit = np.full(n, np.nan)              # 1 = barreira de cima primeiro · 0 = de baixo · 2 = as duas na mesma vela
+        open_ = np.isfinite(k) & (k > 0)
+        for j in range(1, h + 1):
+            t = np.minimum(idx + j, n - 1)
+            valid = open_ & (idx + j < n)
+            up, dn = valid & (hi[t] >= c + k), valid & (lo[t] <= c - k)
+            hit[up & ~dn], hit[dn & ~up], hit[up & dn] = 1.0, 0.0, 2.0
+            ex = np.where(up | dn, t, ex)
+            open_ &= ~(up | dn)
+        y = np.where(hit == 2, np.nan, hit)
+        step = k / c
+        timeout = open_ & (idx + h < n)       # nenhuma barreira no prazo: sai no fechamento
+        drift = np.where(timeout, c[ex] / c - 1, np.nan)
+        long_r = np.select([hit == 1, hit == 0, hit == 2, timeout], [step, -step, -step, drift], np.nan)
+        short_r = np.select([hit == 1, hit == 0, hit == 2, timeout], [-step, step, -step, -drift], np.nan)   # as duas: perde nos dois lados
+    else:
+        fwd = np.full(n, np.nan)
+        fwd[: n - h] = c[h:] / c[: n - h] - 1
+        cost = fee * 1.5
+        y = np.where(fwd > cost, 1.0, np.where(fwd < -cost, 0.0, np.nan))
+        long_r, short_r = fwd, -fwd
+    return pd.DataFrame({"y": y, "long": long_r - fee, "short": short_r - fee, "exit": ex}, index=vt.index)
+
+
+def labels(vt: pd.DataFrame, interval: str, fee_pct: float, target: str = "direcao") -> pd.Series:
+    """1 = subiu (ou tocou a barreira de cima primeiro) · 0 = caiu · NaN = neutro ou sem futuro ainda."""
+    return outcomes(vt, interval, fee_pct, target)["y"]
+
+
+# ------------------------------------------------------------------------------ algoritmos
+def _make(algo: str, seed: int):
+    """Estimador no padrão do scikit-learn (fit / predict_proba)."""
+    if algo == "xgboost":
+        from xgboost import XGBClassifier
+
+        return XGBClassifier(n_estimators=250, max_depth=4, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, min_child_weight=20,
+                             reg_lambda=1.0, n_jobs=2, random_state=seed, verbosity=0)
+    if algo == "catboost":
+        from catboost import CatBoostClassifier
+
+        return CatBoostClassifier(iterations=300, depth=5, learning_rate=0.05, l2_leaf_reg=3, random_seed=seed, verbose=False, thread_count=2,
+                                  allow_writing_files=False)
+    if algo == "hgb":
+        from sklearn.ensemble import HistGradientBoostingClassifier
+
+        return HistGradientBoostingClassifier(max_iter=200, learning_rate=0.05, max_leaf_nodes=15, min_samples_leaf=40, l2_regularization=1.0,
+                                              random_state=seed)
+    if algo == "floresta":
+        from sklearn.ensemble import RandomForestClassifier
+
+        return RandomForestClassifier(n_estimators=150, max_depth=7, min_samples_leaf=40, max_features="sqrt", n_jobs=2, random_state=seed)
+    if algo == "extra":
+        from sklearn.ensemble import ExtraTreesClassifier
+
+        return ExtraTreesClassifier(n_estimators=150, max_depth=8, min_samples_leaf=40, max_features="sqrt", n_jobs=2, random_state=seed)
+    if algo == "logistica":
+        from sklearn.linear_model import LogisticRegression
+
+        return LogisticRegression(C=0.3, max_iter=500)
+    raise ValueError(algo)
+
+
+ALGOS = {   # nome · biblioteca que precisa estar instalada
+    "lightgbm": ("LightGBM", "lightgbm"),
+    "xgboost": ("XGBoost", "xgboost"),
+    "catboost": ("CatBoost", "catboost"),
+    "hgb": ("Gradient Boosting (scikit-learn)", "sklearn"),
+    "floresta": ("Random Forest", "sklearn"),
+    "extra": ("Extra Trees", "sklearn"),
+    "logistica": ("Regressão logística", None),
+}
+
+
+def available_algos() -> list[str]:
+    import importlib.util
+
+    out = []
+    for k, (_, lib) in ALGOS.items():
+        if lib is None or importlib.util.find_spec(lib) is not None:
+            out.append(k)
+    return out
+
+
+def algo_label(k: str | None) -> str:
+    return ALGOS.get(k or "", (k or "—", None))[0]
 
 
 # ------------------------------------------------------------------------------ modelo
 class Model:
-    def __init__(self, cols: list[str]):
-        self.cols, self.kind, self.booster, self.w = cols, None, None, None
+    def __init__(self, cols: list[str], algo: str = "lightgbm", target: str = "direcao"):
+        self.cols, self.kind, self.booster, self.w, self.est = cols, None, None, None, None
+        self.algo, self.target = algo, target
         self.mu = self.sd = None
         self.ref = self.di_thr = None
         self.meta: dict = {}
@@ -101,25 +209,41 @@ class Model:
     def _z(self, x: np.ndarray) -> np.ndarray:
         return np.nan_to_num((x - self.mu) / self.sd)
 
-    def fit(self, X: pd.DataFrame, y: np.ndarray, seed: int = 7) -> "Model":
+    def fit(self, X: pd.DataFrame, y: np.ndarray, seed: int = 7, di: bool = True) -> "Model":
         x = self._x(X)
         self.mu, self.sd = np.nanmean(x, axis=0), np.nanstd(x, axis=0)
         self.sd[~np.isfinite(self.sd) | (self.sd == 0)] = 1.0
         self.mu[~np.isfinite(self.mu)] = 0.0
-        try:
-            import lightgbm as lgb
+        algo = self.algo if self.algo in available_algos() else "lightgbm"
+        if algo == "logistica" and "sklearn" not in {ALGOS[a][1] for a in available_algos()}:
+            algo = "logistica_np"
+        if algo == "lightgbm":
+            try:
+                import lightgbm as lgb
 
-            self.booster = lgb.train({"objective": "binary", "learning_rate": 0.05, "num_leaves": 15, "min_data_in_leaf": 40,
-                                      "feature_fraction": 0.8, "bagging_fraction": 0.8, "bagging_freq": 1, "lambda_l2": 1.0,
-                                      "verbose": -1, "seed": seed, "num_threads": 2}, lgb.Dataset(x, y), num_boost_round=200)
-            self.kind = "lightgbm"
-        except (ImportError, OSError):   # sem LightGBM (ou sem a libgomp do sistema): regressão logística em numpy
+                self.booster = lgb.train({"objective": "binary", "learning_rate": 0.05, "num_leaves": 15, "min_data_in_leaf": 40,
+                                          "feature_fraction": 0.8, "bagging_fraction": 0.8, "bagging_freq": 1, "lambda_l2": 1.0,
+                                          "verbose": -1, "seed": seed, "num_threads": 2}, lgb.Dataset(x, y), num_boost_round=200)
+                self.kind = "lightgbm"
+            except (ImportError, OSError):   # sem LightGBM (ou sem a libgomp do sistema): regressão logística em numpy
+                algo = "logistica_np"
+        if algo == "logistica_np":
             z = np.c_[self._z(x), np.ones(len(x))]
             w = np.zeros(z.shape[1])
             for _ in range(400):
                 p = 1 / (1 + np.exp(-z @ w))
                 w -= 0.1 * (z.T @ (p - y) / len(y) + 1e-3 * np.r_[w[:-1], 0])
-            self.w, self.kind = w, "logistica"
+            self.w, self.kind = w, "logistica_np"
+        elif algo != "lightgbm":
+            self.est = _make(algo, seed).fit(self._xin(x, algo), y.astype(int))
+            self.kind = algo
+        return self._fit_di(x, seed) if di else self
+
+    def _xin(self, x: np.ndarray, kind: str) -> np.ndarray:
+        """Florestas e logística do scikit-learn não aceitam NaN: recebem os dados padronizados (NaN → média)."""
+        return self._z(x) if kind in ("floresta", "extra", "logistica") else x
+
+    def _fit_di(self, x: np.ndarray, seed: int) -> "Model":
         # referência do índice de dissimilaridade: amostra do treino e a distância típica até o vizinho mais próximo
         rng = np.random.default_rng(seed)
         zs = self._z(x)
@@ -133,6 +257,8 @@ class Model:
         x = self._x(X)
         if self.kind == "lightgbm":
             return self.booster.predict(x)
+        if self.est is not None:
+            return self.est.predict_proba(self._xin(x, self.kind))[:, 1]
         z = np.c_[self._z(x), np.ones(len(x))]
         return 1 / (1 + np.exp(-z @ self.w))
 
@@ -142,27 +268,39 @@ class Model:
     def importance(self, top: int = 10) -> list[tuple[str, float]]:
         if self.kind == "lightgbm":
             g = self.booster.feature_importance("gain")
+        elif self.est is not None:
+            g = np.abs(self.est.coef_[0]) if self.kind == "logistica" else getattr(self.est, "feature_importances_", None)
+            if g is None:   # o gradient boosting do scikit-learn não tem importância pronta
+                return []
         else:
             g = np.abs(self.w[:-1])
+        g = np.asarray(g, dtype=float)
         tot = float(np.sum(g)) or 1.0
         return sorted(((c, float(v) / tot) for c, v in zip(self.cols, g)), key=lambda t: -t[1])[:top]
 
     # ---- guardar no banco (JSON)
     def dump(self) -> dict:
-        d = {"cols": self.cols, "kind": self.kind, "mu": self.mu.tolist(), "sd": self.sd.tolist(), "ref": np.round(self.ref, 4).tolist(),
-             "scale": self.scale, "di_thr": self.di_thr, "meta": self.meta}
-        d["model"] = self.booster.model_to_string() if self.kind == "lightgbm" else self.w.tolist()
+        d = {"cols": self.cols, "kind": self.kind, "algo": self.algo, "target": self.target, "mu": self.mu.tolist(), "sd": self.sd.tolist(),
+             "ref": np.round(self.ref, 4).tolist(), "scale": self.scale, "di_thr": self.di_thr, "meta": self.meta}
+        if self.kind == "lightgbm":
+            d["model"] = self.booster.model_to_string()
+        elif self.est is not None:   # demais bibliotecas: pickle comprimido em texto
+            d["model"] = base64.b64encode(zlib.compress(pickle.dumps(self.est), 6)).decode()
+        else:
+            d["model"] = self.w.tolist()
         return d
 
     @classmethod
     def load(cls, d: dict) -> "Model":
-        m = cls(d["cols"])
+        m = cls(d["cols"], d.get("algo", "lightgbm"), d.get("target", "direcao"))
         m.kind, m.mu, m.sd, m.ref = d["kind"], np.array(d["mu"]), np.array(d["sd"]), np.array(d["ref"])
         m.scale, m.di_thr, m.meta = d["scale"], d["di_thr"], d.get("meta", {})
         if m.kind == "lightgbm":
             import lightgbm as lgb
 
             m.booster = lgb.Booster(model_str=d["model"])
+        elif isinstance(d["model"], str):
+            m.est = pickle.loads(zlib.decompress(base64.b64decode(d["model"])))   # noqa: S301 - gerado pelo próprio sistema
         else:
             m.w = np.array(d["model"])
         return m
@@ -196,16 +334,17 @@ def auc(y: np.ndarray, p: np.ndarray) -> float | None:
 
 # ------------------------------------------------------------------------------ walk-forward (backtest com re-treino)
 def walk_forward(frames: dict[str, pd.DataFrame], interval: str, fee_pct: float, *, train_days: float, step_days: float,
-                 test_days: float, btc: pd.DataFrame | None = None, progress=None) -> dict[str, pd.DataFrame]:
+                 test_days: float, btc: pd.DataFrame | None = None, progress=None, algo: str = "lightgbm",
+                 target: str = "direcao") -> dict[str, pd.DataFrame]:
     """Para cada moeda devolve ``vt`` com ``ml_p`` (probabilidade de alta), ``v_ml`` (voto), ``ml_di`` e ``ml_block`` nas velas de teste.
     O modelo de cada passo só vê velas cujo alvo já estava conhecido antes do início do passo."""
-    h = HORIZON.get(interval, 6)
+    h = horizon(interval, target)
     step = pd.Timedelta(seconds=fastsim_sec(interval))
     data = {}
     for sym, vt in frames.items():
         vt = vt.copy()
         X = features(vt, None if sym == "BTCUSDT" else btc)
-        vt["_y"] = labels(vt, interval, fee_pct)
+        vt["_y"] = labels(vt, interval, fee_pct, target)
         data[sym] = (vt, X)
     end = max(vt["time"].iloc[-1] for vt, _ in data.values())
     start = end - pd.Timedelta(days=test_days)
@@ -227,7 +366,7 @@ def walk_forward(frames: dict[str, pd.DataFrame], interval: str, fee_pct: float,
         y = np.concatenate(ys)
         if len(y) < 300 or y.min() == y.max():
             continue
-        model = Model(cols).fit(Xtr, y)
+        model = Model(cols, algo, target).fit(Xtr, y)
         for vt, X in data.values():
             m = (vt["time"] >= t0) & (vt["time"] < t1)
             if m.any():
@@ -298,7 +437,8 @@ def _key(market: str, interval: str) -> str:
     return f"{market}|{interval}"
 
 
-def get(market: str, interval: str) -> Model | None:
+def get_bundle(market: str, interval: str) -> tuple[Model, dict[str, Model]] | None:
+    """(modelo principal, {grupo de contexto: modelo campeão naquele contexto})."""
     k = _key(market, interval)
     with _lock:
         if k in _models:
@@ -307,12 +447,19 @@ def get(market: str, interval: str) -> Model | None:
     if not d:
         return None
     try:
-        m = Model.load(d)
+        main = Model.load(d)
+        loaded = {c: Model.load(x) for c, x in (d.get("ctx_models") or {}).items()}
+        ctx = {g: loaded[c] for g, c in (d.get("by_ctx") or {}).items() if c in loaded}
     except Exception:  # noqa: BLE001 - modelo salvo com outra versão: será re-treinado
         return None
     with _lock:
-        _models[k] = m
-    return m
+        _models[k] = (main, ctx)
+    return main, ctx
+
+
+def get(market: str, interval: str) -> Model | None:
+    b = get_bundle(market, interval)
+    return b[0] if b else None
 
 
 def status(market: str, interval: str) -> dict | None:
@@ -341,30 +488,48 @@ def train_live(market: str, interval: str, getter=None, symbols=None, progress=N
         raise RuntimeError("Sem candles para treinar agora.")
     btc = frames.get("BTCUSDT")
     fee = float(cfg["fee_pct"])
-    Xs, ys, old, new = [], [], [], []
-    for sym, vt in frames.items():
-        X, y = features(vt, None if sym == "BTCUSDT" else btc), labels(vt, interval, fee)
-        m = (y.notna() & (vt.index >= fastsim.WARMUP)).to_numpy()
-        Xs.append(X[m])
-        ys.append(y[m].to_numpy())
-        cut = int(m.sum() * 0.85)   # os últimos 15% de cada moeda medem a qualidade num período que o modelo não viu
-        old.append(np.arange(m.sum()) < cut)
-        new.append(np.arange(m.sum()) >= cut + HORIZON.get(interval, 6))
-    Xtr, y, old, new = pd.concat(Xs), np.concatenate(ys), np.concatenate(old), np.concatenate(new)
-    hold = Model(list(Xtr.columns)).fit(Xtr[old], y[old])
-    a = auc(y[new], hold.proba(Xtr[new]))
-    model = Model(list(Xtr.columns)).fit(Xtr, y)
-    model.meta = {"trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": int(len(y)), "days": days,
-                  "symbols": list(frames), "kind": model.kind, "auc_holdout": a, "base_up": float(y.mean()),
-                  "importance": model.importance(8), "horizon": HORIZON.get(interval, 6)}
+    from core import ml_tournament as T
+
+    champ, by_ctx = T.champions(market, interval)    # campeões do último torneio (sem torneio: LightGBM · direção)
+    main_c = champ or T.combo("lightgbm", "direcao")
+    combos = [main_c] + [c for c in dict.fromkeys(by_ctx.values()) if c != main_c][:3]
+    feats = {sym: features(vt, None if sym == "BTCUSDT" else btc) for sym, vt in frames.items()}
+    cols = sorted(set().union(*(f.columns for f in feats.values())))
+    trained = {}
+    for n_c, c in enumerate(combos):
+        algo, target = c.split("|")
+        Xs, ys, old, new = [], [], [], []
+        for sym, vt in frames.items():
+            y = labels(vt, interval, fee, target)
+            m = (y.notna() & (vt.index >= fastsim.WARMUP)).to_numpy()
+            Xs.append(feats[sym].reindex(columns=cols)[m])
+            ys.append(y[m].to_numpy())
+            cut = int(m.sum() * 0.85)   # os últimos 15% de cada moeda medem a qualidade num período que o modelo não viu
+            old.append(np.arange(m.sum()) < cut)
+            new.append(np.arange(m.sum()) >= cut + horizon(interval, target))
+        Xtr, y, old, new = pd.concat(Xs), np.concatenate(ys), np.concatenate(old), np.concatenate(new)
+        hold = Model(cols, algo, target).fit(Xtr[old], y[old], di=False)
+        model = Model(cols, algo, target).fit(Xtr, y)
+        model.meta = {"trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": int(len(y)), "days": days,
+                      "symbols": list(frames), "kind": model.kind, "algo": algo, "target": target, "combo": c,
+                      "auc_holdout": auc(y[new], hold.proba(Xtr[new])), "base_up": float(y.mean()),
+                      "importance": model.importance(8), "horizon": horizon(interval, target)}
+        trained[c] = model
+        if progress:
+            progress(0.7 + 0.3 * (n_c + 1) / len(combos), f"Treinado: {T.combo_label(c)}")
+    model = trained[main_c]
+    ctx_map = {g: c for g, c in by_ctx.items() if c in trained}
+    model.meta.update({"from_tournament": bool(champ), "by_ctx": ctx_map})
     dump = model.dump()
+    dump["ctx_models"] = {c: m_.dump() for c, m_ in trained.items() if c != main_c}
+    dump["by_ctx"] = {g: c for g, c in ctx_map.items() if c != main_c}
 
     def _apply(data):
         data[_key(market, interval)] = dump
 
     locked_update(FILE, {}, _apply)
     with _lock:
-        _models[_key(market, interval)] = model
+        _models[_key(market, interval)] = (model, {g: trained[c] for g, c in dump["by_ctx"].items()})
     if progress:
         progress(1.0, "Modelo treinado")
     return model
@@ -401,10 +566,14 @@ _btc_cache: dict = {}
 
 def predict_live(df: pd.DataFrame, cfg: dict, market: str, getter=None) -> dict | None:
     """Previsão para o último candle fechado de ``df`` (saída de ``engine.prepare``): probabilidade de alta, voto e DI."""
-    model = get(market, cfg["interval"])
-    if model is None:
+    bundle = get_bundle(market, cfg["interval"])
+    if bundle is None:
         return None
+    from core import ml_tournament as T
+
     vt = fastsim.compute_votes(df.copy(), cfg)
+    group = T.group_of(vt["regime"].iloc[-2] if "regime" in vt else None)
+    model = bundle[1].get(group) or bundle[0]     # o campeão do contexto atual, se o torneio achou um
     btc = None
     if str(cfg["symbol"]).upper() != "BTCUSDT":
         key = (market, cfg["interval"])
@@ -425,4 +594,10 @@ def predict_live(df: pd.DataFrame, cfg: dict, market: str, getter=None) -> dict 
     p = float(model.proba(X)[0])
     di = float(model.di(X)[0])
     return {"p_up": round(p, 4), "vote": float(vote(p)), "di": round(di, 3), "di_thr": round(model.di_thr, 3), "outlier": bool(di > model.di_thr),
-            "trained_at": model.meta.get("trained_at"), "auc": model.meta.get("auc_holdout")}
+            "trained_at": model.meta.get("trained_at"), "auc": model.meta.get("auc_holdout"),
+            "modelo": T.combo_label(model.meta.get("combo") or combo_of(model)), "contexto": T.CTX_GROUPS[group][0],
+            "do_contexto": model is not bundle[0]}
+
+
+def combo_of(model: Model) -> str:
+    return f"{model.algo}|{model.target}"
