@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from core import advisor, ai, events as events_mod, htf, sentiment as sentiment_mod, indicators as ind, personalities, quota, ranking, risk
+from core import advisor, ai, events as events_mod, ml, htf, sentiment as sentiment_mod, indicators as ind, personalities, quota, ranking, risk
 from core import paper
 from core.broker import get_broker
 from core.data import get_funding_rate
@@ -95,8 +95,19 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
         best = (personality.get("research") or {}).get("best_contexts")
         if best:
             cfg = {**cfg, "context_filter": best}
-    plan = analyze(df, cfg, profile, personality)
+    ml_pred = None
+    if cfg.get("ml_vote") or cfg.get("ml_filter"):   # protótipo de machine learning (core/ml.py)
+        try:
+            ml.refresh_if_due(profile.market, interval)          # re-treino 1x por dia, em segundo plano
+            ml_pred = ml.predict_live(df, cfg, profile.market)
+        except Exception:  # noqa: BLE001 - o modelo nunca derruba a análise
+            ml_pred = None
+    extra = [(ml_pred["vote"], float(cfg.get("ml_weight") or 1.0))] if ml_pred and cfg.get("ml_vote") else None
+    block_ml = ("Modelo de ML: o mercado agora está diferente do que o modelo conhece (índice de dissimilaridade "
+                f"{ml_pred['di']:.2f} > {ml_pred['di_thr']:.2f}); por segurança, fica de fora.") if ml_pred and cfg.get("ml_filter") and ml_pred["outlier"] else ""
+    plan = analyze(df, cfg, profile, personality, extra_votes=extra, ml_block=block_ml)
     plan_d = plan.to_dict()
+    plan_d["ml"] = ml_pred
 
     last = df.iloc[-2]
     indicators_now = {k: _clean(float(last[k])) for k in
@@ -134,7 +145,7 @@ def run_analysis(profile: BotProfile, cfg: dict, df: pd.DataFrame, price: float,
                                snapshot=market_snapshot(df.iloc[:-1], int(cfg["ai_candles_context"])),
                                indicators_now=indicators_now, account=account_view, positions=positions,
                                risk_rules=risk_rules, funding_rate=funding, personality=personality, scenario=sc,
-                               candidates=cands, armed_plan=armed_view, sentiment=sent, events=ev_ctx)
+                               candidates=cands, armed_plan=armed_view, sentiment=sent, events=ev_ctx, ml=ml_pred)
     error = ""
     # A chave da OpenRouter é do dono da plataforma: cada usuário tem um limite diário de análises (quem usa a própria chave não tem).
     platform_key = bool(api_key) and api_key == get_secret("OPENROUTER_API_KEY") and bool(current_user())

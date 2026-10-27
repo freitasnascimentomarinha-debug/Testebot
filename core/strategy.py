@@ -340,7 +340,7 @@ def stops_for(df: pd.DataFrame, cfg: dict, direction: str, personality: dict | N
 
 
 def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict | None = None,
-            live: bool = True) -> RulePlan:
+            live: bool = True, extra_votes: list[tuple[float, float]] | None = None, ml_block: str = "") -> RulePlan:
     """Executa as habilidades e monta o plano baseado em regras.
 
     ``personality`` (ver ``core/personalities.py``) define pesos das
@@ -357,8 +357,9 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
         if weights.get(key, 0) <= 0:
             continue
         results.append(skill_levels(data, cfg, levels) if key == "suporte_resistencia" else fn(data, cfg))
-    total_w = sum(weights[r.key] for r in results) or 1
-    score = sum(r.vote * weights[r.key] for r in results) / total_w * 100
+    extra = [(float(v), float(w)) for v, w in (extra_votes or []) if w > 0]   # ex.: o voto do modelo de ML (core/ml.py)
+    total_w = (sum(weights[r.key] for r in results) + sum(w for _, w in extra)) or 1
+    score = (sum(r.vote * weights[r.key] for r in results) + sum(v * w for v, w in extra)) / total_w * 100
 
     last = data.iloc[-1]
     adx_val = float(last.adx)
@@ -376,6 +377,8 @@ def analyze(df: pd.DataFrame, cfg: dict, profile: BotProfile, personality: dict 
         direction = "HOLD"
         notes.append(reason)
 
+    if direction != "HOLD" and ml_block:
+        block(ml_block)
     if direction != "HOLD" and personality:
         allowed = personality.get("direction", "misto")
         if allowed == "compra" and direction == "SELL":

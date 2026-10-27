@@ -18,7 +18,7 @@ export default function (component) {
   root.innerHTML = `
   <section class="card head ${a.tone}">
     <div class="h1"><span class="dot"></span><h2>${esc(a.title)}</h2><span class="chip">${esc(a.symbol)} · ${esc(a.interval)}</span>${a.bot ? `<span class="chip bot">${esc(a.bot)}</span>` : ""}</div>
-    <div class="chips">${a.context.name ? `<span class="chip ctx" title="${esc(a.context.rule)}">${esc(a.context.name)}</span>` : ""}${a.bias ? `<span class="chip">viés ${esc(a.bias)}</span>` : ""}<span class="chip mut">${esc(a.when)} UTC${a.ai ? " · lido pela IA" : ""}</span></div>
+    <div class="chips">${a.context.name ? `<span class="chip ctx" title="${esc(a.context.rule)}">${esc(a.context.name)}</span>` : ""}${a.bias ? `<span class="chip">viés ${esc(a.bias)}</span>` : ""}${a.ml ? `<span class="chip" title="Modelo de machine learning (protótipo). Índice de dissimilaridade ${a.ml.di} (limite ${a.ml.di_thr}).">🧪 modelo: ${Math.round(a.ml.p_up * 100)}% de alta${a.ml.outlier ? " · ⚠️ mercado fora do conhecido" : ""}</span>` : ""}<span class="chip mut">${esc(a.when)} UTC${a.ai ? " · lido pela IA" : ""}</span></div>
     ${a.summary ? `<p class="lead">${md(a.summary)}</p>` : ""}
     ${a.why ? `<p class="ia">🤖 ${md(a.why)}</p>` : ""}
     ${a.entry ? `<div class="ent"><span>Entrada <b>${px(a.entry.price)}</b></span><span class="dn">Stop <b>${px(a.entry.stop)}</b></span><span class="up">Alvo <b>${px(a.entry.target)}</b></span><span>${nf(a.entry.qty, 6).replace(/,?0+$/, "")} un.</span><span>Risco <b>${nf(a.entry.risk)} USDT</b></span></div>` : ""}
